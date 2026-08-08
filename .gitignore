@@ -3,3 +3,5 @@
 /opendeezer.exe
 *.test
 hs_err_pid*.log
+/gui/windows/libdeezercore.dll
+/.vs
