@@ -27,12 +27,7 @@
 // to %APPDATA%\opendeezer\settings.json, a tray icon (Shell_NotifyIcon) with
 // close-to-tray background playback, and OpenDeezer Connect (LAN device transfer).
 
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -43,12 +38,19 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Media;
 using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI;
+using CommunityToolkit.WinUI.Controls;
 // Both Microsoft.UI.Dispatching and Windows.System expose DispatcherQueueTimer;
 // WinUI 3 uses the Microsoft.UI one.
 using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
@@ -591,24 +593,22 @@ public sealed partial class MainWindow : Window
         ShowLyricsMessage(Loc.S("Lyrics_PlayPrompt"));
     }
 
-    private Grid BuildTransport()
+    private JustifiedWrapPanel BuildTransport()
     {
         // Groove-Music-style Fluent bar: three zones - now-playing on the left,
         // the transport CENTERED (play is a filled accent circle) with the seek
         // bar + times directly under it, and secondary actions + volume on the
         // right. [Star, Auto, Star] keeps the centre cluster dead-centre in the
         // bar regardless of the left/right content widths.
-        var bar = new Grid
-        {
-            Padding = new Thickness(16, 8, 16, 10),
-            Background = new SolidColorBrush(Color.FromArgb(0x66, 0x14, 0x04, 0x1E)),
-        };
-        bar.ColumnDefinitions.Add(ColStar()); // left zone (now-playing)
-        bar.ColumnDefinitions.Add(ColAuto()); // centre zone (transport + seek)
-        bar.ColumnDefinitions.Add(ColStar()); // right zone (actions + volume)
 
-        // ---- LEFT: cover + title/artist + like + add ----
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        var bar = new JustifiedWrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+		// ---- LEFT: cover + title/artist + like + add ----
+		var left = new StackPanel { Margin = new Thickness(16, 8, 16, 8), Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         _cover = new Image { Width = 48, Height = 48, VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(_cover);
         var now = new StackPanel { VerticalAlignment = VerticalAlignment.Center, MinWidth = 120, MaxWidth = 240 };
@@ -649,10 +649,11 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_downloadBtn, Loc.S("Tooltip_DownloadOffline"));
         _downloadBtn.Click += OnDownloadCurrentOffline;
         left.Children.Add(_likeBtn); left.Children.Add(_addBtn); left.Children.Add(_downloadBtn);
-        Grid.SetColumn(left, 0); bar.Children.Add(left);
+        // Grid.SetColumn(left, 0);
+        bar.Children.Add(left);
 
         // ---- CENTRE: transport row (shuffle - prev - play - next - repeat) + seek row ----
-        var center = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        var center = new StackPanel { Margin = new Thickness(16, 8, 16, 8), Spacing = 4, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         // Casting chip: a "Playing on <device>" pill with a "Play here" button,
         // shown only while a Connect device owns playback (UpdateConnectIndicator
         // toggles it). "Play here" disconnects, returning playback to this computer.
@@ -727,10 +728,11 @@ public sealed partial class MainWindow : Window
         _durText = new TextBlock { Text = "0:00", Opacity = 0.7, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, MinWidth = 36 };
         seekRow.Children.Add(_posText); seekRow.Children.Add(_seek); seekRow.Children.Add(_durText);
         center.Children.Add(seekRow);
-        Grid.SetColumn(center, 1); bar.Children.Add(center);
+        // Grid.SetColumn(center, 1);
+        bar.Children.Add(center);
 
         // ---- RIGHT: lyrics - artist - connect (cast) - volume ----
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var right = new StackPanel { Margin = new Thickness(16, 8, 16, 8), Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         _lyricsBtn = new Button { Content = new FontIcon { Glyph = "", FontSize = 14 }, Padding = new Thickness(6, 2, 6, 2) }; // ClosedCaption
         ToolTipService.SetToolTip(_lyricsBtn, Loc.S("Tooltip_Lyrics"));
         AutomationProperties.SetName(_lyricsBtn, Loc.S("Tooltip_Lyrics"));
@@ -782,7 +784,8 @@ public sealed partial class MainWindow : Window
         _volume.ValueChanged += OnVolumeChanged;
         right.Children.Add(_queueBtn); right.Children.Add(_lyricsBtn); right.Children.Add(_artistBtn); right.Children.Add(_connectBtn);
         right.Children.Add(volIcon); right.Children.Add(_volume);
-        Grid.SetColumn(right, 2); bar.Children.Add(right);
+        // Grid.SetColumn(right, 2);
+        bar.Children.Add(right);
 
         return bar;
     }
@@ -1010,15 +1013,17 @@ public sealed partial class MainWindow : Window
         else { if (token != _artGen) return; }
         try
         {
-            var stream = new InMemoryRandomAccessStream();
-            var writer = new DataWriter(stream);
-            writer.WriteBytes(bytes);
-            await writer.StoreAsync();
-            writer.DetachStream();
-            stream.Seek(0);
-            var bmp = new BitmapImage();
-            img.Source = bmp;
-            await bmp.SetSourceAsync(stream);
+            using (var stream = new InMemoryRandomAccessStream())
+            {
+                var writer = new DataWriter(stream);
+                writer.WriteBytes(bytes);
+                await writer.StoreAsync();
+                writer.DetachStream();
+                stream.Seek(0);
+                var bmp = new BitmapImage();
+                img.Source = bmp;
+                await bmp.SetSourceAsync(stream);
+            }
         }
         catch { }
     }
@@ -1285,7 +1290,9 @@ public sealed partial class MainWindow : Window
         }
         _lastContentItem = item;
         _lyricsShown = false; // leaving the lyrics/artist page for a menu page
-        switch (tag)
+        // nav.Margin = new Thickness(0, 0, 0, 0); // Test
+        nav.AlwaysShowHeader = false;
+		switch (tag)
         {
             case "home": nav.Header = Loc.S("Nav_Home"); nav.Content = _homePage; LoadHome(); break;
             case "liked": nav.Header = Loc.S("Nav_LikedSongs"); nav.Content = _tracksPage; LoadFavorites(); break;
@@ -1380,11 +1387,16 @@ public sealed partial class MainWindow : Window
         {
             var p = _homePlaylists[i];
             var tile = MakeTile(p.Name, p.Owner, p.ArtworkUrl, i);
-            int captured = i;
             if (tile is FrameworkElement fe)
-                fe.Tapped += (_, _) => OpenPlaylist(_homePlaylists[captured]);
+                fe.Tapped += OnHomePlaylistTileTapped;
             _homePlaylistPanel.Children.Add(tile);
         }
+    }
+
+    private void OnHomePlaylistTileTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is int index && index >= 0 && index < _homePlaylists.Count)
+            OpenPlaylist(_homePlaylists[index]);
     }
 
     private async void OpenPlaylist(Playlist p)
@@ -3792,15 +3804,17 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var stream = new InMemoryRandomAccessStream();
-                var writer = new DataWriter(stream);
-                writer.WriteBytes(qrBytes);
-                await writer.StoreAsync();
-                writer.DetachStream();
-                stream.Seek(0);
-                var bmp = new BitmapImage();
-                qrImg.Source = bmp;
-                await bmp.SetSourceAsync(stream);
+                using (var stream = new InMemoryRandomAccessStream())
+                {
+                    var writer = new DataWriter(stream);
+                    writer.WriteBytes(qrBytes);
+                    await writer.StoreAsync();
+                    writer.DetachStream();
+                    stream.Seek(0);
+                    var bmp = new BitmapImage();
+                    qrImg.Source = bmp;
+                    await bmp.SetSourceAsync(stream);
+                }
             }
             catch { }
         }

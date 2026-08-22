@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- C# WinUI 3 (.NET 8), unpackaged + self-contained. The real XAML markup
        compiler runs over App.xaml, so XamlControlsResources resolves the WinUI
        theme dictionary and the app launches (the old code-only C++/WinRT build
@@ -8,7 +8,7 @@
        Build it with build.ps1 (dotnet publish, self-contained, win-x64). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>OpenDeezer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -24,8 +24,14 @@
     <ApplicationIcon>opendeezer.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="libdeezercore.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <!-- Localization: MRT Core resources. The .NET SDK's EnableDefaultPriItems globs
        Strings\**\*.resw automatically, so we do NOT list them explicitly (doing so

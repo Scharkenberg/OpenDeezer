@@ -10,8 +10,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:media="using:Microsoft.UI.Xaml.Media"
     Title="OpenDeezer">
-    <Window.SystemBackdrop>
-        <media:MicaBackdrop />
-    </Window.SystemBackdrop>
-    <Grid x:Name="RootGrid" />
+  <Window.SystemBackdrop>
+	<media:MicaBackdrop />
+  </Window.SystemBackdrop>
+  <Grid x:Name="RootGrid" />
 </Window>
