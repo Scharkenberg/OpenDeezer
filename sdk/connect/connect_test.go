@@ -17,17 +17,6 @@ func TestNewRemoteClient(t *testing.T) {
 	}
 }
 
-// TestDiscover sends a probe on the loopback and expects the call to return
-// within the timeout (possibly with zero devices if nothing is running).
-func TestDiscover(t *testing.T) {
-	devices, err := connect.Discover(50*time.Millisecond, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// No assertion on count — just verify it runs without panicking.
-	_ = devices
-}
-
 // TestHostStartStop verifies the inbound side: a Host binds a control endpoint
 // and starts advertising, then shuts down cleanly.
 func TestHostStartStop(t *testing.T) {

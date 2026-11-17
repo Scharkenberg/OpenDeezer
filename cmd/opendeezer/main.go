@@ -72,10 +72,9 @@ func main() {
 
 	// File logging (level via $OPENDEEZER_LOG); never writes to stdout, so the
 	// TUI is unaffected. Best-effort: discards on failure. The log file is held
-	// open for the process lifetime and released by the OS on exit (some paths
-	// below call os.Exit, which would skip a deferred Close anyway).
+	// open for the process lifetime and released by the OS on exit.
 	if base, err := os.UserConfigDir(); err == nil {
-		_, _ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
+		_ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
 	}
 	odlog.Info("opendeezer %s starting", version)
 
@@ -87,24 +86,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	audio.RemoveTempFiles() // stream files a crash left behind
+	mediacache.RemoveOldCaches()
 	player, err := audio.NewPlayer()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "audio:", err)
 		os.Exit(1)
-	}
-
-	// Optional on-disk raw-stream cache (media.json: mediaCacheMB > 0 enables).
-	// Best-effort: a cache that fails to open just means uncached streaming.
-	if mb := config.LoadMedia().MediaCacheMB; mb > 0 {
-		if dir, derr := config.Dir(); derr == nil {
-			if c, cerr := mediacache.New(filepath.Join(dir, "mediacache"), int64(mb)<<20); cerr == nil {
-				player.SetStreamCache(c)
-			} else {
-				odlog.Warn("mediacache: %v (continuing without cache)", cerr)
-			}
-		} else {
-			odlog.Warn("mediacache: no config dir: %v (continuing without cache)", derr)
-		}
 	}
 
 	// Set the UI language before building the model (some strings, e.g. the
@@ -117,8 +104,7 @@ func main() {
 	}
 
 	ui.Version = version
-	client := deezer.New(arl)
-	client.SetQuality(ui.LoadQuality()) // apply persisted quality preference
+	client := deezer.New(arl) // ui.New applies the saved playback settings
 	model := ui.New(client, player)
 
 	// Mouse cell-motion: wheel scrolling, click-to-select/activate and
@@ -128,7 +114,11 @@ func main() {
 	if err := model.StartControl(p.Send); err != nil {
 		odlog.Warn("control api: %v", err) // non-fatal: TUI still runs
 	}
-	if _, err := p.Run(); err != nil {
+	_, err = p.Run()
+	// Save the resume point and history and close services however the program
+	// ended: a quit key, SIGTERM or a recovered panic.
+	model.Shutdown()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

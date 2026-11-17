@@ -3,10 +3,18 @@ package discovery
 import (
 	"encoding/json"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 )
+
+// Every socket in these tests binds loopback, so the OS firewall never asks about the test binary.
+func TestMain(m *testing.M) {
+	bindHost = "127.0.0.1"
+	os.Exit(m.Run())
+}
 
 func TestIsLAN(t *testing.T) {
 	cases := map[string]bool{
@@ -17,6 +25,8 @@ func TestIsLAN(t *testing.T) {
 		"169.254.1.1": true,  // link-local
 		"8.8.8.8":     false, // public
 		"1.1.1.1":     false,
+		"100.101.1.2": true,  // CGNAT (Tailscale)
+		"100.128.0.1": false, // just past 100.64.0.0/10
 	}
 	for s, want := range cases {
 		if got := isLAN(net.ParseIP(s)); got != want {
@@ -25,12 +35,28 @@ func TestIsLAN(t *testing.T) {
 	}
 }
 
+// useFreePort makes the responder bind a free port the OS picks, not the real
+// discovery port a running OpenDeezer listens on, until the test ends.
+func useFreePort(t *testing.T) int {
+	t.Helper()
+	free, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.LocalAddr().(*net.UDPAddr).Port
+	_ = free.Close()
+	listenPort = port
+	t.Cleanup(func() { listenPort = Port })
+	return port
+}
+
 func TestTwoRespondersShareThePort(t *testing.T) {
-	// Two instances on one host must both bind UDP :Port (SO_REUSEPORT), so each
-	// is discoverable — this is the same-machine GNOME+KDE case.
+	// Two instances on one host must both bind one UDP port (SO_REUSEPORT), so
+	// each is discoverable: the same-machine GNOME+KDE case.
+	useFreePort(t)
 	r1, err := Advertise(func() Info { return Info{Name: "A", Client: "gnome"} }, 7001)
 	if err != nil {
-		t.Skipf("cannot bind discovery port: %v", err)
+		t.Fatalf("first responder failed to bind the port: %v", err)
 	}
 	defer r1.Close()
 	r2, err := Advertise(func() Info { return Info{Name: "B", Client: "kde"} }, 7002)
@@ -41,6 +67,7 @@ func TestTwoRespondersShareThePort(t *testing.T) {
 }
 
 func TestResponderRepliesToProbeOnly(t *testing.T) {
+	port := useFreePort(t)
 	r, err := Advertise(func() Info {
 		return Info{Name: "Test Device", Client: "tui", Version: "1.2.3"}
 	}, 7654)
@@ -49,7 +76,7 @@ func TestResponderRepliesToProbeOnly(t *testing.T) {
 	}
 	defer r.Close()
 
-	conn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: Port})
+	conn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,10 +90,10 @@ func TestResponderRepliesToProbeOnly(t *testing.T) {
 		t.Fatal("responder replied to a non-probe packet")
 	}
 
-	// The exact probe gets a well-formed reply. (We don't assert the exact
-	// identity: with SO_REUSEPORT, a real OpenDeezer instance running on the dev
-	// machine may share the port and answer instead — any valid reply proves the
-	// responder answers probes.)
+	// A datagram larger than the read buffer (an error on Windows) must not stop it.
+	_, _ = conn.Write(make([]byte, 4*maxPacket))
+
+	// The exact probe gets a well-formed reply.
 	_, _ = conn.Write([]byte(probeMagic))
 	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	n, err := conn.Read(buf)
@@ -91,7 +118,7 @@ func TestDiscoverDeduplicates(t *testing.T) {
 	}
 	defer r.Close()
 
-	devs, err := Discover(2200*time.Millisecond, 0)
+	devs, err := Discover(2200*time.Millisecond, 0, "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +182,7 @@ func TestIPsChanged(t *testing.T) {
 	}
 }
 
-func TestB20RebindFailureRetried(t *testing.T) {
+func TestRebindFailureRetried(t *testing.T) {
 	origInterval := supervisorInterval
 	origGetIPs := getLocalIPsList
 	supervisorInterval = 10 * time.Millisecond
@@ -174,6 +201,8 @@ func TestB20RebindFailureRetried(t *testing.T) {
 
 	ips = []string{"127.0.0.1"}
 
+	port := useFreePort(t)
+
 	r, err := Advertise(func() Info { return Info{Name: "Retry Test", Client: "tui"} }, 7654)
 	if err != nil {
 		t.Skipf("cannot bind discovery port: %v", err)
@@ -182,9 +211,9 @@ func TestB20RebindFailureRetried(t *testing.T) {
 
 	_ = r.conn.Close()
 
-	blockConn, err := net.ListenPacket("udp4", ":7655")
+	blockConn, err := net.ListenPacket("udp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
-		t.Fatalf("Failed to block port 7655: %v", err)
+		t.Fatalf("Failed to block port %d: %v", port, err)
 	}
 
 	getIPsMutex.Lock()
@@ -208,7 +237,7 @@ func TestB20RebindFailureRetried(t *testing.T) {
 	gotReply := false
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		conn, derr := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: Port})
+		conn, derr := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 		if derr != nil {
 			lastErr = derr
 			time.Sleep(25 * time.Millisecond)
@@ -235,5 +264,30 @@ func TestB20RebindFailureRetried(t *testing.T) {
 	}
 	if rep.Name != "Retry Test" {
 		t.Errorf("expected responder name 'Retry Test', got %q", rep.Name)
+	}
+}
+
+// An oversized datagram (an error on Windows, truncated elsewhere) keeps the
+// responder serving; a closed socket ends it.
+func TestRetryableReadErrors(t *testing.T) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, err := net.DialUDP("udp4", nil, conn.LocalAddr().(*net.UDPAddr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer peer.Close()
+	if _, err := peer.Write(make([]byte, 2048)); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, _, err := conn.ReadFromUDP(make([]byte, 16)); err != nil && !retryableRead(err) {
+		t.Fatalf("oversized datagram: %v is not retryable", err)
+	}
+	conn.Close()
+	if _, _, err := conn.ReadFromUDP(make([]byte, 16)); err == nil || retryableRead(err) {
+		t.Fatalf("closed socket: %v, want a final error", err)
 	}
 }

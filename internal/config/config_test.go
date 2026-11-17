@@ -36,10 +36,12 @@ func TestLoadControlEnv(t *testing.T) {
 		t.Fatal("LAN bind without token should default to same-account auth")
 	}
 
-	t.Setenv("OPENDEEZER_CONTROL", "1")
-	c = LoadControl()
-	if !c.Enabled || c.Addr != "127.0.0.1:7654" || c.SameAccount {
-		t.Fatalf("localhost LoadControl = %+v", c)
+	for _, v := range []string{"1", "yes"} {
+		t.Setenv("OPENDEEZER_CONTROL", v)
+		c = LoadControl()
+		if !c.Enabled || c.Addr != "127.0.0.1:7654" || c.SameAccount {
+			t.Fatalf("%s: localhost LoadControl = %+v", v, c)
+		}
 	}
 }
 
@@ -116,6 +118,40 @@ func TestMediaConfigRoundTrip(t *testing.T) {
 	}
 	if m := LoadMedia(); m.MediaCacheMB != 0 {
 		t.Fatalf("negative MediaCacheMB not clamped on load: %d", m.MediaCacheMB)
+	}
+}
+
+// The default cache folder is <user cache dir>/opendeezer (on Windows
+// %LOCALAPPDATA%\opendeezer), the cache lives in its subfolder
+// opendeezer-cache, and a host can point it elsewhere.
+func TestCacheFolders(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("LOCALAPPDATA", filepath.Join(tmp, "Local"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmp, ".cache"))
+	t.Setenv("HOME", tmp)
+	user, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(user, "opendeezer")
+	if got, _ := CacheBaseDir(); got != want {
+		t.Fatalf("CacheBaseDir = %s, want %s", got, want)
+	}
+	if got, _ := (Media{}).CacheDir(); got != want {
+		t.Fatalf("default CacheDir = %s, want %s", got, want)
+	}
+	if got, _ := (Media{}).CacheStoreDir(); got != filepath.Join(want, "opendeezer-cache") {
+		t.Fatalf("default CacheStoreDir = %s", got)
+	}
+	picked := filepath.Join(tmp, "Music")
+	if got, _ := (Media{MediaCacheDir: picked}).CacheStoreDir(); got != filepath.Join(picked, "opendeezer-cache") {
+		t.Fatalf("CacheStoreDir of a picked folder = %s", got)
+	}
+	other := filepath.Join(tmp, "app-cache")
+	SetCacheBaseDir(other)
+	defer SetCacheBaseDir("")
+	if got, _ := CacheBaseDir(); got != other {
+		t.Fatalf("CacheBaseDir after SetCacheBaseDir = %s, want %s", got, other)
 	}
 }
 

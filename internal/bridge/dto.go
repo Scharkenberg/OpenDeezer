@@ -3,7 +3,13 @@
 // this exact shape.
 package bridge
 
-import "github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+)
 
 // Artist is a track or album credit on the native JSON wire.
 type Artist struct {
@@ -47,6 +53,75 @@ type ArtistInfo struct {
 	Name       string `json:"name"`
 	ArtworkURL string `json:"artworkUrl"`
 	NbFans     int    `json:"nbFans"`
+}
+
+// TrackArtist is an artist credited on a track overview. Role is "main" or
+// "featured".
+type TrackArtist struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Role       string `json:"role,omitempty"`
+	PictureURL string `json:"pictureUrl,omitempty"`
+}
+
+// TrackAlbum is the album block of a track overview.
+type TrackAlbum struct {
+	ID          string   `json:"id,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	CoverURL    string   `json:"coverUrl,omitempty"` // 1000x1000
+	ReleaseDate string   `json:"releaseDate,omitempty"`
+	Label       string   `json:"label,omitempty"`
+	TrackCount  int      `json:"trackCount,omitempty"`
+	Genres      []string `json:"genres,omitempty"`
+}
+
+// Contributor is one credit role on a track overview: RoleKey is Deezer's
+// SNG_CONTRIBUTORS key, Role its English display name.
+type Contributor struct {
+	RoleKey string   `json:"roleKey"`
+	Role    string   `json:"role"`
+	Names   []string `json:"names"`
+}
+
+// TrackInfo is a track overview on the native JSON wire. Fields Deezer does
+// not provide are omitted.
+type TrackInfo struct {
+	ID           string        `json:"id"`
+	Title        string        `json:"title"`
+	Version      string        `json:"version,omitempty"`
+	Artists      []TrackArtist `json:"artists,omitempty"`
+	Album        TrackAlbum    `json:"album"`
+	TrackNumber  int           `json:"trackNumber,omitempty"`
+	DiskNumber   int           `json:"diskNumber,omitempty"`
+	DurationMS   int64         `json:"durationMs,omitempty"`
+	ReleaseDate  string        `json:"releaseDate,omitempty"`
+	BPM          float64       `json:"bpm,omitempty"`
+	Gain         float64       `json:"gain,omitempty"`
+	ISRC         string        `json:"isrc,omitempty"`
+	Explicit     bool          `json:"explicit,omitempty"`
+	Copyright    string        `json:"copyright,omitempty"`
+	Contributors []Contributor `json:"contributors,omitempty"`
+}
+
+// contributorRoles maps common SNG_CONTRIBUTORS keys to English role names.
+// Other keys are shown with underscores as spaces and a capital first letter.
+var contributorRoles = map[string]string{
+	"main_artist":         "Main artist",
+	"featuring":           "Featured artist",
+	"composer":            "Composer",
+	"author":              "Lyricist",
+	"lyricist":            "Lyricist",
+	"writer":              "Songwriter",
+	"producer":            "Producer",
+	"co-producer":         "Co-producer",
+	"mixer":               "Mixing engineer",
+	"engineer":            "Engineer",
+	"mastering":           "Mastering engineer",
+	"arranger":            "Arranger",
+	"conductor":           "Conductor",
+	"musicpublisher":      "Music publisher",
+	"publisher":           "Publisher",
+	"associatedperformer": "Associated performer",
 }
 
 // Podcast is a podcast on the native JSON wire.
@@ -161,6 +236,48 @@ func FromArtistInfo(artist deezer.ArtistInfo) ArtistInfo {
 		ArtworkURL: artist.ArtworkURL,
 		NbFans:     artist.NbFans,
 	}
+}
+
+// FromTrackInfo converts a Deezer track overview to its native wire
+// representation, naming contributor roles in English.
+func FromTrackInfo(ti deezer.TrackInfo) TrackInfo {
+	out := TrackInfo{
+		ID:      ti.ID,
+		Title:   ti.Title,
+		Version: ti.Version,
+		Album: TrackAlbum{
+			ID:          ti.Album.ID,
+			Title:       ti.Album.Title,
+			CoverURL:    ti.Album.CoverURL,
+			ReleaseDate: ti.Album.ReleaseDate,
+			Label:       ti.Album.Label,
+			TrackCount:  ti.Album.TrackCount,
+			Genres:      ti.Album.Genres,
+		},
+		TrackNumber: ti.TrackNumber,
+		DiskNumber:  ti.DiskNumber,
+		DurationMS:  ti.DurationMS,
+		ReleaseDate: ti.ReleaseDate,
+		BPM:         ti.BPM,
+		Gain:        ti.Gain,
+		ISRC:        ti.ISRC,
+		Explicit:    ti.Explicit,
+		Copyright:   ti.Copyright,
+	}
+	for _, a := range ti.Artists {
+		out.Artists = append(out.Artists, TrackArtist{ID: a.ID, Name: a.Name, Role: a.Role, PictureURL: a.PictureURL})
+	}
+	for _, c := range ti.Contributors {
+		role, ok := contributorRoles[c.Role]
+		if !ok {
+			role = strings.ReplaceAll(c.Role, "_", " ")
+			if r, size := utf8.DecodeRuneInString(role); size > 0 {
+				role = string(unicode.ToUpper(r)) + role[size:]
+			}
+		}
+		out.Contributors = append(out.Contributors, Contributor{RoleKey: c.Role, Role: role, Names: c.Names})
+	}
+	return out
 }
 
 // FromArtistInfos converts Deezer artist information to its native wire

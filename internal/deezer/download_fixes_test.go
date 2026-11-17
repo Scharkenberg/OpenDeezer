@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +26,9 @@ import (
 
 	"github.com/go-flac/flacvorbis"
 	flac "github.com/go-flac/go-flac"
+
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
 )
 
 // rtFunc adapts a function to http.RoundTripper so tests can fake the gw
@@ -83,7 +87,7 @@ func loggedInPremium(c *Client) {
 	c.mu.Unlock()
 }
 
-// --- C6: unique filenames + atomic single-track writes ---
+// --- Unique filenames + atomic single-track writes ---
 
 func TestTrackFileName_IncludesTrackID(t *testing.T) {
 	a := Track{ID: "111", Name: "Intro", Artists: []Artist{{Name: "Band"}}}
@@ -171,7 +175,7 @@ func TestSaveTrack_FailedTransferPreservesExistingFile(t *testing.T) {
 	}
 }
 
-// --- C7: album tracklist pagination ---
+// --- Album tracklist pagination ---
 
 func TestAlbumTracks_PaginatesBeyond100(t *testing.T) {
 	var indexes []string
@@ -234,7 +238,7 @@ func TestAlbumTracks_SinglePageStops(t *testing.T) {
 	}
 }
 
-// --- C8: strict playlist listing for downloads ---
+// --- Strict playlist listing for downloads ---
 
 func TestCollectTrackPagesStrict(t *testing.T) {
 	t.Run("mid-fetch error fails whole listing", func(t *testing.T) {
@@ -320,7 +324,7 @@ func TestSavePlaylist_FailsOnMidFetchPageError(t *testing.T) {
 	}
 }
 
-// --- C5: cancellation surfaces and pre-cancelled ctx skips the listing ---
+// --- Cancellation surfaces and pre-cancelled ctx skips the listing ---
 
 func TestSaveAlbum_PreCancelledContextSkipsListing(t *testing.T) {
 	listings := 0
@@ -361,7 +365,7 @@ func TestSavePlaylist_PreCancelledContextSkipsListing(t *testing.T) {
 	}
 }
 
-// --- C17: aggregate error matches both sentinels ---
+// --- Aggregate error matches both sentinels ---
 
 func TestSaveBatch_PartialErrorMatchesBothSentinels(t *testing.T) {
 	tmp := t.TempDir()
@@ -430,7 +434,7 @@ func TestSaveBatch_ResolvesPlanOncePerTrack(t *testing.T) {
 	}
 }
 
-// --- C9: FLAC tagging never destroys the downloaded audio ---
+// --- FLAC tagging never destroys the downloaded audio ---
 
 func TestTagFLAC_ErrorLeavesOriginalBytesIntact(t *testing.T) {
 	tr := Track{Name: "T", Artists: []Artist{{Name: "A"}}, AlbumName: "Alb"}
@@ -488,22 +492,73 @@ func TestTagFLAC_ErrorLeavesOriginalBytesIntact(t *testing.T) {
 	})
 }
 
-func TestTagFile_DispatchesFLACUnderPartSuffix(t *testing.T) {
-	// saveTrack tags the not-yet-renamed "<name>.flac.part" file; the FLAC
-	// path must still be chosen despite the .part suffix.
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "song.flac.part")
+// Tagging a FLAC rewrites its metadata and copies the frames through: the
+// frames come out byte for byte, and the file is never held in memory.
+func TestTagFLAC_StreamsFrames(t *testing.T) {
 	raw, err := base64.StdEncoding.DecodeString(flacAudioB64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
+	orig := append(raw, bytes.Repeat([]byte{0x5A, 0xA5}, 8<<20)...) // 16 MB more frame bytes
+	path := filepath.Join(t.TempDir(), "big.flac")
+	if err := os.WriteFile(path, orig, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	want, err := flac.ParseBytes(bytes.NewReader(orig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := Track{Name: "Big", Artists: []Artist{{Name: "A"}}, AlbumName: "Alb"}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if err := tagFLAC(path, tr, []byte("art"), 3, "2024"); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	allocated := float64(after.TotalAlloc-before.TotalAlloc) / 1e6
+	t.Logf("tagging a %.1f MB FLAC allocated %.2f MB", float64(len(orig))/1e6, allocated)
+	if allocated > 1 {
+		t.Fatalf("tagging allocated %.2f MB", allocated)
+	}
+	got, err := flac.ParseFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got.Frames, want.Frames) {
+		t.Fatal("frames changed")
+	}
+	title := ""
+	for _, mb := range got.Meta {
+		if mb.Type == flac.VorbisComment {
+			if vc, perr := flacvorbis.ParseFromMetaDataBlock(*mb); perr == nil {
+				if vs, _ := vc.Get(flacvorbis.FIELD_TITLE); len(vs) > 0 {
+					title = vs[0]
+				}
+			}
+		}
+	}
+	if got.Meta[0].Type != flac.StreamInfo || title != "Big" {
+		t.Fatalf("first block %v, title %q", got.Meta[0].Type, title)
+	}
+}
+
+func TestSaveTrack_FLACIsTaggedAsFLAC(t *testing.T) {
+	// saveTrack tags its temp file ("<stem>-<rand>.part", no extension) before
+	// the rename: the FLAC tagger must still be chosen.
+	raw, err := base64.StdEncoding.DecodeString(flacAudioB64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(raw)
+	}))
+	defer ts.Close()
 
 	tr := Track{Name: "Part Song", Artists: []Artist{{Name: "A"}}, AlbumName: "Alb"}
-	if err := tagFile(context.Background(), path, tr, "", 0, "", nil); err != nil {
-		t.Fatalf("tagFile(.flac.part): %v", err)
+	plan := &StreamPlan{CDNURL: ts.URL + "/cdn/audio", Format: "FLAC"}
+	path, err := New("dummy").saveTrack(context.Background(), tr, t.TempDir(), plan, nil)
+	if err != nil {
+		t.Fatalf("saveTrack: %v", err)
 	}
 
 	f, err := flac.ParseFile(path)
@@ -525,7 +580,7 @@ func TestTagFile_DispatchesFLACUnderPartSuffix(t *testing.T) {
 	}
 }
 
-// --- B12: concurrent .part uniqueness via CreateTemp ---
+// --- Concurrent .part uniqueness via CreateTemp ---
 
 func TestSaveTrack_ConcurrentSameTrack_UsesUniqueTemps(t *testing.T) {
 	tmp := t.TempDir()
@@ -631,7 +686,7 @@ func TestTrackFileName_TruncatesBeforeIDSuffix_UTF8Safe(t *testing.T) {
 	}
 }
 
-// --- B13: PodcastEpisodes and Playlists pagination (100+30) ---
+// --- PodcastEpisodes and Playlists pagination (100+30) ---
 
 func TestPodcastEpisodes_PaginatesBeyond100(t *testing.T) {
 	var indexes []string
@@ -726,6 +781,34 @@ func TestPlaylists_Paginates(t *testing.T) {
 	}
 }
 
+// The CDN files images by kind and answers a wrong kind with a placeholder, so
+// playlist pictures follow PICTURE_TYPE and the account picture is a "user" image.
+func TestImageKinds(t *testing.T) {
+	c := New("dummy")
+	c.http = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.RawQuery, "method=deezer.getUserData") {
+			return jsonResponse([]byte(`{"error":{},"results":{"checkForm":"api-t","USER":{"USER_ID":"1","BLOG_NAME":"t","USER_PICTURE":"u5"}}}`)), nil
+		}
+		return jsonResponse([]byte(`{"error":{},"results":{"TAB":{"playlists":{"data":[` +
+			`{"PLAYLIST_ID":"1","PLAYLIST_PICTURE":"e1","PICTURE_TYPE":"playlist"},` +
+			`{"PLAYLIST_ID":"2","PLAYLIST_PICTURE":"a-b-c-d","PICTURE_TYPE":"cover"},` +
+			`{"PLAYLIST_ID":"3","PLAYLIST_PICTURE":"","PICTURE_TYPE":"cover"}]}}}}`)), nil
+	})}
+	if err := c.Login(); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if got := c.Account().Picture; !strings.Contains(got, "/images/user/u5/") {
+		t.Errorf("account picture = %q", got)
+	}
+	pls, err := c.Playlists()
+	if err != nil || len(pls) != 3 {
+		t.Fatalf("Playlists: %v, %d", err, len(pls))
+	}
+	if !strings.Contains(pls[0].ArtworkURL, "/images/playlist/e1/") || !strings.Contains(pls[1].ArtworkURL, "/images/cover/a-b-c-d/") || pls[2].ArtworkURL != "" {
+		t.Errorf("artwork = %q, %q, %q", pls[0].ArtworkURL, pls[1].ArtworkURL, pls[2].ArtworkURL)
+	}
+}
+
 func gwPlaylistsPage(startID, n int) []byte {
 	var sb strings.Builder
 	sb.WriteString(`{"error":{},"results":{"TAB":{"playlists":{"data":[`)
@@ -739,7 +822,7 @@ func gwPlaylistsPage(startID, n int) []byte {
 	return []byte(sb.String())
 }
 
-// --- E1: PrepareStream error classification ---
+// --- PrepareStream error classification ---
 
 func TestPrepareStream_Transient5xxRetried_NoPreviewFallback(t *testing.T) {
 	mediaCalls := 0
@@ -841,6 +924,221 @@ func TestPrepareStream_Entitlement_NoMedia_GivesPreview(t *testing.T) {
 	}
 }
 
+// streamTestClient is a logged-in premium client whose gw answers song.getData
+// with songData (a 502 when empty), get_url with mediaBody, and counts logins.
+func streamTestClient(songData, mediaBody string, logins *int) *Client {
+	c := New("dummy")
+	loggedInPremium(c)
+	c.mu.Lock()
+	c.licenseToken = "lic-1"
+	c.userID = "1"
+	c.mu.Unlock()
+	c.restURLOverride = "http://rest.test"
+	c.http = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		q := r.URL.RawQuery
+		switch {
+		case strings.Contains(q, "method=deezer.getUserData"):
+			*logins++
+			return loginResponseForTest(), nil
+		case strings.Contains(q, "method=song.getData"):
+			if songData == "" {
+				return &http.Response{StatusCode: 502, Status: "502 Bad Gateway", Body: io.NopCloser(strings.NewReader("<html>bad gateway</html>"))}, nil
+			}
+			return jsonResponse([]byte(songData)), nil
+		case strings.Contains(r.URL.Path, "get_url"):
+			return jsonResponse([]byte(mediaBody)), nil
+		case strings.HasPrefix(r.URL.Path, "/track/"):
+			return jsonResponse([]byte(`{"preview":"https://cdn/preview.mp3"}`)), nil
+		}
+		return nil, fmt.Errorf("unexpected test req: %s", r.URL)
+	})}
+	return c
+}
+
+// A failed track-token call is an error, not a 30-second preview for a paid user.
+func TestPrepareStream_TokenFailureIsNoPreview(t *testing.T) {
+	logins := 0
+	plan, err := streamTestClient("", "", &logins).PrepareStream("123")
+	if err == nil || plan != nil {
+		t.Fatalf("got plan %+v, err %v; want the gw error", plan, err)
+	}
+}
+
+// A refused track gets the preview and costs no re-login. A licence-token
+// rejection re-logs in once a minute; inside the minute it is an error, not
+// the preview a paid user is not meant to get.
+func TestPrepareStream_ReloginOnlyForLicenseToken(t *testing.T) {
+	const song = `{"error":{},"results":{"TRACK_TOKEN":"tok","GAIN":"0"}}`
+	refusal := func(msg string) string { return `{"data":[{"errors":[{"code":2002,"message":"` + msg + `"}]}]}` }
+
+	logins := 0
+	c := streamTestClient(song, refusal("Track token has no sufficient rights on requested media"), &logins)
+	for i := 0; i < 5; i++ {
+		if plan, err := c.PrepareStream("123"); err != nil || !plan.Preview {
+			t.Fatalf("refused track: plan %+v, err %v; want the preview", plan, err)
+		}
+	}
+	if logins != 0 {
+		t.Errorf("refused track: %d logins, want 0", logins)
+	}
+
+	logins = 0
+	c = streamTestClient(song, refusal("License token has expired"), &logins)
+	if plan, err := c.PrepareStream("123"); err != nil || !plan.Preview {
+		t.Fatalf("rejected after a re-login: plan %+v, err %v; want the preview", plan, err)
+	}
+	for i := 0; i < 4; i++ {
+		if plan, err := c.PrepareStream("123"); err == nil || plan != nil {
+			t.Fatalf("rejected inside the minute: plan %+v, err %v; want an error", plan, err)
+		}
+	}
+	if logins != 1 {
+		t.Errorf("licence rejections: %d logins, want 1", logins)
+	}
+}
+
+// A licence-token rejection inside the re-login minute retries once with the
+// token another call's re-login brought meanwhile.
+func TestPrepareStream_LicenseRejectionRetriesNewerToken(t *testing.T) {
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"TRACK_TOKEN":"tok","GAIN":"0"}}`, "", &logins)
+	c.licenseRelogin.Store(time.Now().Unix()) // a re-login just happened
+	base := c.http.Transport
+	c.http.Transport = rtFunc(func(r *http.Request) (*http.Response, error) {
+		if !strings.Contains(r.URL.Path, "get_url") {
+			return base.RoundTrip(r)
+		}
+		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), `"license_token":"lic-2"`) {
+			return jsonResponse([]byte(`{"data":[{"media":[{"format":"MP3_128","sources":[{"url":"https://cdn/full.mp3"}]}]}]}`)), nil
+		}
+		c.mu.Lock()
+		c.licenseToken = "lic-2" // the other call's re-login lands
+		c.mu.Unlock()
+		return jsonResponse([]byte(`{"data":[{"errors":[{"code":2002,"message":"License token has expired"}]}]}`)), nil
+	})
+	plan, err := c.PrepareStream("123")
+	if err != nil || plan.Preview || plan.CDNURL != "https://cdn/full.mp3" {
+		t.Fatalf("plan %+v, err %v; want the full track", plan, err)
+	}
+	if logins != 0 {
+		t.Errorf("%d logins, want 0", logins)
+	}
+}
+
+// A track start asks song.getData once: the plan carries the track's metadata,
+// and SaveTrack reuses it.
+func TestPrepareStream_OneSongGetDataCarriesTrack(t *testing.T) {
+	cdn := httptest.NewServer(http.NotFoundHandler())
+	defer cdn.Close()
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"123","SNG_TITLE":"Song","DURATION":"200","ART_NAME":"Band","TRACK_TOKEN":"tok","GAIN":"-3"}}`,
+		`{"data":[{"media":[{"format":"MP3_320","sources":[{"url":"`+cdn.URL+`/a.mp3"}]}]}]}`, &logins)
+	songData := 0
+	base := c.http.Transport
+	c.http.Transport = rtFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.RawQuery, "method=song.getData") {
+			songData++
+		}
+		return base.RoundTrip(r)
+	})
+	plan, err := c.PrepareStream("123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Track.ID != "123" || plan.Track.Name != "Song" || plan.Track.DurationMS != 200000 || plan.GainDB != -3 {
+		t.Fatalf("plan track %+v gain %v", plan.Track, plan.GainDB)
+	}
+	if songData != 1 {
+		t.Fatalf("PrepareStream: %d song.getData, want 1", songData)
+	}
+	songData = 0
+	if _, err := c.SaveTrack(context.Background(), "123", t.TempDir()); err == nil {
+		t.Fatal("SaveTrack against a 404 CDN succeeded")
+	}
+	if songData != 1 {
+		t.Fatalf("SaveTrack: %d song.getData, want 1", songData)
+	}
+}
+
+// Online, a cached copy plays only at the quality the plan would ask for or
+// better; offline, the best copy present plays.
+func TestPrepareStreamCached_HonoursQuality(t *testing.T) {
+	mc, err := mediacache.New(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := func(id, format string) {
+		mctest.PutBody(t, mc, id+"."+format)
+		if err := mc.PutMeta(id+"."+format, mediacache.StreamMeta{Format: format, Encrypted: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache("1", "MP3_128")
+	cache("2", "MP3_128")
+	cache("2", "FLAC")
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"1","TRACK_TOKEN":"tok","GAIN":"0"}}`,
+		`{"data":[{"media":[{"format":"MP3_320","sources":[{"url":"https://cdn/full.mp3"}]}]}]}`, &logins)
+	c.SetQuality(QualityHigh)
+
+	for _, tc := range []struct{ id, format, url string }{
+		{"1", "MP3_320", "https://cdn/full.mp3"}, // the cached 128 is below the asked 320
+		{"2", "FLAC", ""},                        // the cached FLAC is better
+	} {
+		plan, err := c.PrepareStreamCached(tc.id, mc)
+		if err != nil || plan.Format != tc.format || plan.CDNURL != tc.url {
+			t.Fatalf("online %s: plan %+v err %v; want %s from %q", tc.id, plan, err, tc.format, tc.url)
+		}
+	}
+	plan, err := New("arl").PrepareStreamCached("1", mc) // not logged in
+	if err != nil || plan.Format != "MP3_128" || plan.CDNURL != "" {
+		t.Fatalf("offline: plan %+v err %v; want the cached MP3_128", plan, err)
+	}
+}
+
+// A plan records the format it asked for; a cached copy fetched while asking
+// for the format wanted now qualifies even when Deezer served a lower one (a
+// HiFi account and a track that exists only as MP3_320), so it is not
+// downloaded again on every play. A copy asked at a lower quality does not.
+func TestPrepareStreamCached_AskedFormatQualifies(t *testing.T) {
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"1","TRACK_TOKEN":"tok","GAIN":"0"}}`,
+		`{"data":[{"media":[{"format":"MP3_320","sources":[{"url":"https://cdn/full.mp3"}]}]}]}`, &logins)
+	c.mu.Lock()
+	c.canHiFi = true
+	c.mu.Unlock()
+	c.SetQuality(QualityLossless)
+	plan, err := c.PrepareStream("1")
+	if err != nil || plan.Format != "MP3_320" || plan.AskedFormat != "FLAC" {
+		t.Fatalf("plan %+v err %v; want MP3_320 served for FLAC asked", plan, err)
+	}
+
+	mc, err := mediacache.New(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mc.Close()
+	mctest.PutBody(t, mc, "1.MP3_320")
+	_ = mc.PutMeta("1.MP3_320", mediacache.StreamMeta{Format: "MP3_320", AskedFormat: "FLAC", Encrypted: true})
+	mctest.PutBody(t, mc, "2.MP3_320")
+	_ = mc.PutMeta("2.MP3_320", mediacache.StreamMeta{Format: "MP3_320", AskedFormat: "MP3_320", Encrypted: true})
+	if plan, err := c.PrepareStreamCached("1", mc); err != nil || plan.CDNURL != "" || plan.Format != "MP3_320" {
+		t.Fatalf("copy asked as FLAC: plan %+v err %v; want the cached copy", plan, err)
+	}
+	if plan, err := c.PrepareStreamCached("2", mc); err != nil || plan.CDNURL == "" {
+		t.Fatalf("copy asked as MP3_320: plan %+v err %v; want a stream", plan, err)
+	}
+}
+
+// Transport errors must not carry the request URL (gw URLs hold the api_token).
+func TestClassifyNet_HidesURL(t *testing.T) {
+	err := classifyNet(&url.Error{Op: "Post", URL: gwURL + "?api_token=SECRET", Err: errors.New("tls: bad record")})
+	if strings.Contains(err.Error(), "SECRET") {
+		t.Errorf("error text leaks the token: %v", err)
+	}
+}
+
 func loginResponseForTest() *http.Response {
 	return jsonResponse([]byte(`{"error":{},"results":{"checkForm":"api-t","USER":{"USER_ID":"1","BLOG_NAME":"t","OPTIONS":{"license_token":"lic-1","web_hq":true,"web_lossless":false,"mobile_hq":true,"mobile_lossless":false}},"OFFERS":[{"title":"P"}]}}`))
 }
@@ -877,7 +1175,9 @@ func TestDownloadTrackContext_ResumesOnMidBodyDrop(t *testing.T) {
 			_, _ = w.Write(full[off:])
 			return
 		}
-		// First attempt: deliver prefix + flush, then hijack-close to force a non-EOF read err on client.
+		// First attempt: declare the full length, deliver a prefix + flush, then
+		// close the connection (the client reads io.ErrUnexpectedEOF).
+		w.Header().Set("Content-Length", fmt.Sprint(len(full)))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(full[:64])
 		if f, ok := w.(http.Flusher); ok {
@@ -917,6 +1217,94 @@ func TestDownloadTrackContext_ResumesOnMidBodyDrop(t *testing.T) {
 	}
 	if rr < 1 {
 		t.Errorf("expected at least one Range request on resume, got %d", rr)
+	}
+}
+
+// An encrypted body that ends cleanly but short of the declared total (a 206
+// for a sub-range) is resumed on the same decryptor; the result must equal a
+// full decrypt, with the partial chunk carried over rather than flushed.
+func TestDownloadTrackContext_EncryptedShortBodyResumesIntact(t *testing.T) {
+	full := make([]byte, 3*StripeChunk+700)
+	for i := range full {
+		full[i] = byte(i*131 + i/7)
+	}
+	const cut = StripeChunk + 952 // mid-chunk
+	var mu sync.Mutex
+	gets := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gets++
+		mu.Unlock()
+		off := 0
+		end := cut
+		if rg := r.Header.Get("Range"); rg != "" {
+			if _, err := fmt.Sscanf(rg, "bytes=%d-", &off); err != nil {
+				t.Errorf("bad Range %q", rg)
+			}
+			end = len(full)
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", off, end-1, len(full)))
+		w.Header().Set("Content-Length", fmt.Sprint(end-off))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(full[off:end])
+	}))
+	defer ts.Close()
+
+	plan := &StreamPlan{CDNURL: ts.URL + "/a", TrackID: "enc1", Format: "MP3_320", Encrypted: true}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	want, _ := DecryptTrack("enc1", full)
+	if !bytes.Equal(buf.Bytes(), want) {
+		t.Fatalf("resumed encrypted download differs from a full decrypt (len %d, want %d)", buf.Len(), len(want))
+	}
+	if gets != 2 {
+		t.Errorf("GETs = %d, want 2", gets)
+	}
+}
+
+// The stall time counts only while a body is read: headers that come late do
+// not end the download, and a body that stops delivering is resumed.
+func TestDownloadStallResumes(t *testing.T) {
+	prev := downloadStallTimeout
+	downloadStallTimeout = 200 * time.Millisecond
+	defer func() { downloadStallTimeout = prev }()
+	full := bytes.Repeat([]byte("od"), 100000)
+	var mu sync.Mutex
+	gets := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gets++
+		first := gets == 1
+		mu.Unlock()
+		if first {
+			time.Sleep(400 * time.Millisecond) // the headers come late
+			w.Header().Set("Content-Length", fmt.Sprint(len(full)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(full[:len(full)/2])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done() // then nothing more
+			return
+		}
+		var off int
+		if _, err := fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-", &off); err != nil {
+			t.Errorf("bad Range %q", r.Header.Get("Range"))
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", off, len(full)-1, len(full)))
+		w.Header().Set("Content-Length", fmt.Sprint(len(full)-off))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(full[off:])
+	}))
+	defer ts.Close()
+
+	plan := &StreamPlan{CDNURL: ts.URL + "/a", TrackID: "stall1", Format: "MP3_128"}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("resumed download is %d bytes, want %d", buf.Len(), len(full))
 	}
 }
 

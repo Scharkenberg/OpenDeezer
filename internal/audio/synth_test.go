@@ -80,13 +80,14 @@ func makeFLAC(nFrames, blockSize int) []byte {
 	return buf.Bytes()
 }
 
-// drainStreamBuffer reads a finished streamBuffer to completion and returns all
-// its bytes.
-func drainStreamBuffer(sb *streamBuffer) []byte {
+// drainStreamFile reads a finished stream to completion through a new
+// reader and returns all its bytes.
+func drainStreamFile(sb *streamFile) []byte {
 	var out []byte
+	r := sb.reader()
 	buf := make([]byte, 32*1024)
 	for {
-		n, err := sb.Read(buf)
+		n, err := r.Read(buf)
 		if n > 0 {
 			out = append(out, buf[:n]...)
 		}
@@ -96,9 +97,9 @@ func drainStreamBuffer(sb *streamBuffer) []byte {
 	}
 }
 
-// sbDone reports whether the producer has marked the streamBuffer finished
+// sbDone reports whether the producer has marked the stream finished
 // (in-package access to the unexported flag for progressive-start assertions).
-func sbDone(sb *streamBuffer) bool {
+func sbDone(sb *streamFile) bool {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 	return sb.done

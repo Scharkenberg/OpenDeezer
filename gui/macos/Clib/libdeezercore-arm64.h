@@ -103,6 +103,7 @@ extern "C" {
 
 extern void DZSetClientInfo(char* client, char* device);
 extern char* DZNowPlayingJSON(void);
+extern long long DZNowPlayingVersion(void);
 extern char* DZDiscoverDevices(int timeoutMS);
 extern int DZConnectDevice(char* addr);
 extern void DZDisconnectDevice(void);
@@ -198,7 +199,15 @@ extern char* DZQueueJSON(void);
 extern void DZQueueRemove(int i);
 extern void DZQueueMove(int from, int to);
 extern void DZQueueInsertNext(char* js);
-extern char* DZDownloadForOffline(char* trackID);
+extern char* DZPinOffline(char* kind, char* id);
+extern char* DZUnpinOffline(char* kind, char* id);
+extern char* DZOfflineProgressJSON(void);
+extern void DZCancelOffline(void);
+extern char* DZOfflineCollectionsJSON(void);
+extern char* DZOfflineTracksJSON(char* kind, char* id);
+extern char* DZOfflineIDsJSON(void);
+extern void DZSetOfflineMode(int on);
+extern int DZOfflineMode(void);
 extern char* DZControlConfigJSON(void);
 extern void DZSetControlConfig(int enabled, char* addr, char* token);
 extern void DZWebRemoteSetEnabled(int on);

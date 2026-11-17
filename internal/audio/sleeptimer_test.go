@@ -6,18 +6,6 @@ import (
 	"time"
 )
 
-// newBarePlayer builds a Player without an output device, for testing the pure
-// logic (volume taper, sleep timer, fade-in) that doesn't need a real sink.
-func newBarePlayer() *Player {
-	p := &Player{stopMgr: make(chan struct{})}
-	p.state.Store(int32(Stopped))
-	p.gainFac.Store(math.Float64bits(1))
-	p.sleepGain.Store(math.Float64bits(1))
-	p.gapless.Store(true)
-	p.setVolume(1.0)
-	return p
-}
-
 func TestVolumeTaperIsPerceptual(t *testing.T) {
 	// The taper must be monotonic, pinned at the endpoints, and below linear in
 	// the middle (so mid-slider is quieter than half amplitude).
@@ -41,7 +29,7 @@ func TestVolumeTaperIsPerceptual(t *testing.T) {
 }
 
 func TestSleepTimerDurationArmAndCancel(t *testing.T) {
-	p := newBarePlayer()
+	p := newPlayer(&mockOutput{})
 	if p.SleepActive() {
 		t.Fatal("new player should have no sleep timer armed")
 	}
@@ -66,7 +54,7 @@ func TestSleepTimerDurationArmAndCancel(t *testing.T) {
 }
 
 func TestSleepTimerEndOfTrackMode(t *testing.T) {
-	p := newBarePlayer()
+	p := newPlayer(&mockOutput{})
 	p.totalMS.Store(200000)
 	p.played.Store(0)
 	p.SetSleepTimer(0, true)
@@ -80,7 +68,7 @@ func TestSleepTimerEndOfTrackMode(t *testing.T) {
 }
 
 func TestSetSleepTimerNonPositiveCancels(t *testing.T) {
-	p := newBarePlayer()
+	p := newPlayer(&mockOutput{})
 	p.SetSleepTimer(10*time.Minute, false)
 	p.SetSleepTimer(0, false) // non-positive duration, not EOT -> cancel
 	if p.SleepActive() {

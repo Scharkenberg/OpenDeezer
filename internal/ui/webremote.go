@@ -9,6 +9,7 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,7 +28,7 @@ type webRemoteMsg struct {
 }
 
 // webRemoteEnableCmd starts the phone web remote, binding LAN-reachably if
-// needed and enabling pairing. Mirrors corelib/webremote.go ensureWebRemoteServer.
+// needed and enabling pairing, as the engine's WebRemoteSetEnabled does.
 func (m *Model) webRemoteEnableCmd() tea.Cmd {
 	// Capture everything we need before the closure runs off the update loop.
 	existingCtrl := m.ctrl
@@ -149,7 +150,7 @@ func buildWebRemoteMsg(srv *control.Server, replacedCtrl bool) webRemoteMsg {
 	}
 	_, portStr, _ := net.SplitHostPort(srv.Addr())
 	port, _ := strconv.Atoi(portStr)
-	url := fmt.Sprintf("http://%s:%d/remote", lanIPv4(), port)
+	url := fmt.Sprintf("http://%s:%d/remote", discovery.LANIPv4(), port)
 	code := srv.PairingCode()
 	qr := ""
 	if q, err := qrcode.New(url, qrcode.Medium); err == nil {
@@ -161,47 +162,20 @@ func buildWebRemoteMsg(srv *control.Server, replacedCtrl bool) webRemoteMsg {
 	}
 }
 
-// lanIPv4 returns the primary non-loopback IPv4 address for building a
-// LAN-reachable URL. Falls back to "127.0.0.1".
-func lanIPv4() string {
-	ifaces, _ := net.Interfaces()
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, _ := iface.Addrs()
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if ip4 := ip.To4(); ip4 != nil {
-				return ip4.String()
-			}
-		}
-	}
-	return "127.0.0.1"
-}
-
 // handleWebRemoteKey drives the Web Remote screen.
 func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.ctrlEditToken {
 		switch msg.String() {
 		case "esc":
-			m.ctrlEditToken = false
-			m.search.Blur()
-			m.search.EchoMode = textinput.EchoNormal
+			m.endTokenEdit()
 			m.status = ""
 			return m, nil
 		case "enter":
 			tok := strings.TrimSpace(m.search.Value())
-			m.ctrlEditToken = false
-			m.search.Blur()
-			m.search.EchoMode = textinput.EchoNormal
-			if err := config.SaveControlToken(tok); err != nil {
+			m.endTokenEdit()
+			err := config.SaveControlToken(tok)
+			m.webCtrlCfg = LoadControl()
+			if err != nil {
 				m.status = i18n.Tf("Couldn't save token: %s", err.Error())
 			} else if tok == "" {
 				m.status = i18n.T("Token cleared — restart to apply")
@@ -219,7 +193,9 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		cfg := LoadControl()
 		enable := !cfg.Enabled
-		if err := config.SaveControlEnabled(enable, cfg.Addr); err != nil {
+		err := config.SaveControlEnabled(enable, cfg.Addr)
+		m.webCtrlCfg = LoadControl()
+		if err != nil {
 			m.status = i18n.Tf("Couldn't save: %s", err.Error())
 		} else if enable {
 			m.status = i18n.Tf("Control API on (%s) — restart to apply", cfg.Addr)
@@ -229,6 +205,7 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "t":
 		cfg := LoadControl()
+		m.search.CharLimit = 0 // tokens can be longer than a search
 		m.search.SetValue(cfg.Token)
 		m.search.EchoMode = textinput.EchoPassword
 		m.search.Focus()
@@ -236,14 +213,10 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.status = ""
 		return m, nil
 	case "esc", "backspace":
-		m.screen = screenMenu
-		m.list.Title = "OpenDeezer"
-		m.list.SetItems(m.menuRows())
-		m.list.ResetSelected()
+		m.showMenu()
 		m.status = ""
 		return m, nil
-	case "ctrl+c", "q":
-		m.shutdown()
+	case "q":
 		return m, tea.Quit
 	case "enter", " ":
 		if m.webRemoteActive {
@@ -258,6 +231,14 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.webRemoteEnableCmd()
 	}
 	return m, nil
+}
+
+// endTokenEdit returns the shared text input to its search settings.
+func (m *Model) endTokenEdit() {
+	m.ctrlEditToken = false
+	m.search.Blur()
+	m.search.EchoMode = textinput.EchoNormal
+	m.search.CharLimit = searchCharLimit
 }
 
 // webRemoteView renders the Web Remote screen.
@@ -289,7 +270,7 @@ func (m *Model) webRemoteView(rows int) string {
 
 	// Control API: the persisted setting used for the remote-control feature and
 	// MCP, separate from (but shareable with) the ad-hoc pairing above.
-	cfg := LoadControl()
+	cfg := m.webCtrlCfg
 	apiStatus := i18n.T("off")
 	if cfg.Enabled {
 		apiStatus = i18n.T("on") + " · " + cfg.Addr

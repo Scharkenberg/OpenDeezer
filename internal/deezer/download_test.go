@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bogem/id3v2/v2"
@@ -91,7 +92,7 @@ func TestTagFile_WritesID3v24AndCover(t *testing.T) {
 	fakeArt := makeTestJPEG()
 	fetch := func(context.Context, string) ([]byte, error) { return fakeArt, nil }
 
-	if err := tagFile(context.Background(), mp3Path, tr, "https://cdnt.dzcdn.net/cover/500x500.jpg", 12, "2026-03-04", fetch); err != nil {
+	if err := tagFile(context.Background(), mp3Path, "mp3", tr, "https://cdnt.dzcdn.net/cover/500x500.jpg", 12, "2026-03-04", fetch); err != nil {
 		t.Fatalf("tagFile(mp3): %v", err)
 	}
 
@@ -152,7 +153,7 @@ func TestTagFile_WritesFLACVorbisAndPicture(t *testing.T) {
 	fakeArt := makeTestJPEG()
 	fetch := func(context.Context, string) ([]byte, error) { return fakeArt, nil }
 
-	if err := tagFile(context.Background(), flacPath, tr, "https://cdnt.dzcdn.net/p.jpg", 4, "2025", fetch); err != nil {
+	if err := tagFile(context.Background(), flacPath, "flac", tr, "https://cdnt.dzcdn.net/p.jpg", 4, "2025", fetch); err != nil {
 		t.Fatalf("tagFile(flac): %v", err)
 	}
 
@@ -322,6 +323,54 @@ func TestSaveBatch_SkipExistingAndProgress(t *testing.T) {
 	// t1 should still have old content (skipped)
 	if b, _ := os.ReadFile(filepath.Join(tmp, name1)); string(b) != "preexisting" {
 		t.Error("skip did not preserve preexisting file")
+	}
+}
+
+// A file already there is skipped before its stream is resolved, and the
+// tracks of one album fetch their cover once.
+func TestSaveBatch_SkipsBeforePlanAndFetchesCoverOnce(t *testing.T) {
+	tmp := t.TempDir()
+	c := &Client{}
+	var trs []Track
+	for i := range 6 {
+		trs = append(trs, Track{ID: fmt.Sprint("t", i), Name: fmt.Sprint("Song ", i), Artists: []Artist{{Name: "A"}}, ArtworkURL: "https://cdn/cover.jpg"})
+	}
+	if err := os.WriteFile(filepath.Join(tmp, trackFileName(trs[0], "mp3")), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	plans, fetches := map[string]int{}, 0
+	opts := DownloadOptions{
+		Concurrency:  3,
+		SkipExisting: true,
+		ArtworkFetcher: func(ctx context.Context, u string) ([]byte, error) {
+			mu.Lock()
+			fetches++
+			mu.Unlock()
+			return []byte("jpeg"), nil
+		},
+		planResolver: func(id string) (*StreamPlan, error) {
+			mu.Lock()
+			plans[id]++
+			mu.Unlock()
+			return &StreamPlan{Format: "MP3_320"}, nil
+		},
+		trackSaver: func(ctx context.Context, tt Track, d string, plan *StreamPlan, f ArtworkFetcher) (string, error) {
+			if b, err := f(ctx, tt.ArtworkURL); err != nil || string(b) != "jpeg" {
+				return "", fmt.Errorf("cover %q %v", b, err)
+			}
+			return filepath.Join(d, trackFileName(tt, "mp3")), nil
+		},
+	}
+	saved, err := c.saveBatch(context.Background(), trs, tmp, opts)
+	if err != nil || len(saved) != 6 {
+		t.Fatalf("saved %d, err %v", len(saved), err)
+	}
+	if plans["t0"] != 0 || len(plans) != 5 {
+		t.Fatalf("plans resolved %v, want none for the existing file", plans)
+	}
+	if fetches != 1 {
+		t.Fatalf("cover fetched %d times, want 1", fetches)
 	}
 }
 

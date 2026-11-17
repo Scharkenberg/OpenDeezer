@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -560,7 +559,7 @@ func TestEventsSlowSubscriberDoesNotBlockAnother(t *testing.T) {
 	case <-slow.state:
 		// A notification is only a prompt to take a fresh snapshot, so the
 		// already-buffered signal naturally coalesces to the newest state.
-		payload, err := s.stateEventPayload()
+		payload, _, err := s.stateEventPayload(0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -573,6 +572,33 @@ func TestEventsSlowSubscriberDoesNotBlockAnother(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("slow subscriber lost its coalesced notification")
+	}
+}
+
+// A host with a status-since callback gets the queue version the stream last
+// carried, so it can skip building an unchanged queue.
+func TestStateEventPayloadUsesStatusSince(t *testing.T) {
+	full := 0
+	s := New(Config{}, func() State { full++; return State{} }, nil, Commands{}, nil)
+	var asked []uint64
+	s.SetStatusSince(func(sent uint64) State {
+		asked = append(asked, sent)
+		st := State{QueueVersion: 7}
+		if sent != 7 {
+			st.Queue = []Track{{ID: "a"}}
+		}
+		return st
+	})
+	payload, version, err := s.stateEventPayload(0)
+	if err != nil || version != 7 || !strings.Contains(payload, `"id":"a"`) {
+		t.Fatalf("first payload %s version %d err %v", payload, version, err)
+	}
+	payload, _, _ = s.stateEventPayload(7)
+	if strings.Contains(payload, `"id":"a"`) {
+		t.Fatalf("unchanged queue resent: %s", payload)
+	}
+	if full != 0 || len(asked) != 2 || asked[0] != 0 || asked[1] != 7 {
+		t.Fatalf("status calls %d, status-since asked %v", full, asked)
 	}
 }
 
@@ -1895,7 +1921,7 @@ func TestPairingCodeGenerationFailureFailsClosed(t *testing.T) {
 		if code := s.EnablePairing(); code != "" {
 			t.Fatalf("EnablePairing code = %q after entropy failure, want empty", code)
 		}
-		if s.PairingActive() || s.PairingCode() != "" || s.webRemoteEnabled() {
+		if s.PairingActive() || s.PairingCode() != "" || s.WebRemoteEnabled() {
 			t.Fatal("entropy failure left pairing or the web remote enabled")
 		}
 		rr := pairHandlerRequest(s, "192.0.2.10:1000", "")
@@ -1915,7 +1941,7 @@ func TestPairingCodeGenerationFailureFailsClosed(t *testing.T) {
 		if s.PairingActive() || s.PairingCode() != "" {
 			t.Fatal("entropy failure left the previous pairing code active")
 		}
-		if !s.webRemoteEnabled() || !s.sessionAuthRequired() {
+		if !s.WebRemoteEnabled() || !s.sessionAuthRequired() {
 			t.Fatal("entropy failure weakened the configured web-remote auth mode")
 		}
 		rr := pairHandlerRequest(s, "192.0.2.10:1000", "123456")
@@ -2037,7 +2063,7 @@ func TestWebRemoteStateConcurrentAccess(t *testing.T) {
 		defer wg.Done()
 		<-start
 		for i := 0; i < 200; i++ {
-			_ = s.webRemoteEnabled()
+			_ = s.WebRemoteEnabled()
 			_ = s.sessionAuthRequired()
 			_ = s.authMode()
 			rr := httptest.NewRecorder()
@@ -2048,19 +2074,24 @@ func TestWebRemoteStateConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
+// serveLAN answers one request the way a server configured for every interface
+// would, without binding one (a wildcard listener makes the OS firewall ask
+// about the test binary).
+func serveLAN(s *Server, method, path string, headers map[string]string, body []byte) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, "http://192.168.1.5:7654"+path, bytes.NewReader(body))
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	rr := httptest.NewRecorder()
+	s.handler().ServeHTTP(rr, req)
+	return rr
+}
+
 func TestDisablePairingKeepsLANServerClosed(t *testing.T) {
 	s := New(Config{Addr: "0.0.0.0:0", WebRemote: true},
 		func() State { return State{} }, nil, Commands{}, nil)
-	if err := s.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	_, port, err := net.SplitHostPort(s.Addr())
-	if err != nil {
-		t.Fatalf("addr parse: %v", err)
-	}
 	s.DisablePairing()
-	if code := getWith(t, "http://127.0.0.1:"+port+"/status", nil); code != http.StatusUnauthorized {
+	if code := serveLAN(s, http.MethodGet, "/status", nil, nil).Code; code != http.StatusUnauthorized {
 		t.Fatalf("no-session LAN status after DisablePairing = %d, want 401", code)
 	}
 }
@@ -2123,6 +2154,7 @@ func TestPairingFlow(t *testing.T) {
 		wrongCode = "000002"
 	}
 	req, _ := http.NewRequest(http.MethodPost, base+"/pair?code="+wrongCode, nil)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -2235,10 +2267,12 @@ func TestPairingFlow(t *testing.T) {
 	_ = s.EnablePairing()
 	for i := 0; i < 5; i++ {
 		req, _ := http.NewRequest(http.MethodPost, base+"/pair?code=000000", nil)
+		req.Header.Set("Content-Type", "application/json")
 		resp, _ := http.DefaultClient.Do(req)
 		resp.Body.Close()
 	}
 	req, _ = http.NewRequest(http.MethodPost, base+"/pair?code=000000", nil)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -2259,42 +2293,25 @@ func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
 		func() State { return State{} },
 		acct,
 		Commands{}, nil)
-	if err := s.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-
-	// Derive a connectable base (127.0.0.1 works for a wildcard bind).
-	_, port, err := net.SplitHostPort(s.Addr())
-	if err != nil {
-		t.Fatalf("addr parse: %v", err)
-	}
-	base := "http://127.0.0.1:" + port
 
 	// Correct account id is accepted on non-loopback (for LAN Connect peers).
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Account": "42"}); code != http.StatusOK {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Account": "42"}, nil).Code; code != http.StatusOK {
 		t.Fatalf("matching account id on non-loopback = %d, want 200", code)
 	}
 	// Wrong account id is rejected.
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Account": "999"}); code != http.StatusUnauthorized {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Account": "999"}, nil).Code; code != http.StatusUnauthorized {
 		t.Fatalf("wrong account id on non-loopback = %d, want 401", code)
 	}
 
 	// Pairing must be used to obtain session.
 	pairCode := s.EnablePairing()
 	body, _ := json.Marshal(map[string]string{"code": pairCode})
-	req, _ := http.NewRequest(http.MethodPost, base+"/pair", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("pair on nonloop sameacct = %d, want 200", resp.StatusCode)
+	rr := serveLAN(s, http.MethodPost, "/pair", map[string]string{"Content-Type": "application/json"}, body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("pair on nonloop sameacct = %d, want 200", rr.Code)
 	}
 	var pr map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&pr); err != nil {
 		t.Fatal(err)
 	}
 	sessTok := pr["token"]
@@ -2303,7 +2320,7 @@ func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
 	}
 
 	// Valid session grants access (no need for account header).
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": sessTok}); code != http.StatusOK {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Session": sessTok}, nil).Code; code != http.StatusOK {
 		t.Fatalf("session on nonloop sameacct = %d, want 200", code)
 	}
 }
@@ -2431,5 +2448,109 @@ func TestSessionRevocation(t *testing.T) {
 	uid = "99" // switch account
 	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "switchtok1234567890abcdef"}); code != http.StatusUnauthorized {
 		t.Fatalf("post-switch session = %d, want 401 (account switch revokes)", code)
+	}
+}
+
+// Only the SPA's own JSON request may try a code; a form post or another
+// page's request is refused before it costs an attempt.
+func TestPairRefusesForeignRequests(t *testing.T) {
+	s := New(Config{Addr: "127.0.0.1:0", WebRemote: true}, nil, nil, Commands{}, nil)
+	s.EnablePairing()
+	for name, set := range map[string]func(*http.Request){
+		"form": func(r *http.Request) { r.Header.Set("Content-Type", "application/x-www-form-urlencoded") },
+		"cross-origin": func(r *http.Request) {
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Origin", "https://evil.example")
+		},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "http://192.168.1.5:7654/pair", strings.NewReader(`{"code":"000000"}`))
+		set(req)
+		rr := httptest.NewRecorder()
+		s.handlePair(rr, req)
+		if rr.Code != http.StatusUnsupportedMediaType && rr.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want refused", name, rr.Code)
+		}
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://192.168.1.5:7654/pair", strings.NewReader(`{"code":"000000"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://192.168.1.5:7654")
+	rr := httptest.NewRecorder()
+	s.handlePair(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("same-origin wrong code: status %d, want 401", rr.Code)
+	}
+}
+
+// The event stream carries the queue only when its version changes, GET
+// /status always carries it, and the Go client hands its readers complete
+// states.
+func TestEventsSendQueueOnlyWhenItsVersionChanges(t *testing.T) {
+	var stateMu sync.Mutex
+	queue := []Track{{ID: "a"}, {ID: "b"}}
+	state := State{State: "playing", Queue: queue, QueueVersion: 1}
+	snapshot := func() State {
+		stateMu.Lock()
+		defer stateMu.Unlock()
+		return state
+	}
+	update := func(f func(*State)) {
+		stateMu.Lock()
+		f(&state)
+		stateMu.Unlock()
+	}
+	s, base := newTestServer(t, Config{}, snapshot, Commands{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, scanner := openEventStream(t, ctx, base+"/events", nil)
+	defer resp.Body.Close()
+	states, err := NewClient(base, "", "").Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientState := func() State {
+		t.Helper()
+		select {
+		case st := <-states:
+			return st
+		case <-ctx.Done():
+			t.Fatal("no state from the client")
+			return State{}
+		}
+	}
+	if got := nextSSEState(t, scanner); len(got.Queue) != 2 || got.QueueVersion != 1 {
+		t.Fatalf("initial event: queue %d, version %d; want 2, 1", len(got.Queue), got.QueueVersion)
+	}
+	if got := clientState(); len(got.Queue) != 2 {
+		t.Fatalf("client initial queue %d, want 2", len(got.Queue))
+	}
+	waitForEventSubscriberCount(t, s, 2)
+
+	update(func(st *State) { st.PositionMS = 1000 })
+	s.NotifyStateChanged()
+	if got := nextSSEState(t, scanner); got.Queue != nil || got.QueueVersion != 1 || got.PositionMS != 1000 {
+		t.Fatalf("position event: queue %v, version %d", got.Queue, got.QueueVersion)
+	}
+	if got := clientState(); len(got.Queue) != 2 || got.PositionMS != 1000 {
+		t.Fatalf("client after a position event: queue %d, position %d; want 2, 1000", len(got.Queue), got.PositionMS)
+	}
+	var status State
+	r, err := http.Get(base + "/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = json.NewDecoder(r.Body).Decode(&status)
+	r.Body.Close()
+	if err != nil || len(status.Queue) != 2 {
+		t.Fatalf("GET /status queue %d (err %v), want 2", len(status.Queue), err)
+	}
+
+	update(func(st *State) { st.Queue, st.QueueVersion = nil, 2 })
+	s.NotifyStateChanged()
+	if got := nextSSEState(t, scanner); got.Queue != nil || got.QueueVersion != 2 {
+		t.Fatalf("cleared queue event: queue %v, version %d", got.Queue, got.QueueVersion)
+	}
+	if got := clientState(); got.Queue != nil {
+		t.Fatalf("client kept %d tracks after the queue was cleared", len(got.Queue))
 	}
 }

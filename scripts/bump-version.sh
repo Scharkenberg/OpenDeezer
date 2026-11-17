@@ -31,11 +31,12 @@ case "${1:-minor}" in
 esac
 echo "bump: $CUR -> $NEW"
 
-# sub FILE SED_EXPR — apply in place, warn if the file doesn't exist.
+# sub FILE SED_ARGS: apply in place (GNU and BSD sed), warn if the file
+# doesn't exist.
 sub() {
   local f=$1; shift
   [[ -f "$f" ]] || { echo "  ! missing: $f (skipped)" >&2; return 0; }
-  sed -i '' "$@" "$f"
+  sed -i.bak "$@" "$f" && rm -f "$f.bak"
   echo "  · $f"
 }
 
@@ -58,20 +59,18 @@ echo "  · gui/macos/Info.plist"
 
 # ---- GNOME ----
 sub gui/gnome/meson.build "s/version: '[0-9.]*'/version: '$NEW'/"
-sub gui/gnome/src/main.c "s/\"$CUR\"/\"$NEW\"/g"
+sub gui/gnome/src/main.c -E -e "s/(adw_about_dialog_set_version\([^,]*, )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/" \
+  -e "s/\"version\", \"[0-9]+\.[0-9]+\.[0-9]+\"/\"version\", \"$NEW\"/"
 for f in gui/gnome/po/*.po gui/gnome/po/*.pot; do
   sub "$f" "s/Project-Id-Version: opendeezer-gnome [0-9.]*/Project-Id-Version: opendeezer-gnome $NEW/"
 done
 
 # ---- KDE ----
-sub gui/kde/src/mainwindow.cpp "s/OpenDeezer $CUR/OpenDeezer $NEW/g"
+sub gui/kde/src/mainwindow.cpp -E "s/OpenDeezer [0-9]+\.[0-9]+\.[0-9]+/OpenDeezer $NEW/g"
 
 # ---- Windows ----
-sub gui/windows/MainWindow.xaml.cs "s/OpenDeezer $CUR/OpenDeezer $NEW/g"
-# Anchor on the assemblyIdentity name, not the current version: if the manifest
-# ever falls out of sync (it froze at 1.6.0.0 through several releases because the
-# old "$CUR.0" pattern silently matched nothing), a value-agnostic sed still fixes it.
-sub gui/windows/app.manifest "s/\(name=\"OpenDeezer.app\" version=\"\)[0-9.]*\"/\1$NEW.0\"/"
+# <Version> in the csproj is the only source; the build stamps app.manifest from it.
+sub gui/windows/OpenDeezer.csproj "s|<Version>[0-9.]*</Version>|<Version>$NEW</Version>|"
 
 # ---- Android (phone + TV share the module) ----
 sub gui/android/app/build.gradle.kts "s/versionName = \"[0-9.]*\"/versionName = \"$NEW\"/"
@@ -90,7 +89,7 @@ sub packaging/aur/PKGBUILD "s/^pkgver=.*/pkgver=$NEW/"
 # "/v$CUR/" pattern never matched and the source URL froze a release behind.
 # Match the tag path value-agnostically instead.
 sub packaging/aur/.SRCINFO -e "s/pkgver = .*/pkgver = $NEW/" -e "s|/refs/tags/v[0-9.]*\.tar\.gz|/refs/tags/v$NEW.tar.gz|g" -e "s/opendeezer-[0-9.]*\.tar\.gz/opendeezer-$NEW.tar.gz/g"
-sub packaging/homebrew/opendeezer.rb "s/$CUR/$NEW/g"
+sub packaging/homebrew/opendeezer.rb -E "s/^(  version )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/"
 for f in packaging/winget/*.yaml; do
   # PackageVersion + tag URLs only — ManifestVersion is the SCHEMA version.
   sub "$f" -e "s/^PackageVersion: .*/PackageVersion: $NEW/" -e "s|/v$CUR/|/v$NEW/|g" -e "s/ReleaseNotesUrl: \(.*\)v$CUR/ReleaseNotesUrl: \1v$NEW/"
@@ -104,7 +103,7 @@ echo
 echo "leftover occurrences of $CUR (excluding CHANGELOG/history — review manually):"
 grep -rn --exclude-dir=.git --exclude=CHANGELOG.md --exclude-dir=scripts -F "$CUR" \
   internal/version gui/macos/Info.plist gui/gnome/meson.build gui/gnome/po gui/kde/src/mainwindow.cpp \
-  gui/windows/app.manifest gui/android/app/build.gradle.kts gui/ios/project.yml \
+  gui/windows/OpenDeezer.csproj gui/android/app/build.gradle.kts gui/ios/project.yml \
   packaging 2>/dev/null || echo "  (none)"
 echo
 echo "done: $NEW — remember to add a CHANGELOG.md entry and run: go build ./..."

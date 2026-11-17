@@ -29,7 +29,7 @@ func (c *Client) TrackByISRC(isrc string) (Track, error) {
 	}
 	t := dto.toTrack()
 	if t.ID == "" || t.ID == "0" {
-		return Track{}, fmt.Errorf("isrc %s: not found", isrc)
+		return Track{}, fmt.Errorf("isrc %s: %w", isrc, ErrNotFound)
 	}
 	return t, nil
 }

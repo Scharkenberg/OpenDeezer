@@ -34,5 +34,8 @@ class OpenDeezerApplication : Application() {
         // don't survive a relaunch, so the stream cache neither persists across
         // reboots nor reads back into Settings.
         runCatching { Odmobile.setDataDir(filesDir.absolutePath) }
+        // Stream temp files and the default stream cache go in the app's cache
+        // directory.
+        runCatching { Odmobile.setCacheDir(cacheDir.absolutePath) }
     }
 }

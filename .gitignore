@@ -2,6 +2,11 @@
 /opendeezer
 /opendeezer.exe
 *.test
+*.test.exe
 hs_err_pid*.log
+/gui/windows.tests/bin/
+/gui/windows.tests/obj/
+TestResults/
 /gui/windows/libdeezercore.dll
 /.vs
+/gui/windows/libdeezercore.prebuilt.dll

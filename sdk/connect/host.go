@@ -112,9 +112,8 @@ func (h *Host) Addr() string { return h.srv.Addr() }
 // OpenDeezer Connect (UDP port 7655). The advertised control port is taken
 // from the endpoint's actual listen address.
 //
-// Advertising is only useful when the control endpoint binds a LAN-reachable
-// (non-loopback) address; a loopback bind is advertised but reachable only on
-// this machine.
+// Only a LAN-reachable (non-loopback) endpoint is advertised: no other device
+// could reach a loopback one.
 //
 // When advertising fails, Start leaves the control endpoint serving (reachable
 // by address) and returns an error wrapping [ErrAdvertise]; the caller must
@@ -129,6 +128,11 @@ func (h *Host) Start() error {
 	}
 	if err := h.srv.Start(); err != nil {
 		return err
+	}
+	if host, _, err := net.SplitHostPort(h.srv.Addr()); err == nil {
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return nil
+		}
 	}
 	resp, err := Advertise(h.advertiseInfo, portOf(h.srv.Addr()))
 	if err != nil {

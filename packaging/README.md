@@ -61,9 +61,9 @@ covers local build/install tests and the human Snap Store publication step.
 The manifests under [`flatpak/`](flatpak/) remain useful for local Flatpak
 builds. They are not a Flathub submission. Current
 [Flathub requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
-restrict AI-assisted applications and submission material and also impose
-third-party trademark rules. A human maintainer must obtain policy and naming
-clearance before replacing and submitting the stale `flatpak/flathub/` draft.
+impose submission policies and third-party trademark rules. A maintainer must
+obtain policy and naming clearance before replacing and submitting the stale
+`flatpak/flathub/` draft.
 
 ## Terminal package managers
 

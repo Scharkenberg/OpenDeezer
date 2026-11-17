@@ -77,21 +77,73 @@ func SetLevel(l Level) {
 }
 
 // OpenFile points logging at <dir>/opendeezer.log (appended, 0600), honoring the
-// OPENDEEZER_LOG env var ("debug"/"info"/...) for the level. Returns the file so
-// the caller can Close it; logging is a no-op (discard) on failure.
-func OpenFile(dir string) (*os.File, error) {
+// OPENDEEZER_LOG env var ("debug"/"info"/...) for the level. Logging is a no-op
+// (discard) on failure.
+func OpenFile(dir string) error {
 	if v := os.Getenv("OPENDEEZER_LOG"); v != "" {
 		SetLevel(ParseLevel(v))
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
+		return err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "opendeezer.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	r := &rollingFile{path: filepath.Join(dir, "opendeezer.log")}
+	if err := r.open(); err != nil {
+		return err
+	}
+	SetOutput(r)
+	return nil
+}
+
+// maxLogBytes is the size at which the log moves to opendeezer.log.old, as
+// the Windows app's own log does.
+const maxLogBytes = 512 * 1024
+
+// rename is os.Rename, indirected so a test can make the move fail.
+var rename = os.Rename
+
+// rollingFile appends to path and moves it to path.old once it passes
+// maxLogBytes. Written under mu.
+type rollingFile struct {
+	path string
+	f    *os.File
+	size int64
+	// rollAt is the size at which the next move is tried: maxLogBytes, or
+	// another maxLogBytes further after a move or the reopening after it
+	// failed.
+	rollAt int64
+}
+
+func (r *rollingFile) open() error {
+	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	SetOutput(f)
-	return f, nil
+	r.f, r.size = f, 0
+	if fi, err := f.Stat(); err == nil {
+		r.size = fi.Size()
+	}
+	r.rollAt = maxLogBytes
+	return nil
+}
+
+func (r *rollingFile) Write(p []byte) (int, error) {
+	if r.size > r.rollAt {
+		_ = r.f.Close()
+		// Another process (the TUI or the app) may hold the file open, which
+		// makes the rename fail on Windows: the log then grows on, and the
+		// move is tried again another maxLogBytes later.
+		moved := rename(r.path, r.path+".old") == nil
+		if err := r.open(); err != nil {
+			r.rollAt = r.size + maxLogBytes
+			return 0, err
+		}
+		if !moved {
+			r.rollAt = r.size + maxLogBytes
+		}
+	}
+	n, err := r.f.Write(p)
+	r.size += int64(n)
+	return n, err
 }
 
 func logf(l Level, format string, args ...any) {

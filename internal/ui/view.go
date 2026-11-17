@@ -24,6 +24,7 @@ var (
 
 // View renders the whole screen.
 func (m *Model) View() string {
+	m.barY = -1
 	if !m.ready {
 		return "starting…"
 	}
@@ -31,6 +32,15 @@ func (m *Model) View() string {
 		return m.noInternetView() // full screen, no playback footer
 	}
 	footer := m.footer()
+	// The footer is the bottom of the screen; the progress bar is its last
+	// line drawn with "━", absent when the footer is cut short.
+	lines := strings.Split(footer, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "━") {
+			m.barY = m.height - len(lines) + i
+			break
+		}
+	}
 	if m.height <= 1 {
 		return footer
 	}
@@ -213,7 +223,7 @@ func (m *Model) footer() string {
 	st := m.player.State()
 	var now string
 	cur, hasCur := m.q.Current()
-	if hasCur && (m.playing || st == audio.Playing || st == audio.Paused) {
+	if hasCur && (m.playing || st == audio.Playing || st == audio.Paused || st == audio.Errored) {
 		t := cur
 		icon := "▶"
 		switch st {
@@ -221,6 +231,8 @@ func (m *Model) footer() string {
 			icon = "⏸"
 		case audio.Loading:
 			icon = "…"
+		case audio.Errored:
+			icon = "⚠" // the error itself is in the status line (tick)
 		}
 		now = fmt.Sprintf("%s %s %s",
 			icon, accent.Render(t.Name), dim.Render("· "+t.ArtistLine()))
@@ -246,8 +258,11 @@ func (m *Model) footer() string {
 		shuf, i18n.T(m.q.Repeat().String()), int(m.player.Volume()*100+0.5)))
 
 	status := ""
-	if m.status != "" {
-		s := m.status
+	s := m.status
+	if m.plConfirm {
+		s = i18n.Tf("Delete playlist %s? (y/n)", m.plTarget.Name)
+	}
+	if s != "" {
 		if m.loading {
 			s = m.spinner.View() + s
 		}
@@ -272,22 +287,21 @@ func (m *Model) footer() string {
 }
 
 // footerHelp keeps the primary controls discoverable without letting the full
-// shortcut legend run off narrow terminals. The complete legend remains on
-// wide screens and on the dedicated ? help screen.
+// shortcut legend run off narrow terminals: the longest legend that fits the
+// width on one line. The complete legend remains on the ? help screen.
 func (m *Model) footerHelp(shuffle, repeat string, volume int) string {
-	switch {
-	case m.width >= 124:
-		return i18n.Tf(
+	for _, s := range []string{
+		i18n.Tf(
 			"space play · n/p · z shuf:%s · r rep:%s · +/- %d%% · m radio · / search · ^f filter · l lyrics · u queue · h qual · ? help · q quit",
-			shuffle, repeat, volume)
-	case m.width >= 62:
-		return "space " + i18n.T("play / pause") + " · n/p · +/- · / " +
-			i18n.T("Search") + " · ? · q " + i18n.T("quit")
-	case m.width >= 38:
-		return "space · n/p · / " + i18n.T("Search") + " · ? · q"
-	default:
-		return "space · / · ? · q"
+			shuffle, repeat, volume),
+		"space " + i18n.T("play / pause") + " · n/p · +/- · / " + i18n.T("Search") + " · ? · q " + i18n.T("quit"),
+		"space · n/p · / " + i18n.T("Search") + " · ? · q",
+	} {
+		if lipgloss.Width(s) <= m.width {
+			return s
+		}
 	}
+	return "space · / · ? · q"
 }
 
 func (m *Model) progressBar() string {
@@ -394,7 +408,7 @@ func (m *Model) lyricsView(bodyRows int) string {
 	// local queue/player are unrelated to what the peer is playing).
 	t, ok := m.q.Current()
 	pos := m.player.PositionMS()
-	if m.remote != nil && m.remoteState.Track != nil {
+	if m.peer() != nil && m.remoteState.Track != nil {
 		t, ok = remoteTrack(m.remoteState.Track), true
 		pos = m.remoteState.PositionMS
 	}
@@ -468,6 +482,7 @@ func (m *Model) helpView(rows int) string {
 		{"M", "toggle mono downmix"},
 		{"d", "choose output device"},
 		{"x", "cycle crossfade (off/3/6/12s)"},
+		{"C", "cycle stream cache size (off/1/2/5/10/20 GB)"},
 		{"ctrl+g", "toggle gapless"},
 		{"l", "lyrics (synced when available)"},
 		{"u", "queue view"},

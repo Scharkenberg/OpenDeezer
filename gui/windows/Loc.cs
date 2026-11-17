@@ -1,18 +1,5 @@
-// Localization helper for the OpenDeezer Windows client.
-//
-// All UI is built in code-behind, so the classic WinUI x:Uid markup pattern does
-// not apply. Instead strings live in Strings\<locale>\Resources.resw and are
-// resolved here through MRT Core (Microsoft.Windows.ApplicationModel.Resources).
-//
-//   Loc.S("Nav_Home")                       -> "Home" / "首页" / ...
-//   Loc.Format("Update_TitleFormat", ver)   -> string.Format with {0}, {1}, ...
-//   Loc.Plural("Tracks", n)                  -> CLDR-correct counted noun ("3 titres")
-//
-// The active language is chosen by the user (Settings > Language) and persisted in
-// settings.json. An empty tag ("") means "follow the Windows display language".
-// SetLanguage() is called once at startup (MainWindow ctor) BEFORE the UI is built,
-// so every literal picks up the right language; changing it later needs a restart
-// because the already-built code-behind tree does not re-text itself.
+// Strings from Strings\<locale>\Resources.resw through MRT Core. The language is set once
+// before any UI is built; a change needs a restart because built elements keep their text.
 
 using System;
 using System.Globalization;
@@ -26,14 +13,13 @@ internal static class Loc
     private static readonly ResourceManager _rm = new();
     private static ResourceContext _ctx = _rm.CreateResourceContext();
 
-    private static string _base = "en";       // base language subtag for plural / RTL rules
-    private static CultureInfo _culture = CultureInfo.InvariantCulture; // number formatting
+    private static string _base = "en";
+    private static CultureInfo _culture = CultureInfo.InvariantCulture;
     private static bool _rtl;
 
-    // Supported UI languages: (settings tag, base subtag). "" = follow the OS.
     internal static readonly (string Tag, string Native)[] Languages =
     {
-        ("",       "System default"), // replaced with the localized label by the caller
+        ("",       "System default"),
         ("en-US",  "English"),
         ("zh-CN",  "简体中文"),
         ("hi-IN",  "हिन्दी"),
@@ -43,26 +29,28 @@ internal static class Loc
         ("ru-RU",  "Русский"),
     };
 
-    // Point the resource resolver at a specific language (or the OS default when the
-    // tag is empty). Recreates the ResourceContext so a stale Language qualifier can
-    // never linger. Also derives the base subtag, formatting culture and RTL flag.
     internal static void SetLanguage(string tag)
     {
         _ctx = _rm.CreateResourceContext();
-        string resolved;
-        if (!string.IsNullOrEmpty(tag))
-        {
-            _ctx.QualifierValues["Language"] = tag;
-            resolved = tag;
-        }
-        else
-        {
-            // Follow the OS display language (MRT resolves resources the same way).
-            try { resolved = CultureInfo.CurrentUICulture.Name; } catch { resolved = "en-US"; }
-        }
+        lock (_cache) _cache.Clear();
+        // Windows' language maps onto the nearest shipped one, else English, so plural and RTL rules match.
+        string resolved = string.IsNullOrEmpty(tag) ? NearestShipped(OsLanguage()) : tag;
+        _ctx.QualifierValues["Language"] = resolved;
         _base = BaseOf(resolved);
         _culture = SafeCulture(resolved);
         _rtl = _base is "ar" or "he" or "fa" or "ur";
+    }
+
+    private static string OsLanguage() => CultureInfo.CurrentUICulture.Name;
+
+    private static string NearestShipped(string os)
+    {
+        foreach (var l in Languages)
+            if (!string.IsNullOrEmpty(l.Tag) && string.Equals(l.Tag, os, StringComparison.OrdinalIgnoreCase)) return l.Tag;
+        string b = BaseOf(os);
+        foreach (var l in Languages)
+            if (!string.IsNullOrEmpty(l.Tag) && BaseOf(l.Tag) == b) return l.Tag;
+        return "en-US";
     }
 
     private static string BaseOf(string tag)
@@ -75,57 +63,75 @@ internal static class Loc
     private static CultureInfo SafeCulture(string tag)
     {
         try { return string.IsNullOrEmpty(tag) ? CultureInfo.CurrentCulture : new CultureInfo(tag); }
-        catch { return CultureInfo.InvariantCulture; }
+        catch (CultureNotFoundException ex)
+        {
+            AppLog.Write("culture " + tag + ": " + ex.Message);
+            return CultureInfo.InvariantCulture;
+        }
     }
 
     internal static bool IsRtl => _rtl;
+
+    // The app language's culture, for dates and numbers.
+    internal static CultureInfo Culture => _culture;
 
     // Fully qualified so the enum reference cannot bind to this same-named property.
     internal static Microsoft.UI.Xaml.FlowDirection FlowDirection =>
         _rtl ? Microsoft.UI.Xaml.FlowDirection.RightToLeft : Microsoft.UI.Xaml.FlowDirection.LeftToRight;
 
-    // Look up a resource by key. A missing key returns the key itself (so an
-    // untranslated build still renders something identifiable, never blank).
+    // Each MRT lookup is a native call, so values are cached per language.
+    private static readonly System.Collections.Generic.Dictionary<string, string> _cache = new();
+
     internal static string S(string key)
     {
+        lock (_cache)
+        {
+            if (_cache.TryGetValue(key, out var hit)) return hit;
+        }
+        string v = key;
         try
         {
             var c = _rm.MainResourceMap.TryGetValue("Resources/" + key, _ctx);
-            if (c != null) return c.ValueAsString;
+            if (c != null) v = c.ValueAsString;
         }
-        catch { }
-        return key;
+        catch (Exception ex) { AppLog.Write("resource " + key + ": " + ex.Message); }
+        lock (_cache) _cache[key] = v;
+        return v;
     }
 
-    // Positional {0}/{1}/... substitution, formatted in the active culture.
-    internal static string Format(string key, params object[] args)
+    internal static string Format(string key, params object[] args) => Fill(S(key), args);
+
+    // Replaces {0}..{9} with the arguments in the language's culture. Anything else, such as a
+    // translation with a broken or extra placeholder, stays as written instead of throwing.
+    internal static string Fill(string fmt, params object[] args)
     {
-        string fmt = S(key);
-        try { return string.Format(_culture, fmt, args); }
-        catch { return fmt; }
+        var sb = new System.Text.StringBuilder(fmt.Length + 16);
+        for (int i = 0; i < fmt.Length; i++)
+        {
+            if (fmt[i] == '{' && i + 2 < fmt.Length && fmt[i + 2] == '}' && char.IsAsciiDigit(fmt[i + 1]) && fmt[i + 1] - '0' < args.Length)
+            {
+                sb.Append(Convert.ToString(args[fmt[i + 1] - '0'], _culture));
+                i += 2;
+            }
+            else sb.Append(fmt[i]);
+        }
+        return sb.ToString();
     }
 
-    // Counted noun with the platform-native plural form. `baseKey` is the noun stem
-    // ("Tracks"); the resolved key is baseKey + "_" + <CLDR category>. The count is
-    // formatted in the active culture and substituted for {0}.
+    // The counted noun for the language's CLDR category (baseKey_One, _Few, ...), else _Other.
     internal static string Plural(string baseKey, long n)
     {
         string cat = PluralCategory(_base, n);
         string fmt = S(baseKey + "_" + cat);
-        if (fmt == baseKey + "_" + cat) // category missing for this language -> Other
+        if (fmt == baseKey + "_" + cat)
         {
             fmt = S(baseKey + "_Other");
             if (fmt == baseKey + "_Other") fmt = "{0}";
         }
-        string num;
-        try { num = n.ToString("N0", _culture); } catch { num = n.ToString(CultureInfo.InvariantCulture); }
-        try { return string.Format(_culture, fmt, num); }
-        catch { return num; }
+        return Fill(fmt, n.ToString("N0", _culture));
     }
 
-    // CLDR cardinal plural category (returns a key suffix: One/Two/Few/Many/Other/Zero).
-    // Only the categories a language actually uses are ever returned, matching the
-    // forms present in that language's Resources.resw.
+    // Returns only the categories the language uses, matching the forms in its .resw.
     private static string PluralCategory(string lang, long n)
     {
         long an = Math.Abs(n);

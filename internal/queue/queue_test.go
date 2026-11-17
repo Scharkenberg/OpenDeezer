@@ -300,3 +300,88 @@ func TestSetIndexAfterAdvanceRecordsHistory(t *testing.T) {
 		t.Fatalf("Prev after AdvanceAuto+pick should retrace to 1, got %d", q2.Index())
 	}
 }
+
+// Add to an empty queue, next, prev: the cursor must come back to the first
+// track instead of falling off to -1.
+func TestNextFromNoCurrentKeepsHistoryValid(t *testing.T) {
+	q := New()
+	q.Append(tracks(3)...)
+	if !q.Next() || curID(q) != "a" {
+		t.Fatalf("next from no current -> %q, want a", curID(q))
+	}
+	if !q.Next() || curID(q) != "b" {
+		t.Fatalf("next -> %q, want b", curID(q))
+	}
+	if !q.Prev() || curID(q) != "a" {
+		t.Fatalf("prev -> %q, want a", curID(q))
+	}
+	if q.Prev() || curID(q) != "a" {
+		t.Fatalf("prev at the first track moved the cursor to %q", curID(q))
+	}
+}
+
+func TestAdvanceLinearFromNoCurrentPushesNoHistory(t *testing.T) {
+	q := New()
+	q.Append(tracks(2)...)
+	if !q.AdvanceLinear() || curID(q) != "a" {
+		t.Fatalf("AdvanceLinear -> %q, want a", curID(q))
+	}
+	if len(q.history) != 0 {
+		t.Fatalf("history = %v, want empty", q.history)
+	}
+}
+
+// With shuffle on, Next from no current starts the cycle at order[0], so every
+// track of the cycle plays.
+func TestShuffleNextFromNoCurrentPlaysWholeCycle(t *testing.T) {
+	q := New()
+	q.SetShuffle(true)
+	q.Append(tracks(4)...)
+	seen := map[string]bool{}
+	for q.Next() {
+		seen[curID(q)] = true
+	}
+	if len(seen) != 4 {
+		t.Fatalf("played %d distinct tracks in one cycle, want 4: %v", len(seen), seen)
+	}
+}
+
+// Append under shuffle keeps the part of the cycle already played and puts the
+// new tracks after the current position.
+func TestShuffleAppendKeepsPlayedPrefix(t *testing.T) {
+	q := New()
+	q.SetShuffle(true)
+	q.Set(tracks(4), 0)
+	q.Next()
+	q.Next()
+	played := append([]int(nil), q.order[:q.pos+1]...)
+	q.Append(tracks(3)...)
+	if len(q.order) != 7 {
+		t.Fatalf("order has %d entries, want 7", len(q.order))
+	}
+	for i, idx := range played {
+		if q.order[i] != idx {
+			t.Fatalf("order prefix changed: %v, was %v", q.order[:len(played)], played)
+		}
+	}
+	if q.order[q.pos] != q.index {
+		t.Fatalf("order[pos]=%d, index=%d", q.order[q.pos], q.index)
+	}
+	seen := map[int]bool{}
+	for _, idx := range q.order {
+		seen[idx] = true
+	}
+	if len(seen) != 7 {
+		t.Fatalf("order is not a permutation: %v", q.order)
+	}
+}
+
+func TestSetCopiesTracks(t *testing.T) {
+	ts := tracks(3)
+	q := New()
+	q.Set(ts, 0)
+	q.Remove(1)
+	if ts[1].ID != "b" || ts[2].ID != "c" {
+		t.Fatalf("Remove rewrote the caller's slice: %v", ts)
+	}
+}

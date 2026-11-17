@@ -194,7 +194,7 @@ func (c *Client) Stop() (State, error) { return c.c.Stop() }
 func (c *Client) Restart() (State, error) { return c.c.Restart() }
 
 // SeekMS seeks to ms milliseconds from the start of the current track.
-func (c *Client) SeekMS(ms int64) (State, error) { return c.c.Seek(ms) }
+func (c *Client) SeekMS(ms int64) (State, error) { return c.c.SeekMS(ms) }
 
 // SetVolume sets the volume (0.0 = silent, 1.0 = full).
 func (c *Client) SetVolume(v float64) (State, error) { return c.c.SetVolume(v) }

@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
@@ -84,7 +88,7 @@ func TestStreamCacheHitSkipsHTTP(t *testing.T) {
 	s1 := newSource(plan, 10000)
 	s1.cache = mc
 	s1.download()
-	if got := drainStreamBuffer(s1.sb); !bytes.Equal(got, want) {
+	if got := drainStreamFile(s1.sb); !bytes.Equal(got, want) {
 		t.Fatalf("first play mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 	if h := cdn.hits.Load(); h != 1 {
@@ -94,7 +98,7 @@ func TestStreamCacheHitSkipsHTTP(t *testing.T) {
 	s2 := newSource(plan, 10000)
 	s2.cache = mc
 	s2.download()
-	if got := drainStreamBuffer(s2.sb); !bytes.Equal(got, want) {
+	if got := drainStreamFile(s2.sb); !bytes.Equal(got, want) {
 		t.Fatalf("cached play output differs from the network play")
 	}
 	if h := cdn.hits.Load(); h != 1 {
@@ -103,11 +107,8 @@ func TestStreamCacheHitSkipsHTTP(t *testing.T) {
 	if e := s2.lastErr(); e != "" {
 		t.Fatalf("unexpected error on cached play: %s", e)
 	}
-	// The cached size fed setContentLength/preallocate (SeekEnd resolves early).
-	s2.sb.mu.Lock()
-	total := s2.sb.total
-	s2.sb.mu.Unlock()
-	if total != int64(len(cipher)) {
+	// The cached size is the stream's total.
+	if total := s2.sb.Total(); total != int64(len(cipher)) {
 		t.Fatalf("cached play content length = %d, want %d", total, len(cipher))
 	}
 }
@@ -124,7 +125,7 @@ func TestStreamCacheStoresExactCiphertext(t *testing.T) {
 	s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: trackID, Format: "FLAC", Encrypted: true}, 10000)
 	s.cache = mc
 	s.download()
-	drainStreamBuffer(s.sb)
+	drainStreamFile(s.sb)
 
 	rc, size, ok := mc.Get(trackID + ".FLAC")
 	if !ok {
@@ -143,34 +144,70 @@ func TestStreamCacheStoresExactCiphertext(t *testing.T) {
 	}
 }
 
-// TestStreamCacheInterruptedDownloadNotCached verifies that a torn first
-// download (mid-body drop + Range resume) leaves NO cache entry while playback
-// still completes correctly via the resume path.
-func TestStreamCacheInterruptedDownloadNotCached(t *testing.T) {
-	const trackID = "3135556"
-	cipher := makeCipher(300000)
-	want, err := deezer.DecryptTrack(trackID, cipher)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mc := newTestCache(t)
-	srv := flakyServer(t, cipher, 150000)
-	defer srv.Close()
+// TestStreamCacheResumedDownloadCached verifies that a torn first download
+// (mid-body drop + Range resume) still ends as the whole body in the stream
+// file, which the cache adopts: the entry is exactly the served ciphertext and
+// plays back as the plaintext's PCM.
+func TestStreamCacheResumedDownloadCached(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			srv := flakyServer(t, fx.cipher, len(fx.cipher)/2+7)
+			defer srv.Close()
 
-	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: trackID, Format: "MP3_320", Encrypted: true}, 10000)
-	s.cache = mc
-	s.download()
-	if got := drainStreamBuffer(s.sb); !bytes.Equal(got, want) {
-		t.Fatalf("interrupted play did not decode correctly: got %d bytes, want %d", len(got), len(want))
+			s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			s.cache = mc
+			s.download()
+			defer s.kill()
+			if e := s.lastErr(); e != "" {
+				t.Fatalf("unexpected error after successful resume: %s", e)
+			}
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("resumed play PCM %d bytes, want %d", len(got), len(want))
+			}
+			rc, size, ok := mc.Get(fx.id + "." + fx.format)
+			if !ok {
+				t.Fatal("resumed complete download was not cached")
+			}
+			got, _ := io.ReadAll(rc)
+			rc.Close()
+			if size != int64(len(fx.cipher)) || !bytes.Equal(got, fx.cipher) {
+				t.Fatalf("cached entry is not the served ciphertext: %d bytes (size %d)", len(got), size)
+			}
+		})
 	}
-	if e := s.lastErr(); e != "" {
-		t.Fatalf("unexpected error after successful resume: %s", e)
-	}
-	if _, _, ok := mc.Get(trackID + ".MP3_320"); ok {
-		t.Fatal("interrupted first download left a cache entry")
-	}
-	if n, b := mc.Stats(); n != 0 || b != 0 {
-		t.Fatalf("Stats after interrupted download = %d entries / %d bytes, want 0 / 0", n, b)
+}
+
+// TestStreamCacheShortBodyNotAdopted verifies that a body that never arrives
+// whole (every resume torn too) leaves no cache entry and no file.
+func TestStreamCacheShortBodyNotAdopted(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				start := 0
+				if rng := r.Header.Get("Range"); rng != "" {
+					start = parseRangeStart(t, rng)
+					hdr := fmt.Sprintf("Content-Range: bytes %d-%d/%d\r\n", start, len(fx.cipher)-1, len(fx.cipher))
+					tornRawResponse(t, w, "206 Partial Content", hdr, len(fx.cipher)-start, fx.cipher[start:start+10])
+					return
+				}
+				tornRawResponse(t, w, "200 OK", "", len(fx.cipher), fx.cipher[:len(fx.cipher)/2])
+			}))
+			defer srv.Close()
+
+			s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			s.cache = mc
+			s.download()
+			if n, b := mc.Stats(); n != 0 || b != 0 {
+				t.Fatalf("Stats after a short body = %d entries / %d bytes, want 0 / 0", n, b)
+			}
+			name := s.sb.f.Name()
+			s.kill()
+			if _, err := os.Stat(name); !os.IsNotExist(err) {
+				t.Fatalf("stream file after kill: %v", err)
+			}
+		})
 	}
 }
 
@@ -185,7 +222,7 @@ func TestStreamCacheSkipsPreviewAndPassthrough(t *testing.T) {
 	s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: "ep1", Format: "MP3", Encrypted: false}, 10000)
 	s.cache = mc
 	s.download()
-	if got := drainStreamBuffer(s.sb); !bytes.Equal(got, body) {
+	if got := drainStreamFile(s.sb); !bytes.Equal(got, body) {
 		t.Fatalf("passthrough play mismatch: got %d bytes, want %d", len(got), len(body))
 	}
 
@@ -196,66 +233,178 @@ func TestStreamCacheSkipsPreviewAndPassthrough(t *testing.T) {
 	s2 := newSource(&deezer.StreamPlan{CDNURL: cdn2.srv.URL, TrackID: "3135556", Format: "MP3_128", Encrypted: true, Preview: true}, 10000)
 	s2.cache = mc
 	s2.download()
-	drainStreamBuffer(s2.sb)
+	drainStreamFile(s2.sb)
 
 	if n, b := mc.Stats(); n != 0 || b != 0 {
 		t.Fatalf("preview/passthrough created cache entries: %d entries / %d bytes", n, b)
 	}
 }
 
-// tornCache is a StreamCache whose Get always hits but whose reader fails
-// after `good` bytes, exercising the fall-back-to-HTTP-from-consumed-offset
-// path of download().
-type tornCache struct {
-	data []byte
-	good int
-}
-
-func (c *tornCache) Get(string) (io.ReadCloser, int64, bool) {
-	return &tornReader{data: c.data[:c.good]}, int64(len(c.data)), true
-}
-func (c *tornCache) TeeReader(_ string, src io.Reader) io.Reader { return src }
-
-type tornReader struct {
-	data []byte
-	off  int
-}
-
-func (r *tornReader) Read(p []byte) (int, error) {
-	if r.off >= len(r.data) {
-		return 0, errors.New("cached file torn")
-	}
-	n := copy(p, r.data[r.off:])
-	r.off += n
-	return n, nil
-}
-func (r *tornReader) Close() error { return nil }
-
-// TestStreamCacheTornHitFallsBackToHTTP verifies that a mid-read error on a
-// cached entry falls back to the network from the exact ciphertext offset
-// already fed (a Range request at consumed), and playback still decodes
-// byte-identically.
+// TestStreamCacheTornHitFallsBackToHTTP verifies that a cached entry whose
+// file was cut short on disk is a miss: the track streams over the network
+// from the start, plays as the plaintext's PCM, and is cached whole again.
 func TestStreamCacheTornHitFallsBackToHTTP(t *testing.T) {
-	const trackID = "3135556"
-	const good = 100000 // deliberately not 2048-chunk-aligned
-	cipher := makeCipher(260000)
-	want, err := deezer.DecryptTrack(trackID, cipher)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cdn := newCountingCDN(t, cipher)
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			dir := t.TempDir()
+			mc, err := mediacache.New(dir, 1<<30)
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := fx.id + "." + fx.format
+			w, _ := mc.Put(key)
+			_, _ = w.Write(fx.cipher)
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			des, _ := os.ReadDir(dir)
+			for _, de := range des {
+				if de.Name() != "index.json" && de.Name() != "lock" {
+					if err := os.Truncate(filepath.Join(dir, de.Name()), 100000); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			cdn := newCountingCDN(t, fx.cipher)
 
-	s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: trackID, Format: "MP3_320", Encrypted: true}, 10000)
-	s.cache = &tornCache{data: cipher, good: good}
-	s.download()
-	if got := drainStreamBuffer(s.sb); !bytes.Equal(got, want) {
-		t.Fatalf("torn-cache play mismatch: got %d bytes, want %d", len(got), len(want))
+			s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			s.cache = mc
+			s.download()
+			defer s.kill()
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("torn-cache play PCM %d bytes, want %d", len(got), len(want))
+			}
+			if h, start := cdn.hits.Load(), cdn.lastRange.Load(); h != 1 || start != -1 {
+				t.Fatalf("HTTP fallback: %d requests, last Range start %d; want one full GET", h, start)
+			}
+			if _, size, ok := mc.Get(key); !ok || size != int64(len(fx.cipher)) {
+				t.Fatalf("entry after the fallback: ok %v size %d, want the whole body", ok, size)
+			}
+		})
 	}
-	if h := cdn.hits.Load(); h == 0 {
-		t.Fatal("no HTTP fallback happened after the torn cache read")
+}
+
+// TestStreamCacheHitReadsCacheFile verifies that a cached play reads the
+// cache entry's file itself (no copy, no HTTP), decodes to the plaintext's PCM,
+// and leaves the entry in place when the source goes.
+func TestStreamCacheHitReadsCacheFile(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			key := fx.id + "." + fx.format
+			w, _ := mc.Put(key)
+			_, _ = w.Write(fx.cipher)
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			s := newSource(&deezer.StreamPlan{TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			s.cache = mc
+			s.download()
+			if !s.sb.cached {
+				t.Fatal("the cached play does not read the cache file")
+			}
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("cached play PCM %d bytes, want %d", len(got), len(want))
+			}
+			s.kill()
+			if _, size, ok := mc.Get(key); !ok || size != int64(len(fx.cipher)) {
+				t.Fatalf("entry after the cached play: ok %v size %d", ok, size)
+			}
+		})
 	}
-	if start := cdn.lastRange.Load(); start != good {
-		t.Fatalf("HTTP fallback resumed from offset %d, want %d", start, good)
+}
+
+// The cache can be swapped while tracks start; each source keeps the cache it
+// started with (run with -race).
+func TestSetStreamCacheDuringPlayback(t *testing.T) {
+	p := newPlayer(&mockOutput{})
+	defer p.Close()
+	mc := newTestCache(t)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			if i%2 == 0 {
+				p.SetStreamCache(mc)
+			} else {
+				p.SetStreamCache(nil)
+			}
+		}
+	}()
+	for i := 0; i < 50; i++ {
+		_ = p.Play(&deezer.StreamPlan{TrackID: "1", Format: "MP3_128", Encrypted: true}, 1000)
+		p.Preload(&deezer.StreamPlan{TrackID: "2", Format: "MP3_128", Encrypted: true}, 1000)
+	}
+	<-done
+	p.SetStreamCache(mc)
+	_ = p.Play(&deezer.StreamPlan{TrackID: "3", Format: "MP3_128", Encrypted: true}, 1000)
+	if c := p.cur.Load().cache; c != StreamCache(mc) {
+		t.Fatal("a track started after SetStreamCache does not use the new cache")
+	}
+}
+
+// The stream fields are stored with the body when the cache adopts it, so a
+// track skipped after its download completed plays from the cache next time
+// with no network.
+func TestAdoptStoresMeta(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			cdn := newCountingCDN(t, fx.cipher)
+			s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, AskedFormat: "FLAC", Encrypted: true, GainDB: -4.5}, 10000)
+			s.cache = mc
+			s.download()
+			s.kill() // skipped: the track never finishes
+			m, ok := mc.GetMetaForTrack(fx.id)
+			if !ok || m.Format != fx.format || m.AskedFormat != "FLAC" || !m.Encrypted || m.GainDB != -4.5 || m.Preview {
+				t.Fatalf("meta after the download = %+v, %v; want %s asked as FLAC, encrypted, gain -4.5", m, ok, fx.format)
+			}
+		})
+	}
+}
+
+// A source that started with a cache since closed (the folder changed, or the
+// cache went off and on again) neither reads nor fills it: the track streams,
+// the cache now on that folder gets no entry and keeps its index, and the
+// temp file goes with the source.
+func TestClosedCacheNotWritten(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			dir := t.TempDir()
+			old, err := mediacache.New(dir, 1<<30)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cdn := newCountingCDN(t, fx.cipher)
+			s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			s.cache = old
+			old.Close()
+			now, err := mediacache.New(dir, 1<<30)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer now.Close()
+			idx, _ := os.ReadFile(filepath.Join(dir, "index.json"))
+
+			s.download()
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("PCM %d bytes, want %d", len(got), len(want))
+			}
+			if h := cdn.hits.Load(); h != 1 {
+				t.Fatalf("%d requests, want the track streamed once", h)
+			}
+			name := s.sb.f.Name()
+			s.kill()
+			if n, _ := now.Stats(); n != 0 {
+				t.Fatalf("the cache now on the folder has %d entries, want 0", n)
+			}
+			if after, _ := os.ReadFile(filepath.Join(dir, "index.json")); !bytes.Equal(after, idx) {
+				t.Fatal("the closed cache rewrote the folder's index")
+			}
+			if _, err := os.Stat(name); !os.IsNotExist(err) {
+				t.Fatalf("temp file after the source went: %v", err)
+			}
+		})
 	}
 }
 
@@ -266,11 +415,11 @@ func TestSetStreamCacheNilSafe(t *testing.T) {
 	p.SetStreamCache(nil) // must not panic
 	mc := newTestCache(t)
 	p.SetStreamCache(mc)
-	if p.streamCache == nil {
+	if p.cache() == nil {
 		t.Fatal("SetStreamCache did not install the cache")
 	}
 	p.SetStreamCache(nil)
-	if p.streamCache != nil {
+	if p.cache() != nil {
 		t.Fatal("SetStreamCache(nil) did not clear the cache")
 	}
 }
@@ -288,9 +437,12 @@ func TestStreamCacheOfflineHit(t *testing.T) {
 	mc := newTestCache(t)
 	// Seed the cache directly
 	cacheKey := trackID + ".MP3_320"
-	teeReader := mc.TeeReader(cacheKey, bytes.NewReader(cipher))
-	_, err = io.ReadAll(teeReader)
+	w, err := mc.Put(cacheKey)
 	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write(cipher)
+	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,7 +458,7 @@ func TestStreamCacheOfflineHit(t *testing.T) {
 	s.cache = mc
 	s.download()
 
-	if got := drainStreamBuffer(s.sb); !bytes.Equal(got, want) {
+	if got := drainStreamFile(s.sb); !bytes.Equal(got, want) {
 		t.Fatalf("offline hit play mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 	if e := s.lastErr(); e != "" {
@@ -314,11 +466,180 @@ func TestStreamCacheOfflineHit(t *testing.T) {
 	}
 
 	// Check that size handling worked correctly using the cached size
-	s.sb.mu.Lock()
-	total := s.sb.total
-	s.sb.mu.Unlock()
-	if total != int64(len(cipher)) {
+	if total := s.sb.Total(); total != int64(len(cipher)) {
 		t.Fatalf("offline play content length = %d, want %d", total, len(cipher))
+	}
+}
+
+// A plan from the cache whose entry went before the track opened (evicted,
+// expired or cleared) streams over the network through its Refresh, and the
+// body is cached again.
+func TestCachedPlanMissStreams(t *testing.T) {
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			cdn := newCountingCDN(t, fx.cipher)
+			plan := &deezer.StreamPlan{TrackID: fx.id, Format: fx.format, Encrypted: true,
+				Refresh: func() (*deezer.StreamPlan, error) {
+					return &deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, nil
+				}}
+			s := newSource(plan, 10000)
+			s.cache = mc
+			s.download()
+			defer s.kill()
+			if e := s.lastErr(); e != "" {
+				t.Fatalf("a cached plan with its entry gone failed: %s", e)
+			}
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("PCM %d bytes, want %d", len(got), len(want))
+			}
+			if h := cdn.hits.Load(); h != 1 {
+				t.Fatalf("%d requests, want 1", h)
+			}
+			if _, size, ok := mc.Get(fx.id + "." + fx.format); !ok || size != int64(len(fx.cipher)) {
+				t.Fatalf("entry after the stream: ok %v size %d", ok, size)
+			}
+		})
+	}
+}
+
+// drainRing reads a source's ring until its decoder has finished, bypassing
+// the player's gain.
+func drainRing(t *testing.T, s *source) []byte {
+	t.Helper()
+	var out []byte
+	buf := make([]byte, 4096)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		n := s.ring.read(buf)
+		out = append(out, buf[:n]...)
+		if n > 0 {
+			continue
+		}
+		if s.eof.Load() && s.ring.buffered() == 0 {
+			return out
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the decoder did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// A plan from the cache whose entry went before the source opened, and whose
+// Refresh answers another format, plays that format: its decoder, its key for
+// the cache and the meta stored with it, and the player publishes its format
+// and gain while the source is current. The other fixture's format stands for
+// the format the cache held.
+func TestCachedPlanMissOtherFormat(t *testing.T) {
+	fxs := fixtures()
+	for i, fx := range fxs {
+		other := fxs[1-i].format
+		t.Run(other+"->"+fx.format, func(t *testing.T) {
+			mc := newTestCache(t)
+			cdn := newCountingCDN(t, fx.cipher)
+			plan := &deezer.StreamPlan{TrackID: fx.id, Format: other, Encrypted: true, GainDB: -2,
+				Refresh: func() (*deezer.StreamPlan, error) {
+					return &deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, AskedFormat: "FLAC", Encrypted: true, GainDB: -6}, nil
+				}}
+			p := newPlayer(&mockOutput{})
+			defer p.Close()
+			p.SetStreamCache(mc)
+			p.SetReplayGain(true)
+			if err := p.Play(plan, 10000); err != nil {
+				t.Fatal(err)
+			}
+			s := p.cur.Load()
+			got := drainRing(t, s)
+			if e := s.lastErr(); e != "" {
+				t.Fatalf("the source failed: %s", e)
+			}
+			if want := pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("PCM %d bytes, want the %s plaintext's %d", len(got), fx.format, len(want))
+			}
+			if f := p.Format(); f != fx.format {
+				t.Fatalf("published format %q, want %q", f, fx.format)
+			}
+			if g, want := math.Float64frombits(p.gainFac.Load()), dbToFactor(-6); g != want {
+				t.Fatalf("published gain %v, want %v", g, want)
+			}
+			if f := s.plan().rgFac; f != dbToFactor(-6) {
+				t.Fatalf("source gain %v, want %v", f, dbToFactor(-6))
+			}
+			waitFor(t, "the entry", func() bool {
+				_, _, ok := mc.Get(fx.id + "." + fx.format)
+				return ok
+			})
+			if m, ok := mc.GetMetaForTrack(fx.id); !ok || m.Format != fx.format || m.AskedFormat != "FLAC" || m.GainDB != -6 {
+				t.Fatalf("meta %+v, %v; want %s asked as FLAC, gain -6", m, ok, fx.format)
+			}
+			if _, _, ok := mc.Get(fx.id + "." + other); ok {
+				t.Fatalf("an entry under the cached plan's key %s", other)
+			}
+		})
+	}
+}
+
+// A plan from the cache whose Refresh falls back to the unencrypted preview
+// plays the preview as it is (no decryption), reports it as a preview and
+// caches nothing.
+func TestCachedPlanMissPreview(t *testing.T) {
+	plain := makeMP3(120)
+	mc := newTestCache(t)
+	cdn := newCountingCDN(t, plain)
+	plan := &deezer.StreamPlan{TrackID: "fx-FLAC", Format: "FLAC", Encrypted: true,
+		Refresh: func() (*deezer.StreamPlan, error) {
+			return &deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: "fx-FLAC", Format: "MP3_128", Preview: true}, nil
+		}}
+	p := newPlayer(&mockOutput{})
+	defer p.Close()
+	p.SetStreamCache(mc)
+	if err := p.Play(plan, 30000); err != nil {
+		t.Fatal(err)
+	}
+	s := p.cur.Load()
+	got := drainRing(t, s)
+	if e := s.lastErr(); e != "" {
+		t.Fatalf("the source failed: %s", e)
+	}
+	if want := pcmOf(t, "MP3_128", bytes.NewReader(plain)); !bytes.Equal(got, want) {
+		t.Fatalf("PCM %d bytes, want %d", len(got), len(want))
+	}
+	if !p.IsPreview() || p.Format() != "MP3_128" {
+		t.Fatalf("IsPreview %v, format %q; want a preview in MP3_128", p.IsPreview(), p.Format())
+	}
+	if n, _ := mc.Stats(); n != 0 {
+		t.Fatalf("%d entries, want none for a preview", n)
+	}
+}
+
+// A preloaded source whose plan changes at its open does not publish while
+// another track is current; its promotion publishes the plan it plays.
+func TestCachedPlanMissPreloadPublishesAtPromotion(t *testing.T) {
+	fx := fixtures()[1]
+	mc := newTestCache(t)
+	cdn := newCountingCDN(t, fx.cipher)
+	p := newPlayer(&mockOutput{})
+	defer p.Close()
+	p.SetStreamCache(mc)
+	if err := p.Play(&deezer.StreamPlan{TrackID: "cur", Format: "MP3_128"}, 10000); err != nil {
+		t.Fatal(err)
+	}
+	cur := p.cur.Load()
+	p.Preload(&deezer.StreamPlan{TrackID: fx.id, Format: "MP3_128", Encrypted: true,
+		Refresh: func() (*deezer.StreamPlan, error) {
+			return &deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, nil
+		}}, 10000)
+	next := p.next.Load()
+	waitFor(t, "the preload's plan", func() bool { return next.plan().Format == fx.format })
+	if f := p.Format(); f != "MP3_128" {
+		t.Fatalf("published format %q while the preload is not current, want MP3_128", f)
+	}
+	if !p.advanceToNext(cur, next) {
+		t.Fatal("the preload was not promoted")
+	}
+	if f := p.Format(); f != fx.format {
+		t.Fatalf("published format %q after the promotion, want %q", f, fx.format)
 	}
 }
 
@@ -344,12 +665,12 @@ func TestStreamCacheOfflineMiss(t *testing.T) {
 		t.Fatalf("expected error %q, got %q", ErrOffline.Error(), gotErr)
 	}
 
-	// Drain streamBuffer should return the same error
-	_, err := s.sb.Read(make([]byte, 100))
+	// Reading the stream file should return the same error
+	_, err := s.sb.reader().Read(make([]byte, 100))
 	if err == nil {
-		t.Fatal("expected read error from streamBuffer, got nil")
+		t.Fatal("expected read error from the stream file, got nil")
 	}
 	if !errors.Is(err, ErrOffline) {
-		t.Fatalf("expected streamBuffer error errors.Is(ErrOffline), got %v", err)
+		t.Fatalf("expected stream file error errors.Is(ErrOffline), got %v", err)
 	}
 }

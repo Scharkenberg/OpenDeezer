@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Off-screen measurements of the Windows app's own controls. Compiles gui\windows as is,
+       minus its entry point, App.xaml.cs and MainWindow; never loads the engine or signs in.
+       Run with run.ps1. Not part of the app or its solution. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>OpenDeezer</RootNamespace>
+    <AssemblyName>OdHarness</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CS8305</NoWarn>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <App>..\windows\</App>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.3.260402-preview2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.3.260402-preview2" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(App)**\*.cs" Exclude="$(App)bin\**;$(App)obj\**;$(App)Program.cs;$(App)App.xaml.cs;$(App)Shell\MainWindow.cs" LinkBase="app" />
+    <ApplicationDefinition Include="$(App)App.xaml" Link="App.xaml" />
+    <PRIResource Include="$(App)Strings\**\*.resw" Link="Strings\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="$(App)opendeezer.ico" Link="opendeezer.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

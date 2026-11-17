@@ -3,18 +3,22 @@
 // machine: nothing in this package talks to the network.
 //
 // The store is safe for one writer (the player reporting plays) plus any
-// number of concurrent readers (stats views, the control API). A small
-// in-memory index is rebuilt lazily from the file on first use and kept in
-// sync by Record.
+// number of concurrent readers (stats views, the control API). Record only
+// appends; the newest entries are read into memory on the first Recent and
+// kept in sync by Record, and the stats read the file.
 package history
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +46,55 @@ type Entry struct {
 	Kind              string `json:"kind,omitempty"`    // "" / "track" = song, "episode" = podcast
 	StartedAt         int64  `json:"startedAt"`         // unix seconds
 	DurationPlayedSec int64  `json:"durationPlayedSec"` // seconds actually listened
+	ArtworkURL        string `json:"artworkUrl,omitempty"`
+	DurationMS        int64  `json:"durationMs,omitempty"` // the track's length
+}
+
+// Deezer's CDN serves artwork at
+// https://<host>.dzcdn.net/images/<kind>/<hash>/250x250-000000-80-0-0.jpg, kind
+// being "cover" for albums, "talk" for podcasts and so on.
+const (
+	cdnHost  = "e-cdns-images"
+	cdnPath  = ".dzcdn.net/images/"
+	cdnImage = "/250x250-000000-80-0-0.jpg"
+)
+
+// line is an Entry as stored in the file. An artwork URL of the CDN shape above
+// is stored as Cover ("<kind>/<hash>") and CDN (the host, omitted when it is
+// cdnHost), with ArtworkURL empty; any other URL stays in ArtworkURL. Lines that
+// carry the full URL read as they are.
+type line struct {
+	Entry
+	Cover string `json:"cover,omitempty"`
+	CDN   string `json:"cdn,omitempty"`
+}
+
+// toLine moves a CDN artwork URL into Cover and CDN, copied so the URL itself
+// is not kept alive.
+func toLine(e Entry) line {
+	rest, ok := strings.CutPrefix(e.ArtworkURL, "https://")
+	host, rest, ok2 := strings.Cut(rest, cdnPath)
+	cover, ok3 := strings.CutSuffix(rest, cdnImage)
+	if !ok || !ok2 || !ok3 {
+		return line{Entry: e}
+	}
+	if host == cdnHost {
+		host = ""
+	}
+	e.ArtworkURL = ""
+	return line{Entry: e, Cover: strings.Clone(cover), CDN: strings.Clone(host)}
+}
+
+// entry returns the Entry with its artwork URL built again.
+func (l line) entry() Entry {
+	if l.Cover != "" {
+		host := l.CDN
+		if host == "" {
+			host = cdnHost
+		}
+		l.ArtworkURL = "https://" + host + cdnPath + l.Cover + cdnImage
+	}
+	return l.Entry
 }
 
 // isEpisode reports whether this entry is a podcast episode rather than a song.
@@ -69,20 +122,25 @@ type ArtistStat struct {
 // rotation trims it back to the newest DefaultCap entries.
 const DefaultCap = 50000
 
+// recentMax is how many of the newest entries a store keeps in memory for
+// Recent; longer queries and the stats read the file.
+const recentMax = 500
+
 // Store is a JSONL-backed listening history.
 type Store struct {
 	path string
 	cap  int
 
-	mu      sync.RWMutex
-	loaded  bool
-	entries []Entry // oldest -> newest
+	mu     sync.RWMutex
+	lines  int    // entries in the file; -1 until the first Record counts them
+	loaded bool   // recent holds the file's newest entries
+	recent []line // the newest recentMax entries, oldest -> newest
 }
 
 // New returns a store backed by the given JSONL file. The file (and its
 // directory) is created on the first Record.
 func New(path string) *Store {
-	return &Store{path: path, cap: DefaultCap}
+	return &Store{path: path, cap: DefaultCap, lines: -1}
 }
 
 // Default returns the store at <config-dir>/history.jsonl (the same config
@@ -98,22 +156,27 @@ func Default() (*Store, error) {
 // Path returns the backing file path.
 func (s *Store) Path() string { return s.path }
 
-// Record appends one entry, durably (single write + fsync). When the file
-// exceeds the size cap it is rotated in place: the newest cap entries are
-// rewritten atomically (temp file + rename), matching the config package's
-// crash-safe write pattern.
+// Record appends one entry, durably (single write + fsync), without reading
+// the history. When the file exceeds the size cap it is rotated in place: the
+// newest cap entries are rewritten atomically (temp file + rename), matching
+// the config package's crash-safe write pattern.
 func (s *Store) Record(e Entry) error {
 	if e.StartedAt == 0 {
 		e.StartedAt = time.Now().Unix()
 	}
-	line, err := json.Marshal(e)
+	l := toLine(e)
+	b, err := json.Marshal(l)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.ensureLoadedLocked(); err != nil {
-		return err
+	if s.lines < 0 {
+		n, err := s.countLinesLocked()
+		if err != nil {
+			return err
+		}
+		s.lines = n
 	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0700); err != nil {
 		return err
@@ -124,7 +187,7 @@ func (s *Store) Record(e Entry) error {
 	}
 	// One Write call for the whole line so concurrent external readers never
 	// see a torn record; Sync so a crash right after Record can't lose it.
-	if _, err := f.Write(append(line, '\n')); err != nil {
+	if _, err := f.Write(append(b, '\n')); err != nil {
 		_ = f.Close()
 		return err
 	}
@@ -135,17 +198,58 @@ func (s *Store) Record(e Entry) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	s.entries = append(s.entries, e)
-	if len(s.entries) > s.cap {
+	s.lines++
+	if s.loaded {
+		if len(s.recent) == recentMax {
+			s.recent = append(s.recent[:0], s.recent[1:]...)
+		}
+		s.recent = append(s.recent, l)
+	}
+	// Rotate with slack, so a full history is not rewritten on every play. The
+	// TUI and the GUI share the file: rotation reads it again, so what the
+	// other appended meanwhile survives.
+	if s.lines > s.cap+s.cap/10 {
 		return s.rotateLocked()
 	}
 	return nil
 }
 
-// rotateLocked trims the in-memory list to the newest cap entries and
-// atomically rewrites the file to match. Caller holds the write lock.
+// countLinesLocked counts the entries in the file (0 when it does not exist).
+func (s *Store) countLinesLocked() (int, error) {
+	f, err := os.Open(s.path)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	n := 0
+	buf := make([]byte, 64*1024)
+	for {
+		k, err := f.Read(buf)
+		n += bytes.Count(buf[:k], []byte{'\n'})
+		if err == io.EOF {
+			return n, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+}
+
+// rotateLocked atomically rewrites the file with its newest cap entries.
+// Caller holds the write lock.
 func (s *Store) rotateLocked() error {
-	keep := s.entries[len(s.entries)-s.cap:]
+	var keep []line
+	if err := s.eachLocked(func(l line) { keep = append(keep, l) }); err != nil {
+		return err
+	}
+	if len(keep) > s.cap {
+		keep = keep[len(keep)-s.cap:]
+	}
+	s.loaded = false
+	s.recent = nil
 	dir := filepath.Dir(s.path)
 	tmp, err := os.CreateTemp(dir, filepath.Base(s.path)+".tmp*")
 	if err != nil {
@@ -158,13 +262,13 @@ func (s *Store) rotateLocked() error {
 		return err
 	}
 	w := bufio.NewWriter(tmp)
-	for _, e := range keep {
-		line, err := json.Marshal(e)
+	for _, l := range keep {
+		b, err := json.Marshal(l)
 		if err != nil {
 			_ = tmp.Close()
 			return err
 		}
-		if _, err := w.Write(append(line, '\n')); err != nil {
+		if _, err := w.Write(append(b, '\n')); err != nil {
 			_ = tmp.Close()
 			return err
 		}
@@ -183,80 +287,77 @@ func (s *Store) rotateLocked() error {
 	if err := os.Rename(tmpName, s.path); err != nil {
 		return err
 	}
-	// Re-slice into a fresh array so the trimmed prefix can be collected.
-	s.entries = append([]Entry(nil), keep...)
+	s.lines = len(keep)
 	return nil
 }
 
-// ensureLoadedLocked rebuilds the in-memory index from the file once. Caller
-// holds the write lock. Unparseable lines (a torn write from a crash mid-line)
-// are skipped rather than poisoning the whole history.
-func (s *Store) ensureLoadedLocked() error {
-	if s.loaded {
+// eachLocked calls fn for every entry in the file, oldest first, a full
+// artwork URL already moved into Cover and CDN. Caller holds the lock.
+// Unparseable lines (a torn write from a crash mid-line) are skipped rather
+// than poisoning the whole history; a missing file has no entries.
+func (s *Store) eachLocked(fn func(line)) error {
+	f, err := os.Open(s.path)
+	if os.IsNotExist(err) {
 		return nil
 	}
-	f, err := os.Open(s.path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			s.loaded = true
-			return nil
-		}
 		return err
 	}
 	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	var entries []Entry
 	for sc.Scan() {
 		b := sc.Bytes()
 		if len(b) == 0 {
 			continue
 		}
-		var e Entry
-		if json.Unmarshal(b, &e) != nil {
+		var l line
+		if json.Unmarshal(b, &l) != nil {
 			continue // skip corrupt line
 		}
-		entries = append(entries, e)
+		if l.Cover == "" {
+			l = toLine(l.Entry)
+		}
+		fn(l)
 	}
 	if err := sc.Err(); err != nil {
 		return fmt.Errorf("read %s: %w", s.path, err)
 	}
-	if len(entries) > s.cap {
-		entries = append([]Entry(nil), entries[len(entries)-s.cap:]...)
-	}
-	s.entries = entries
-	s.loaded = true
 	return nil
 }
 
-// load makes sure the index is built, then downgrades to a read lock pattern
-// for the query methods.
-func (s *Store) load() error {
-	s.mu.RLock()
-	loaded := s.loaded
-	s.mu.RUnlock()
-	if loaded {
-		return nil
-	}
+// Recent returns the newest n entries, newest first. n <= 0 returns all.
+// Up to recentMax entries come from memory, read from the file once.
+func (s *Store) Recent(n int) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.ensureLoadedLocked()
-}
-
-// Recent returns the newest n entries, newest first. n <= 0 returns all.
-func (s *Store) Recent(n int) ([]Entry, error) {
-	if err := s.load(); err != nil {
+	var from []line
+	if n > 0 && n <= recentMax {
+		if !s.loaded {
+			var win []line // the newest entries read so far, at most 2*recentMax
+			err := s.eachLocked(func(l line) {
+				if len(win) == 2*recentMax {
+					win = append(win[:0], win[recentMax:]...)
+				}
+				win = append(win, l)
+			})
+			if err != nil {
+				return nil, err
+			}
+			s.recent = slices.Clone(win[max(0, len(win)-recentMax):])
+			s.loaded = true
+		}
+		from = s.recent
+	} else if err := s.eachLocked(func(l line) { from = append(from, l) }); err != nil {
 		return nil, err
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	total := len(s.entries)
+	total := len(from)
 	if n <= 0 || n > total {
 		n = total
 	}
 	out := make([]Entry, 0, n)
 	for i := total - 1; i >= total-n; i-- {
-		out = append(out, s.entries[i])
+		out = append(out, from[i].entry())
 	}
 	return out, nil
 }
@@ -265,15 +366,12 @@ func (s *Store) Recent(n int) ([]Entry, error) {
 // all history), ordered by play count, then total listened time, then title.
 // Podcast episodes are excluded — this is a music-only stat.
 func (s *Store) TopTracks(since time.Time, n int) ([]TrackStat, error) {
-	if err := s.load(); err != nil {
-		return nil, err
-	}
-	s.mu.RLock()
 	cut := sinceUnix(since)
 	byKey := map[string]*TrackStat{}
-	for _, e := range s.entries {
+	s.mu.RLock()
+	err := s.eachLocked(func(e line) {
 		if e.StartedAt < cut || e.isEpisode() {
-			continue
+			return
 		}
 		key := e.TrackID
 		if key == "" {
@@ -286,8 +384,11 @@ func (s *Store) TopTracks(since time.Time, n int) ([]TrackStat, error) {
 		}
 		st.Plays++
 		st.TotalSec += e.DurationPlayedSec
-	}
+	})
 	s.mu.RUnlock()
+	if err != nil {
+		return nil, err
+	}
 	out := make([]TrackStat, 0, len(byKey))
 	for _, st := range byKey {
 		out = append(out, *st)
@@ -312,15 +413,12 @@ func (s *Store) TopTracks(since time.Time, n int) ([]TrackStat, error) {
 // Podcast episodes are excluded — this is a music-only stat (a show's name would
 // otherwise land in the artist chart).
 func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
-	if err := s.load(); err != nil {
-		return nil, err
-	}
-	s.mu.RLock()
 	cut := sinceUnix(since)
 	byArtist := map[string]*ArtistStat{}
-	for _, e := range s.entries {
+	s.mu.RLock()
+	err := s.eachLocked(func(e line) {
 		if e.StartedAt < cut || e.Artist == "" || e.isEpisode() {
-			continue
+			return
 		}
 		st, ok := byArtist[e.Artist]
 		if !ok {
@@ -329,8 +427,11 @@ func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
 		}
 		st.Plays++
 		st.TotalSec += e.DurationPlayedSec
-	}
+	})
 	s.mu.RUnlock()
+	if err != nil {
+		return nil, err
+	}
 	out := make([]ArtistStat, 0, len(byArtist))
 	for _, st := range byArtist {
 		out = append(out, *st)
@@ -354,17 +455,17 @@ func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
 // all history). This is total listening time across all media — songs and
 // podcast episodes alike (unlike TopTracks/TopArtists, which are music-only).
 func (s *Store) TotalListenedSec(since time.Time) (int64, error) {
-	if err := s.load(); err != nil {
-		return 0, err
-	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	cut := sinceUnix(since)
 	var total int64
-	for _, e := range s.entries {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	err := s.eachLocked(func(e line) {
 		if e.StartedAt >= cut {
 			total += e.DurationPlayedSec
 		}
+	})
+	if err != nil {
+		return 0, err
 	}
 	return total, nil
 }

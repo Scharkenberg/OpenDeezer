@@ -177,18 +177,67 @@ type fakeResolver struct {
 	byISRC   map[string]deezer.Track
 	bySearch map[string][]deezer.Track // key: artist + "|" + title
 	searches int
+	err      error // returned by Search when set
 }
 
 func (f *fakeResolver) ByISRC(isrc string) (deezer.Track, error) {
 	if t, ok := f.byISRC[isrc]; ok {
 		return t, nil
 	}
-	return deezer.Track{}, errors.New("not found")
+	return deezer.Track{}, deezer.ErrNotFound
 }
 
 func (f *fakeResolver) Search(artist, title string) ([]deezer.Track, error) {
 	f.searches++
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.bySearch[artist+"|"+title], nil
+}
+
+// The app's own M3U export imports again by id; a foreign M3U by its EXTINF.
+func TestParseM3U(t *testing.T) {
+	var buf bytes.Buffer
+	if err := ExportM3U(&buf, "Mix", []deezer.Track{track("3135556", "Harder", "Daft Punk", "Discovery")}); err != nil {
+		t.Fatal(err)
+	}
+	buf.WriteString("#EXTINF:180,Air - La Femme d'Argent\r\nC:\\Music\\Air\\01.mp3\r\nhttps://www.deezer.com/en/track/42\r\n")
+	rows, err := ParseCSV(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Row{{Title: "Harder", Artist: "Daft Punk", ID: "3135556"}, {Title: "La Femme d'Argent", Artist: "Air"}, {ID: "42"}}
+	if len(rows) != len(want) {
+		t.Fatalf("rows = %+v", rows)
+	}
+	for i := range want {
+		if rows[i] != want[i] {
+			t.Errorf("row %d = %+v, want %+v", i, rows[i], want[i])
+		}
+	}
+}
+
+// Non-Latin titles keep their letters, so unrelated tracks do not match.
+func TestBestMatchNonLatin(t *testing.T) {
+	if got := normalize("Кино — Группа крови"); got != "кино группа крови" {
+		t.Errorf("normalize = %q", got)
+	}
+	if _, ok := bestMatch([]deezer.Track{track("1", "夜に駆ける", "YOASOBI", "")}, "YOASOBI", "群青"); ok {
+		t.Error("an unrelated CJK title matched")
+	}
+	if _, ok := bestMatch([]deezer.Track{track("1", "!!!", "X", "")}, "X", "???"); ok {
+		t.Error("two titles with nothing comparable matched")
+	}
+}
+
+// A resolver failure stops the import instead of reading as "no match".
+func TestImportStopsOnResolverError(t *testing.T) {
+	r := &fakeResolver{err: errors.New("quota exceeded")}
+	pc := &fakeCreator{}
+	_, err := ImportPlaylist(context.Background(), r, pc, "T", []Row{{Title: "A", Artist: "B"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "quota exceeded") || pc.ids != nil {
+		t.Fatalf("err = %v, created %v", err, pc.ids)
+	}
 }
 
 type fakeCreator struct {

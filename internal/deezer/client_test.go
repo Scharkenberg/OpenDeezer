@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
 )
 
 func TestTrackIDOf(t *testing.T) {
@@ -179,6 +180,7 @@ func TestPrepareStreamCached_FromMeta_NoHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mctest.PutBody(t, mc, "cached42.MP3_320")
 	_ = mc.PutMeta("cached42.MP3_320", mediacache.StreamMeta{
 		Format:    "MP3_320",
 		Encrypted: true,
@@ -202,8 +204,8 @@ func TestPrepareStreamCached_FromMeta_NoHTTP(t *testing.T) {
 	if plan.TrackID != "cached42" || plan.Format != "MP3_320" || !plan.Encrypted || plan.GainDB != -7.5 || plan.Preview {
 		t.Errorf("plan fields wrong: %+v", plan)
 	}
-	if plan.Refresh != nil {
-		t.Error("cached plan must have nil Refresh")
+	if plan.Refresh == nil {
+		t.Error("a cached plan needs the Refresh a streamed one has, for when its entry is gone")
 	}
 
 	// Fallback path still works (and would hit the bad transport if no meta).

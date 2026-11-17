@@ -60,8 +60,7 @@ func (m *Model) discoverDevicesCmd() tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		devs, _ := discovery.Discover(700*time.Millisecond, selfPort, config.PeerHostPorts()...)
-		devs = mergeConfiguredPeers(devs, account)
+		devs, _ := discovery.ProbePeers(700*time.Millisecond, selfPort, account)
 		peers := make([]peerDevice, 0, len(devs))
 		for _, d := range devs {
 			np := ""
@@ -79,57 +78,86 @@ func (m *Model) discoverDevicesCmd() tea.Cmd {
 	}
 }
 
-// mergeConfiguredPeers adds manually-listed peers (config) not found by discovery
-// — querying each /whoami for name/type/version. Lets Connect reach peers over
-// unicast-only networks (Tailscale/VPN) with no multicast/broadcast.
-func mergeConfiguredPeers(devs []discovery.Device, account string) []discovery.Device {
-	peers := config.LoadPeers()
-	if len(peers) == 0 {
-		return devs
+// peer returns the connected peer while its screens are shown: the remote
+// screen and the lyrics opened from it. Elsewhere keys act locally.
+func (m *Model) peer() *control.Client {
+	if m.screen == screenRemoteCtl || (m.screen == screenLyrics && m.prevScreen == screenRemoteCtl) {
+		return m.remote
 	}
-	seen := map[string]bool{}
-	for _, d := range devs {
-		seen[d.Addr] = true
-	}
-	for _, p := range peers {
-		base, hp := config.NormalizePeer(p)
-		if base == "" || seen[hp] {
-			continue
-		}
-		seen[hp] = true
-		name, client, version := hp, "", ""
-		if who, err := control.NewClient(base, "", account).Whoami(); err == nil {
-			if who.Name != "" {
-				name = who.Name
-			}
-			client, version = who.Client, who.Version
-		}
-		devs = append(devs, discovery.Device{Name: name, Addr: hp, Client: client, Version: version})
-	}
-	return devs
+	return nil
 }
 
-// remotePollCmd fetches the peer's current status.
-func remotePollCmd(rc *control.Client) tea.Cmd {
+// detachRemote stops driving the peer (its playback goes on).
+func (m *Model) detachRemote() {
+	m.remote = nil
+	m.remoteState = control.State{}
+	if m.prevScreen == screenRemoteCtl {
+		m.prevScreen = screenMenu
+	}
+}
+
+// remotePoll fetches the peer's status, one request at a time.
+func (m *Model) remotePoll() tea.Cmd {
+	if m.remotePolling {
+		return nil
+	}
+	m.remotePolling = true
+	rc := m.remote
 	return func() tea.Msg {
 		st, err := rc.Status()
-		return remoteStateMsg{state: st, err: err}
+		return remoteStateMsg{client: rc, poll: true, state: st, err: err}
 	}
 }
 
 // remoteCmd runs a peer command and reports the resulting status.
-func remoteCmd(call func() (control.State, error)) tea.Cmd {
+func remoteCmd(rc *control.Client, call func() (control.State, error)) tea.Cmd {
 	return func() tea.Msg {
 		st, err := call()
-		return remoteStateMsg{state: st, err: err}
+		return remoteStateMsg{client: rc, state: st, err: err}
 	}
+}
+
+// remoteKey maps a transport key to a peer command. Seek and volume update the
+// local copy of the peer's state at once, so repeated presses add up.
+func (m *Model) remoteKey(rc *control.Client, key string) (tea.Cmd, bool) {
+	switch key {
+	case " ":
+		return remoteCmd(rc, rc.PlayPause), true
+	case "n":
+		return remoteCmd(rc, rc.Next), true
+	case "p":
+		return remoteCmd(rc, rc.Prev), true
+	case "s":
+		return remoteCmd(rc, rc.Stop), true
+	case "r":
+		return remoteCmd(rc, rc.CycleRepeat), true
+	case "z":
+		return remoteCmd(rc, rc.ToggleShuffle), true
+	case "+", "=", "-", "_":
+		d := 0.1
+		if key == "-" || key == "_" {
+			d = -d
+		}
+		v := clamp01(m.remoteState.Volume + d)
+		m.remoteState.Volume = v
+		return remoteCmd(rc, func() (control.State, error) { return rc.SetVolume(v) }), true
+	case "left", "right":
+		d := int64(10000)
+		if key == "left" {
+			d = -d
+		}
+		ms := max(0, m.remoteState.PositionMS+d)
+		m.remoteState.PositionMS = ms
+		return remoteCmd(rc, func() (control.State, error) { return rc.SeekMS(ms) }), true
+	}
+	return nil, false
 }
 
 // handleRemoteKey drives the connected peer from the remote-control screen.
 func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	rc := m.remote
 	if rc == nil {
-		m.screen = screenMenu
+		m.showMenu()
 		return m, nil
 	}
 	switch msg.String() {
@@ -137,27 +165,22 @@ func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Non-destructive detach: leaving the remote screen stops *driving* the
 		// peer, but must NOT stop its music (disconnect != stop). Crucially, no
 		// synchronous HTTP call here — an unreachable peer would otherwise freeze
-		// the update loop for the client's full timeout (B18). Use 'S' to stop the
+		// the update loop for the client's full timeout. Use 'S' to stop the
 		// peer explicitly when leaving.
-		m.remote = nil
-		m.remoteState = control.State{}
-		m.screen = screenMenu
+		m.detachRemote()
+		m.showMenu()
 		m.status = i18n.T("Disconnected from remote")
 		return m, nil
 	case "S":
 		// Stop the peer's playback AND detach. The Stop runs as a tea.Cmd (off the
 		// update loop) so an unreachable peer can't block; its result is discarded
 		// since we've already left the screen.
-		m.remote = nil
-		m.remoteState = control.State{}
-		m.screen = screenMenu
+		m.detachRemote()
+		m.showMenu()
 		m.status = i18n.T("Stopped remote and disconnected")
 		return m, remoteStopDetachCmd(rc)
-	case "ctrl+c", "Q":
-		m.shutdown() // same cleanup + resume-save as the other quit paths
+	case "Q":
 		return m, tea.Quit
-	case " ":
-		return m, remoteCmd(rc.PlayPause)
 	case "l":
 		// Show the connected peer's now-playing lyrics (the peer drives position).
 		if m.remoteState.Track == nil {
@@ -172,50 +195,9 @@ func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.lyricsCmd(t)
 		}
 		return m, nil
-	case "n":
-		return m, remoteCmd(rc.Next)
-	case "p":
-		return m, remoteCmd(rc.Prev)
-	case "s":
-		return m, remoteCmd(rc.Stop)
-	case "r":
-		return m, remoteCmd(rc.CycleRepeat)
-	case "z":
-		return m, remoteCmd(rc.ToggleShuffle)
-	case "+", "=":
-		return m, remoteVolumeCmd(rc, m.remoteState.Volume+0.1)
-	case "-", "_":
-		return m, remoteVolumeCmd(rc, m.remoteState.Volume-0.1)
-	case "left":
-		return m, remoteSeekCmd(rc, m.remoteState.PositionMS-10000)
-	case "right":
-		return m, remoteSeekCmd(rc, m.remoteState.PositionMS+10000)
 	}
-	return m, nil
-}
-
-// remoteVolumeCmd sets the peer's volume (clamped to [0,1]).
-func remoteVolumeCmd(rc *control.Client, v float64) tea.Cmd {
-	v = clamp01(v)
-	return remoteCmd(func() (control.State, error) { return rc.SetVolume(v) })
-}
-
-// remoteSeekCmd seeks the peer to ms (negative clamps to the start).
-func remoteSeekCmd(rc *control.Client, ms int64) tea.Cmd {
-	if ms < 0 {
-		ms = 0
-	}
-	return remoteCmd(func() (control.State, error) { return rc.Seek(ms) })
-}
-
-// remoteSetRepeatCmd forwards an absolute repeat mode (off|all|one) to the peer.
-func remoteSetRepeatCmd(rc *control.Client, mode string) tea.Cmd {
-	return remoteCmd(func() (control.State, error) { return rc.SetRepeat(mode) })
-}
-
-// remoteSetShuffleCmd forwards an absolute shuffle state to the peer.
-func remoteSetShuffleCmd(rc *control.Client, on bool) tea.Cmd {
-	return remoteCmd(func() (control.State, error) { return rc.SetShuffle(on) })
+	cmd, _ := m.remoteKey(rc, msg.String())
+	return m, cmd
 }
 
 // remoteStopDetachCmd stops the peer's playback in the background after the user

@@ -1,6 +1,7 @@
-// Command deezercore exposes the OpenDeezer engine (login, browse, decrypt +
-// decode + playback) as a C-callable library so native GUIs (SwiftUI on macOS,
-// GTK/libadwaita on GNOME, Qt on KDE) can drive it in-process.
+// Command deezercore exposes the OpenDeezer engine (internal/engine: login,
+// browse, decrypt + decode + playback, queue, control API, Connect) as a
+// C-callable library so native GUIs can drive it in-process. This package only
+// converts arguments and results.
 //
 // Build:
 //
@@ -17,75 +18,28 @@ package main
 import "C"
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
 	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/update"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/version"
 )
 
 func main() {} // required for buildmode=c-archive
 
 var errNotReady = errors.New("not logged in")
-
-var (
-	mu       sync.Mutex
-	client   *deezer.Client
-	player   *audio.Player
-	finished int // bumped whenever a track ends naturally
-)
-
-// playSeq is bumped by every user-initiated play (DZPlay / DZPlayEpisode) and by
-// each engine auto-advance launch. The async auto-advance resolver captures the
-// current seq before its network resolve and, just before p.Play, drops the
-// result if a newer play has since bumped it — so a slow auto-advance resolve
-// can't clobber the track the user just started. (B3)
-var playSeq atomic.Uint64
-
-// lastLoginKind records why the most recent DZInit login attempt failed so the
-// native UIs can tell "no internet" apart from "expired ARL" (DZInit itself only
-// returns a bare 0/1). Read via DZLoginErrorKind. Atomic: DZInit's Login runs off
-// the mu lock. Values match loginKind below.
-var lastLoginKind int32
-
-// loginKind maps a Login/DZInit error to the stable code the GUIs branch on:
-// 0 = ok, 1 = ARL expired/invalid (send to re-auth), 2 = no internet (show the
-// No-Internet screen + Retry), 3 = other (generic failure).
-func loginKind(err error) int32 {
-	switch {
-	case err == nil:
-		return 0
-	case deezer.IsNoNetwork(err):
-		return 2
-	case deezer.IsARLExpired(err):
-		return 1
-	default:
-		return 3
-	}
-}
-
-// Stable JSON DTOs and Deezer-to-wire conversions live in internal/bridge.
-// These aliases keep the sibling c-archive source compatible without
-// reintroducing a binding-local wire type or conversion implementation.
-type jTrack = bridge.Track
-
-func toJTrack(track deezer.Track) bridge.Track { return bridge.FromTrack(track) }
 
 // jsonStr marshals v (or an {"error":...} object) to a malloc'd C string.
 func jsonStr(v any, err error) *C.char {
@@ -101,6 +55,55 @@ func jsonStr(v any, err error) *C.char {
 	return C.CString(string(b))
 }
 
+// cBytes copies b into a malloc'd buffer (free with DZFreeBytes) and writes
+// its length to outLen; nil for an empty b.
+func cBytes(b []byte, outLen *C.int) *C.uchar {
+	*outLen = 0
+	if len(b) == 0 {
+		return nil
+	}
+	p := C.malloc(C.size_t(len(b)))
+	if p == nil {
+		return nil
+	}
+	C.memcpy(p, unsafe.Pointer(&b[0]), C.size_t(len(b)))
+	*outLen = C.int(len(b))
+	return (*C.uchar)(p)
+}
+
+func ok(err error) C.int {
+	if err != nil {
+		return 0
+	}
+	return 1
+}
+
+func cBool(v bool) C.int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+// withClient runs fn with the client for a request and returns its JSON, or
+// {"error":"..."} saying why there is none (offline mode, no login).
+func withClient(fn func(c *deezer.Client) (any, error)) *C.char {
+	c, err := engine.Online()
+	if err != nil {
+		return jsonStr(nil, err)
+	}
+	return jsonStr(fn(c))
+}
+
+// errorReply is {"error":""} for nil, else {"error":"reason"}.
+func errorReply(err error) *C.char {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	return jsonStr(map[string]string{"error": msg}, nil)
+}
+
 // ---- exported C API ----
 
 //export DZFree
@@ -113,8 +116,7 @@ func DZFree(s *C.char) { C.free(unsafe.Pointer(s)) }
 //export DZFetch
 func DZFetch(url *C.char, outLen *C.int) *C.uchar {
 	*outLen = 0
-	cl := &http.Client{Timeout: 15 * time.Second}
-	resp, err := cl.Get(C.GoString(url))
+	resp, err := deezer.HTTPClient(15 * time.Second).Get(C.GoString(url))
 	if err != nil {
 		return nil
 	}
@@ -122,187 +124,96 @@ func DZFetch(url *C.char, outLen *C.int) *C.uchar {
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil || len(b) == 0 {
+	// Bounded: the length goes out as a C int, and artwork is far smaller.
+	const maxFetch = 32 << 20
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxFetch+1))
+	if err != nil || len(b) > maxFetch {
 		return nil
 	}
-	p := C.malloc(C.size_t(len(b)))
-	if p == nil {
-		return nil
-	}
-	C.memcpy(p, unsafe.Pointer(&b[0]), C.size_t(len(b)))
-	*outLen = C.int(len(b))
-	return (*C.uchar)(p)
+	return cBytes(b, outLen)
 }
 
 //export DZFreeBytes
 func DZFreeBytes(p *C.uchar) { C.free(unsafe.Pointer(p)) }
 
+// logOnce opens the log file at the first DZInit (a re-login reuses it).
+var logOnce sync.Once
+
+// DZInit logs in with the ARL and starts the engine; 1 on success, 0 with the
+// reason in DZLoginErrorKind. Another ARL re-logs in, rebuilds the control
+// server and drops the Connect route; the same account keeps both. When the
+// login fails for want of a network (kind 2) the player, the media cache and
+// the offline pins are up anyway and offline mode is on, for the last account
+// that signed in: pinned and cached tracks play (DZOfflineCollectionsJSON,
+// DZOfflineTracksJSON, DZPlay, DZPreload, DZQueueSet). A later DZInit that
+// succeeds turns that mode off.
+//
 //export DZInit
 func DZInit(arl *C.char) C.int {
-	// One-time, non-network setup under the lock.
-	mu.Lock()
-	// This (the c-archive) is embedded in the native GUI processes. The realtime
-	// audio callback re-enters Go from CoreAudio's thread; frequent GC there can
-	// delay it and cause choppy playback (the standalone TUI doesn't show this).
-	// The engine's heap is small, so collect far less often to keep the callback
-	// timely. Set once.
-	debug.SetGCPercent(400)
-	if base, err := os.UserConfigDir(); err == nil {
-		_, _ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
-	}
-	if player == nil {
-		p, err := audio.NewPlayer()
-		if err != nil {
-			mu.Unlock()
-			return 0
+	logOnce.Do(func() {
+		if base, err := os.UserConfigDir(); err == nil {
+			_ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
 		}
-		player = p
-		// Opt-in on-disk raw-stream cache (media.json: mediaCacheMB > 0), attached
-		// once here — before any playback, as SetStreamCache requires. Best-effort:
-		// a cache failure only logs; playback simply runs uncached.
-		if mb := config.LoadMedia().MediaCacheMB; mb > 0 {
-			if dir, err := config.Dir(); err == nil {
-				if mc, err := mediacache.New(filepath.Join(dir, "mediacache"), int64(mb)<<20); err == nil {
-					player.SetStreamCache(mc)
-					mediaCache = mc // retained for preparePlan + DZDownloadForOffline (set under mu)
-					odlog.Info("media cache on (%d MB)", mb)
-				} else {
-					odlog.Warn("media cache: %v", err)
-				}
-			}
-		}
-		// onNaturalFinish (services.go) is the factored callback: it drops an
-		// errored finish (B4), records the natural-end listen, persists the
-		// finished track's stream meta into the media cache (offline), runs the
-		// engine-side auto-advance vs. GUI finished-counter split, publishes the
-		// end-of-track edge to /events subscribers, and pushes a fresh snapshot.
-		player.SetOnFinish(onNaturalFinish)
-	}
-	mu.Unlock()
-
-	// Login is a network round-trip (up to 30s): do it WITHOUT holding mu, so it
-	// can't block every other engine call meanwhile.
-	c := deezer.New(C.GoString(arl))
-	if err := c.Login(); err != nil {
-		atomic.StoreInt32(&lastLoginKind, loginKind(err))
-		odlog.Warn("login failed: %v", err)
-		return 0
-	}
-	atomic.StoreInt32(&lastLoginKind, 0)
-	c.SetAdsDisabled(config.LoadAdsDisabled()) // free-tier ads opt-out (persisted)
-	mu.Lock()
-	client = c
-	mu.Unlock()
-
-	odlog.Info("logged in: %s (%s)", c.Account().Name, c.Account().Offer)
-	// Start engine-hosted services (Discord RP + control API) once.
-	startServices(c)
-	// On a re-login with a different ARL, rebuild the control server around the
-	// new client so an account switch stops serving the previous account's
-	// library (startServices runs under a sync.Once and won't re-run). No-op on
-	// the first login and on a same-account re-login.
-	refreshControlServer(c)
-	return 1
+	})
+	return cBool(engine.Init(C.GoString(arl)))
 }
 
 // DZLoginErrorKind returns why the most recent DZInit failed, so the UI can show
 // a No-Internet retry screen instead of pushing the user to re-authenticate:
-// 0 = ok / logged in, 1 = ARL expired or invalid, 2 = no internet, 3 = other.
+// 0 = ok / logged in, 1 = ARL expired or invalid, 2 = no internet, 3 = other,
+// 4 = no audio output device.
 //
 //export DZLoginErrorKind
-func DZLoginErrorKind() C.int {
-	return C.int(atomic.LoadInt32(&lastLoginKind))
-}
+func DZLoginErrorKind() C.int { return C.int(engine.LoginErrorKind()) }
 
 //export DZLastErrorJSON
 func DZLastErrorJSON() *C.char {
-	mu.Lock()
-	defer mu.Unlock()
 	msg := ""
-	if player != nil {
-		msg = player.LastError()
+	if p := engine.Player(); p != nil {
+		msg = p.LastError()
 	}
 	return jsonStr(map[string]string{"error": msg}, nil)
 }
 
-// DZSetQuality sets the stream quality level: 0=Normal(MP3 128), 1=High(MP3 320),
-// 2=HiFi(FLAC, falls back to MP3 if the account/track isn't entitled).
+// DZSetQuality sets and saves the stream quality level: 0=Normal(MP3 128),
+// 1=High(MP3 320), 2=HiFi(FLAC, falls back to MP3 if the account/track isn't
+// entitled). The engine keeps it in playback.json (shared with the TUI) and
+// applies it at each DZInit; also before DZInit.
 //
 //export DZSetQuality
-func DZSetQuality(level C.int) {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c != nil {
-		c.SetQuality(int(level))
-	}
-}
+func DZSetQuality(level C.int) { engine.SetQuality(int(level)) }
 
-// DZQuality returns the current quality level (0..2).
+// DZQuality returns the quality level (0..2).
 //
 //export DZQuality
-func DZQuality() C.int {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c != nil {
-		return C.int(c.Quality())
-	}
-	return 0
-}
+func DZQuality() C.int { return C.int(engine.Quality()) }
 
 // DZHighQuality reports whether quality is at least MP3_320 (kept for the
 // frontends that use a simple toggle; level 2 also counts as high).
 //
 //export DZHighQuality
-func DZHighQuality() C.int {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c != nil && c.HighQuality() {
-		return 1
-	}
-	return 0
-}
+func DZHighQuality() C.int { return cBool(engine.Quality() >= deezer.QualityHigh) }
 
 // DZFormat returns a human label for the current stream's actual format
 // (e.g. "FLAC · lossless", "MP3 · 320 kbps"), or "" if nothing is playing.
 //
 //export DZFormat
-func DZFormat() *C.char {
-	if routedRemote() != nil {
-		return C.CString(deezer.FormatLabel(remoteSnapshot().Format))
-	}
-	mu.Lock()
-	p := player
-	mu.Unlock()
-	if p == nil {
-		return C.CString("")
-	}
-	return C.CString(deezer.FormatLabel(p.Format()))
-}
+func DZFormat() *C.char { return C.CString(engine.Format()) }
 
 //export DZUserID
 func DZUserID() *C.char {
-	mu.Lock()
-	defer mu.Unlock()
-	if client == nil {
-		return C.CString("")
+	if c := engine.Client(); c != nil {
+		return C.CString(c.UserID())
 	}
-	return C.CString(client.UserID())
+	return C.CString("")
 }
 
 //export DZFavoritesJSON
 func DZFavoritesJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.Favorites()
-	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.Favorites()
+		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
+	})
 }
 
 // DZFavoriteIDsJSON returns the account's liked-track ids as a JSON array of
@@ -313,179 +224,91 @@ func DZFavoritesJSON() *C.char {
 //
 //export DZFavoriteIDsJSON
 func DZFavoriteIDsJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.Favorites()
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	ids := make([]string, 0, len(ts))
-	for _, t := range ts {
-		if t.ID != "" {
-			ids = append(ids, t.ID)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.Favorites()
+		if err != nil {
+			return nil, err
 		}
-	}
-	return jsonStr(ids, nil)
+		ids := make([]string, 0, len(ts))
+		for _, t := range ts {
+			if t.ID != "" {
+				ids = append(ids, t.ID)
+			}
+		}
+		return ids, nil
+	})
 }
 
 //export DZPlaylistsJSON
 func DZPlaylistsJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ps, err := c.Playlists()
-	return jsonStr(map[string]any{"playlists": bridge.FromPlaylists(ps)}, err)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ps, err := c.Playlists()
+		return map[string]any{"playlists": bridge.FromPlaylists(ps)}, err
+	})
 }
 
+// DZPlaylistTracksJSON lists a playlist's tracks: {"tracks":[...]}. A playlist
+// pinned for offline use is listed whole and kept in step: new tracks are
+// pinned and fetched, removed ones unpinned.
+//
 //export DZPlaylistTracksJSON
 func DZPlaylistTracksJSON(id *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.PlaylistTracks(C.GoString(id))
+	ts, err := engine.PlaylistTracks(C.GoString(id))
 	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
 }
 
+// DZAlbumTracksJSON lists an album's tracks: {"tracks":[...]}. An album pinned
+// for offline use is kept in step.
+//
 //export DZAlbumTracksJSON
 func DZAlbumTracksJSON(id *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.AlbumTracks(C.GoString(id))
+	ts, err := engine.AlbumTracks(C.GoString(id))
 	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
 }
 
 //export DZSearchJSON
 func DZSearchJSON(q *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	r, err := c.Search(C.GoString(q))
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	return jsonStr(map[string]any{
-		"tracks": bridge.FromTracks(r.Tracks), "albums": bridge.FromAlbums(r.Albums),
-		"artists": bridge.FromArtistInfos(r.Artists), "playlists": bridge.FromPlaylists(r.Playlists),
-	}, nil)
+	query := C.GoString(q)
+	return withClient(func(c *deezer.Client) (any, error) {
+		r, err := c.Search(query)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"tracks": bridge.FromTracks(r.Tracks), "albums": bridge.FromAlbums(r.Albums),
+			"artists": bridge.FromArtistInfos(r.Artists), "playlists": bridge.FromPlaylists(r.Playlists),
+		}, nil
+	})
 }
 
+// DZPlay resolves and plays a track (on the Connect device when one is
+// selected); the old stream stays audible until the new one starts. 1 when
+// it started, 0 on failure with the reason in DZLastErrorJSON, 2 when a newer
+// play (the host's or a remote's) took the player before this one started
+// (not a failure; no error is set).
+//
 //export DZPlay
 func DZPlay(trackID *C.char, durationMS C.longlong) C.int {
-	id := C.GoString(trackID)
-	// A fresh user play supersedes any in-flight async auto-advance resolve. (B3)
-	playSeq.Add(1)
-	// OpenDeezer Connect: when a device is selected, play there instead.
-	if rc := routedRemote(); rc != nil {
-		st, err := rc.PlayTrack(id)
-		if err != nil {
-			return 0
-		}
-		setRemoteState(rc, st)
-		return 1
-	}
-	mu.Lock()
-	c := client
-	p := player
-	mu.Unlock()
-	if c == nil || p == nil {
-		return 0
-	}
-	plan, err := preparePlan(c, id)
-	if err != nil {
-		return 0
-	}
-	noteTrackTransition(p) // record the outgoing listen before the swap
-	if err := p.Play(plan, int64(durationMS)); err != nil {
-		return 0
-	}
-	clearPreloadedTrack() // p.Play discarded any pending preload; drop its stash too
-	// Track the now-playing for Discord RP + remote status; fill in full
-	// metadata (title/artist/album) asynchronously.
-	setCurrentTrack(deezer.Track{ID: id, DurationMS: int64(durationMS)})
-	go fetchTrackMeta(c, id)
-	// Report the play to Deezer (log.listen), like the web player — free-tier ad
-	// accounting + artist play-counts depend on it. Best-effort, off the hot path.
-	go func() { _ = c.NowPlaying(id) }()
-	return 1
+	return C.int(engine.Play(C.GoString(trackID), int64(durationMS)))
 }
 
 //export DZPause
-func DZPause() {
-	if rc := routedRemote(); rc != nil {
-		if remoteSnapshot().State == "playing" {
-			if st, err := rc.PlayPause(); err == nil {
-				setRemoteState(rc, st)
-			}
-		}
-		return
-	}
-	withPlayerNotify(func(p *audio.Player) { p.Pause() })
-}
+func DZPause() { engine.Pause() }
 
 //export DZResume
-func DZResume() {
-	if rc := routedRemote(); rc != nil {
-		if remoteSnapshot().State == "paused" {
-			if st, err := rc.PlayPause(); err == nil {
-				setRemoteState(rc, st)
-			}
-		}
-		return
-	}
-	withPlayerNotify(func(p *audio.Player) { p.Resume() })
-}
+func DZResume() { engine.Resume() }
 
+// DZTogglePause only flips Playing and Paused; from Stopped or Errored the GUI
+// calls DZPlay again.
+//
 //export DZTogglePause
-func DZTogglePause() {
-	if rc := routedRemote(); rc != nil {
-		if st, err := rc.PlayPause(); err == nil {
-			setRemoteState(rc, st)
-		}
-		return
-	}
-	withPlayerNotify(func(p *audio.Player) { p.TogglePause() })
-}
+func DZTogglePause() { engine.TogglePause() }
 
 //export DZStop
-func DZStop() {
-	if rc := routedRemote(); rc != nil {
-		if st, err := rc.Stop(); err == nil {
-			setRemoteState(rc, st)
-		}
-		return
-	}
-	// Record the in-progress listen before halting: the next Play sees the
-	// player Stopped and skips recording, so this is the only chance.
-	withPlayerNotify(func(p *audio.Player) { noteTrackTransition(p); p.Stop() })
-}
+func DZStop() { engine.Stop() }
 
 //export DZSeek
-func DZSeek(ms C.longlong) {
-	if rc := routedRemote(); rc != nil {
-		if st, err := rc.Seek(int64(ms)); err == nil {
-			setRemoteState(rc, st)
-		}
-		return
-	}
-	withPlayerNotify(func(p *audio.Player) { p.SeekMS(int64(ms)) })
-}
+func DZSeek(ms C.longlong) { engine.Seek(int64(ms)) }
 
 // DZSetRepeat sets the repeat mode (mode: 0=off, 1=all, 2=one). The mode is
 // always recorded on the engine-side queue — /status reports it and the engine
@@ -494,19 +317,10 @@ func DZSeek(ms C.longlong) {
 // streaming the host one track at a time. Forwarding Repeat-All would make the
 // host loop its single-item queue forever and never accept the next track —
 // trapping playback. Repeat is applied locally so the engine's own auto-advance
-// (which drives the remote via /play) honors it. (B2)
+// (which drives the remote via /play) honors it.
 //
 //export DZSetRepeat
-func DZSetRepeat(mode C.int) {
-	m := "off"
-	switch int(mode) {
-	case 1:
-		m = "all"
-	case 2:
-		m = "one"
-	}
-	engineSetRepeat(m)
-}
+func DZSetRepeat(mode C.int) { engine.SetRepeat(int(mode)) }
 
 // DZSetShuffle sets shuffle on (1) or off (0). The flag is always recorded on
 // the engine-side queue — /status reports it and the engine queue honors it
@@ -514,132 +328,54 @@ func DZSetRepeat(mode C.int) {
 // one is selected.
 //
 //export DZSetShuffle
-func DZSetShuffle(on C.int) {
-	engineSetShuffle(on != 0)
-	if rc := routedRemote(); rc != nil {
-		if st, err := rc.SetShuffle(on != 0); err == nil {
-			setRemoteState(rc, st)
-		}
-	}
-}
+func DZSetShuffle(on C.int) { engine.SetShuffle(on != 0) }
 
-// currentRepeatMode returns the effective repeat mode ("off"|"all"|"one"): the
-// routed device's snapshot when casting (so a host GUI reads the real mode),
-// else the engine queue's. Pure Go core of DZGetRepeat.
-func currentRepeatMode() string {
-	if routedRemote() != nil {
-		if r := remoteSnapshot().Repeat; r != "" {
-			return r
-		}
-		return "off"
-	}
-	queueMu.Lock()
-	defer queueMu.Unlock()
-	return engineQ.Repeat().String()
-}
+// DZSetShuffleHostOwned(1) declares that the GUI owns play order: it shuffles
+// its own queue and syncs that order (DZQueueSet), so DZSetShuffle and a
+// controller's shuffle only record the flag for /status, DZGetShuffle and
+// notifications, without reordering the engine queue. The GUI follows a
+// controller's change by polling DZGetShuffle. Call before DZInit.
+//
+//export DZSetShuffleHostOwned
+func DZSetShuffleHostOwned(on C.int) { engine.SetShuffleHostOwned(on != 0) }
 
-// currentShuffleOn returns the effective shuffle flag: routed snapshot when
-// casting, else the engine queue. Pure Go core of DZGetShuffle.
-func currentShuffleOn() bool {
-	if routedRemote() != nil {
-		return remoteSnapshot().Shuffle
-	}
-	queueMu.Lock()
-	defer queueMu.Unlock()
-	return engineQ.Shuffle()
-}
-
-// DZGetRepeat returns the current repeat mode as "off", "all" or "one". When
-// routed to a Connect device the routed snapshot's mode is returned (so a
-// casting host GUI reads the real mode); otherwise the engine queue's. The
+// DZGetRepeat returns the engine queue's repeat mode as "off", "all" or "one",
+// also while routed to a Connect device (repeat is never forwarded). The
 // result must be released with DZFree.
 //
 //export DZGetRepeat
-func DZGetRepeat() *C.char { return C.CString(currentRepeatMode()) }
+func DZGetRepeat() *C.char { return C.CString(engine.Repeat()) }
 
 // DZGetShuffle returns 1 when shuffle is on, else 0. Routed to a Connect device
 // it reflects the routed snapshot; otherwise the engine queue.
 //
 //export DZGetShuffle
-func DZGetShuffle() C.int {
-	if currentShuffleOn() {
-		return 1
-	}
-	return 0
-}
+func DZGetShuffle() C.int { return cBool(engine.Shuffle()) }
 
 //export DZState
-func DZState() C.int {
-	if routedRemote() != nil {
-		return C.int(remoteStateInt(remoteSnapshot().State))
-	}
-	v := 0
-	withPlayer(func(p *audio.Player) { v = int(p.State()) })
-	return C.int(v)
-}
+func DZState() C.int { return C.int(engine.State()) }
 
 //export DZPositionMS
-func DZPositionMS() C.longlong {
-	if routedRemote() != nil {
-		return C.longlong(remoteSnapshot().PositionMS)
-	}
-	var v int64
-	withPlayer(func(p *audio.Player) { v = p.PositionMS() })
-	return C.longlong(v)
-}
+func DZPositionMS() C.longlong { return C.longlong(engine.PositionMS()) }
 
+// DZDurationMS returns the playing track's length: the player's, else (a play
+// started without one) the current track's once its metadata has arrived.
+//
 //export DZDurationMS
-func DZDurationMS() C.longlong {
-	if routedRemote() != nil {
-		return C.longlong(remoteSnapshot().DurationMS)
-	}
-	var v int64
-	withPlayer(func(p *audio.Player) { v = p.DurationMS() })
-	return C.longlong(v)
-}
+func DZDurationMS() C.longlong { return C.longlong(engine.DurationMS()) }
 
 //export DZSetVolume
-func DZSetVolume(v C.double) {
-	if rc := routedRemote(); rc != nil {
-		if st, err := rc.SetVolume(float64(v)); err == nil {
-			setRemoteState(rc, st)
-		}
-		return
-	}
-	withPlayerNotify(func(p *audio.Player) {
-		cur := p.Volume()
-		p.AddVolume(float64(v) - cur)
-	})
-}
+func DZSetVolume(v C.double) { engine.SetVolume(float64(v)) }
 
 //export DZVolume
-func DZVolume() C.double {
-	if routedRemote() != nil {
-		return C.double(remoteSnapshot().Volume)
-	}
-	var v float64 = 1
-	withPlayer(func(p *audio.Player) { v = p.Volume() })
-	return C.double(v)
-}
+func DZVolume() C.double { return C.double(engine.Volume()) }
 
 // DZFinishedCount returns a monotonically increasing count of tracks that ended
-// naturally; native UIs poll it to drive auto-advance.
+// naturally and that the engine queue did not advance itself; native UIs poll
+// it to drive auto-advance.
 //
 //export DZFinishedCount
-func DZFinishedCount() C.int {
-	mu.Lock()
-	defer mu.Unlock()
-	return C.int(finished)
-}
-
-func withPlayer(fn func(*audio.Player)) {
-	mu.Lock()
-	p := player
-	mu.Unlock()
-	if p != nil {
-		fn(p)
-	}
-}
+func DZFinishedCount() C.int { return C.int(engine.FinishedCount()) }
 
 // ---- downloads (premium-only, full track to disk) ----
 
@@ -653,35 +389,16 @@ func withPlayer(fn func(*audio.Player)) {
 //
 //export DZDownloadTrack
 func DZDownloadTrack(trackID, destDir *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	dir := C.GoString(destDir)
-	if dir == "" {
-		dir = config.LoadDownloadDir()
-	}
-	path, err := c.SaveTrack(context.Background(), C.GoString(trackID), dir)
+	path, err := engine.DownloadTrack(C.GoString(trackID), C.GoString(destDir))
 	if err != nil {
 		return jsonStr(nil, err)
 	}
 	return jsonStr(map[string]string{"path": path}, nil)
 }
 
-// batchSummary is the shared JSON summary for the batch downloaders:
-// {"saved":N,"failed":N,"dir":"...","error":""}. error is "" on full success
-// and carries the batch error message (ErrPartialDownload's counts, a premium
-// gate, a cancellation, ...) otherwise.
-func batchSummary(saved []string, failed int, dir string, err error) map[string]any {
-	msg := ""
-	if err != nil {
-		msg = err.Error()
-	}
-	return map[string]any{"saved": len(saved), "failed": failed, "dir": dir, "error": msg}
-}
-
 // DZDownloadAlbum downloads every track of albumID to the shared download folder
-// (DZDownloadDir) and returns the batch summary
+// (DZDownloadDir), skipping tracks already saved there, and returns the batch
+// summary
 // {"saved":N,"failed":N,"dir":"...","error":""}. Blocking and premium-only, the
 // same gate + folder DZDownloadTrack uses (GUIs already call the single-track
 // download off the UI thread). On a partial download the per-track failures are
@@ -689,41 +406,13 @@ func batchSummary(saved []string, failed int, dir string, err error) map[string]
 // yields saved:0,failed:0 with the premium error. Release with DZFree.
 //
 //export DZDownloadAlbum
-func DZDownloadAlbum(id *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	dir := config.LoadDownloadDir()
-	var failed int
-	opts := deezer.DownloadOptions{Progress: func(p deezer.DownloadProgress) {
-		if p.Err != nil {
-			failed++
-		}
-	}}
-	saved, err := c.SaveAlbum(context.Background(), C.GoString(id), dir, opts)
-	return jsonStr(batchSummary(saved, failed, dir, err), nil)
-}
+func DZDownloadAlbum(id *C.char) *C.char { return jsonStr(engine.DownloadAlbum(C.GoString(id))) }
 
 // DZDownloadPlaylist downloads every track of playlistID to the shared download
 // folder and returns the same batch summary as DZDownloadAlbum.
 //
 //export DZDownloadPlaylist
-func DZDownloadPlaylist(id *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	dir := config.LoadDownloadDir()
-	var failed int
-	opts := deezer.DownloadOptions{Progress: func(p deezer.DownloadProgress) {
-		if p.Err != nil {
-			failed++
-		}
-	}}
-	saved, err := c.SavePlaylist(context.Background(), C.GoString(id), dir, opts)
-	return jsonStr(batchSummary(saved, failed, dir, err), nil)
-}
+func DZDownloadPlaylist(id *C.char) *C.char { return jsonStr(engine.DownloadPlaylist(C.GoString(id))) }
 
 // DZDownloadDir returns the current download folder (env/config/default). The
 // result must be released with DZFree.
@@ -743,31 +432,76 @@ func DZSetDownloadDir(path *C.char) C.int { return ok(config.SaveDownloadDir(C.G
 //export DZMediaCacheMB
 func DZMediaCacheMB() C.int { return C.int(config.LoadMedia().MediaCacheMB) }
 
-// DZSetMediaCacheMB persists the raw-stream cache budget in megabytes (0 or a
-// negative value disables the cache). The cache is attached to the player once
-// at startup, before any playback, so a change takes effect at the next
-// launch. Returns 1 on success, 0 on failure.
+// DZSetMediaCacheMB persists the raw-stream cache budget in megabytes and
+// applies it at once: a lower budget evicts the least recent tracks, 0 (or a
+// negative value) removes every cached track not pinned, also from a folder
+// not opened in this session, and stops caching. Pinned tracks are outside the
+// budget. Returns 1 on success, 0 on failure.
 //
 //export DZSetMediaCacheMB
-func DZSetMediaCacheMB(mb C.int) C.int {
-	m := config.LoadMedia()
-	m.MediaCacheMB = int(mb)
-	return ok(config.SaveMedia(m))
+func DZSetMediaCacheMB(mb C.int) C.int { return ok(engine.Caches().SetMB(int(mb))) }
+
+// DZMediaCacheMaxAgeDays returns how many days a cached track may go
+// unplayed before it is removed (media.json; 0 = kept at any age, the default).
+//
+//export DZMediaCacheMaxAgeDays
+func DZMediaCacheMaxAgeDays() C.int { return C.int(config.LoadMedia().MediaCacheMaxAgeDays) }
+
+// DZSetMediaCacheMaxAgeDays persists that age (0 or a negative value keeps
+// tracks at any age) and applies it at once: cached tracks not played or
+// downloaded for longer are removed now, and then at most once an hour while
+// tracks play. Returns 1 on success, 0 on failure.
+//
+//export DZSetMediaCacheMaxAgeDays
+func DZSetMediaCacheMaxAgeDays(days C.int) C.int {
+	return ok(engine.Caches().SetMaxAgeDays(int(days)))
+}
+
+// DZMediaCacheStatsJSON returns the media cache's state:
+// {"entries":int,"bytes":int64,"pinnedBytes":int64,"maxBytes":int64,"dir":string}.
+// bytes counts every stored track, pinned ones included, pinnedBytes those
+// kept for offline use; maxBytes is the budget (0 = off); dir is the folder
+// picked (the cache lives in its subfolder opendeezer-cache), also while
+// off. Release with DZFree.
+//
+//export DZMediaCacheStatsJSON
+func DZMediaCacheStatsJSON() *C.char { return jsonStr(engine.Caches().Stats(), nil) }
+
+// DZClearMediaCache removes every cached track not pinned. includePinned also
+// removes the tracks kept for offline use, with the pins of every account.
+// Returns 1 on success, 0 on failure.
+//
+//export DZClearMediaCache
+func DZClearMediaCache(includePinned C.int) C.int { return ok(engine.ClearCache(includePinned != 0)) }
+
+// DZMediaCacheDir returns the folder picked for the media cache, by default
+// <user cache dir>\opendeezer (%LOCALAPPDATA%\opendeezer on Windows; "" when
+// that is unknown); the cache lives in its subfolder opendeezer-cache.
+// Release with DZFree.
+//
+//export DZMediaCacheDir
+func DZMediaCacheDir() *C.char {
+	dir, _ := config.LoadMedia().CacheDir()
+	return C.CString(dir)
+}
+
+// DZSetMediaCacheDir moves the media cache to the subfolder opendeezer-cache
+// of dir, an absolute path ("" = the default folder), and returns
+// {"error":""} or {"error":"reason"}. The pinned tracks are copied there,
+// then the old cache is cleared; offline fetches stop for the move and go on
+// in the new folder. A relative path or a file is refused; on any error (a
+// copy too) the old folder stays in use. Release with DZFree.
+//
+//export DZSetMediaCacheDir
+func DZSetMediaCacheDir(dir *C.char) *C.char {
+	return errorReply(engine.SetMediaCacheDir(C.GoString(dir)))
 }
 
 // DZIsPreview returns 1 when the current track is Deezer's 30-second preview
 // (the free-account fallback) rather than the full stream, else 0.
 //
 //export DZIsPreview
-func DZIsPreview() C.int {
-	mu.Lock()
-	p := player
-	mu.Unlock()
-	if p != nil && p.IsPreview() {
-		return 1
-	}
-	return 0
-}
+func DZIsPreview() C.int { return cBool(engine.IsPreview()) }
 
 // DZSetAdsDisabled turns Deezer Free's play-reporting/ads off (1) or on (0) and
 // persists the choice. FREE accounts only: reporting plays (log.listen) credits
@@ -777,7 +511,7 @@ func DZIsPreview() C.int {
 //export DZSetAdsDisabled
 func DZSetAdsDisabled(disabled C.int) C.int {
 	off := disabled != 0
-	if c := curClient(); c != nil {
+	if c := engine.Client(); c != nil {
 		c.SetAdsDisabled(off)
 	}
 	return ok(config.SaveAdsDisabled(off))
@@ -787,19 +521,13 @@ func DZSetAdsDisabled(disabled C.int) C.int {
 //
 //export DZAdsDisabled
 func DZAdsDisabled() C.int {
-	if c := curClient(); c != nil {
-		if c.AdsDisabled() {
-			return 1
-		}
-		return 0
+	if c := engine.Client(); c != nil {
+		return cBool(c.AdsDisabled())
 	}
-	if config.LoadAdsDisabled() {
-		return 1
-	}
-	return 0
+	return cBool(config.LoadAdsDisabled())
 }
 
-// ---- account / browse / lyrics / loudness (added for the v0.3 roadmap) ----
+// ---- account / browse / lyrics / loudness ----
 
 // DZAccountJSON returns the logged-in plan + entitlements as JSON
 // {userId,name,offer,canHq,canHifi,loggedIn} so GUIs can show the tier and
@@ -807,35 +535,25 @@ func DZAdsDisabled() C.int {
 //
 //export DZAccountJSON
 func DZAccountJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	return jsonStr(c.Account(), nil)
+	return withClient(func(c *deezer.Client) (any, error) { return c.Account(), nil })
 }
 
 // DZChartsJSON returns the global top tracks/albums/artists/playlists.
 //
 //export DZChartsJSON
 func DZChartsJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ch, err := c.Charts("0")
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	return jsonStr(map[string]any{
-		"tracks":    bridge.FromTracks(ch.Tracks),
-		"albums":    bridge.FromAlbums(ch.Albums),
-		"artists":   bridge.FromArtistInfos(ch.Artists),
-		"playlists": bridge.FromPlaylists(ch.Playlists),
-	}, nil)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ch, err := c.Charts("0")
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"tracks":    bridge.FromTracks(ch.Tracks),
+			"albums":    bridge.FromAlbums(ch.Albums),
+			"artists":   bridge.FromArtistInfos(ch.Artists),
+			"playlists": bridge.FromPlaylists(ch.Playlists),
+		}, nil
+	})
 }
 
 // DZHomeJSON aggregates the Home-screen sections in one call so every GUI shows
@@ -846,23 +564,19 @@ func DZChartsJSON() *C.char {
 //
 //export DZHomeJSON
 func DZHomeJSON() *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	var tracks []deezer.Track
-	var albums []deezer.Album
-	if ch, err := c.Charts("0"); err == nil && ch != nil {
-		tracks, albums = ch.Tracks, ch.Albums
-	}
-	ps, _ := c.Playlists()
-	return jsonStr(map[string]any{
-		"topTracks": bridge.FromTracks(tracks),
-		"topAlbums": bridge.FromAlbums(albums),
-		"playlists": bridge.FromPlaylists(ps),
-	}, nil)
+	return withClient(func(c *deezer.Client) (any, error) {
+		var tracks []deezer.Track
+		var albums []deezer.Album
+		if ch, err := c.Charts("0"); err == nil && ch != nil {
+			tracks, albums = ch.Tracks, ch.Albums
+		}
+		ps, _ := c.Playlists()
+		return map[string]any{
+			"topTracks": bridge.FromTracks(tracks),
+			"topAlbums": bridge.FromAlbums(albums),
+			"playlists": bridge.FromPlaylists(ps),
+		}, nil
+	})
 }
 
 // DZCheckUpdateJSON checks GitHub for a newer OpenDeezer release and returns
@@ -870,7 +584,7 @@ func DZHomeJSON() *C.char {
 //
 //export DZCheckUpdateJSON
 func DZCheckUpdateJSON() *C.char {
-	info, _ := update.Check(coreVersion)
+	info, _ := update.Check(version.Number)
 	return jsonStr(info, nil)
 }
 
@@ -878,14 +592,11 @@ func DZCheckUpdateJSON() *C.char {
 //
 //export DZArtistTopJSON
 func DZArtistTopJSON(id *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.ArtistTop(C.GoString(id))
-	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
+	aid := C.GoString(id)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.ArtistTop(aid)
+		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
+	})
 }
 
 // DZArtistProfileJSON returns an artist profile with top tracks, albums and
@@ -893,119 +604,107 @@ func DZArtistTopJSON(id *C.char) *C.char {
 //
 //export DZArtistProfileJSON
 func DZArtistProfileJSON(id *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	pg, err := c.ArtistProfile(C.GoString(id))
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	info := bridge.FromArtistInfo(pg.Artist)
-	return jsonStr(map[string]any{
-		"artist":  info,
-		"top":     bridge.FromTracks(pg.Top),
-		"albums":  bridge.FromAlbums(pg.Albums),
-		"related": bridge.FromArtistInfos(pg.Related),
-	}, nil)
+	aid := C.GoString(id)
+	return withClient(func(c *deezer.Client) (any, error) {
+		pg, err := c.ArtistProfile(aid)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"artist":  bridge.FromArtistInfo(pg.Artist),
+			"top":     bridge.FromTracks(pg.Top),
+			"albums":  bridge.FromAlbums(pg.Albums),
+			"related": bridge.FromArtistInfos(pg.Related),
+		}, nil
+	})
+}
+
+// DZTrackInfoJSON returns everything known about one track for a track
+// overview page (bridge.TrackInfo): title, version, artists with roles, album
+// (1000x1000 cover, label, genres, track count), numbers, BPM, gain, ISRC and
+// the ordered contributor credits. Unknown fields are omitted; a source that
+// fails leaves its fields out instead of failing the call.
+//
+//export DZTrackInfoJSON
+func DZTrackInfoJSON(id *C.char) *C.char {
+	tid := C.GoString(id)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ti, err := c.TrackInfo(tid)
+		if err != nil {
+			return nil, err
+		}
+		return bridge.FromTrackInfo(ti), nil
+	})
 }
 
 // DZLyricsJSON returns a track's lyrics: {plain, synced:[{timeMs,text}], isSynced}.
 //
 //export DZLyricsJSON
 func DZLyricsJSON(trackID *C.char) *C.char {
-	mu.Lock()
-	c := client
-	mu.Unlock()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	l, err := c.Lyrics(C.GoString(trackID))
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	type jLine struct {
-		TimeMS int64  `json:"timeMs"`
-		Text   string `json:"text"`
-	}
-	synced := make([]jLine, len(l.Synced))
-	for i, s := range l.Synced {
-		synced[i] = jLine{TimeMS: s.TimeMS, Text: s.Text}
-	}
-	return jsonStr(map[string]any{"plain": l.Plain, "synced": synced, "isSynced": l.IsSynced()}, nil)
+	tid := C.GoString(trackID)
+	return withClient(func(c *deezer.Client) (any, error) {
+		l, err := c.Lyrics(tid)
+		if err != nil {
+			return nil, err
+		}
+		type jLine struct {
+			TimeMS int64  `json:"timeMs"`
+			Text   string `json:"text"`
+		}
+		synced := make([]jLine, len(l.Synced))
+		for i, s := range l.Synced {
+			synced[i] = jLine{TimeMS: s.TimeMS, Text: s.Text}
+		}
+		return map[string]any{"plain": l.Plain, "synced": synced, "isSynced": l.IsSynced()}, nil
+	})
 }
 
-// DZSetReplayGain enables (1) / disables (0) loudness normalization.
+// DZSetReplayGain enables (1) / disables (0) loudness normalization and saves
+// it (playback.json).
 //
 //export DZSetReplayGain
-func DZSetReplayGain(on C.int) {
-	withPlayer(func(p *audio.Player) { p.SetReplayGain(on != 0) })
-}
+func DZSetReplayGain(on C.int) { engine.SetReplayGain(on != 0) }
 
 // DZReplayGain reports whether ReplayGain is enabled (1/0).
 //
 //export DZReplayGain
-func DZReplayGain() C.int {
-	v := 0
-	withPlayer(func(p *audio.Player) {
-		if p.ReplayGain() {
-			v = 1
-		}
-	})
-	return C.int(v)
-}
+func DZReplayGain() C.int { return cBool(engine.ReplayGain()) }
 
-// ---- library write ops (v0.4) — return 1 on success, 0 on failure ----
+// ---- library write ops — return 1 on success, 0 on failure ----
 
-func ok(err error) C.int {
+// clientOp runs fn with the client for a request: 1 on success, 0 on failure,
+// in offline mode (refused, not queued; the log says why) and before login.
+func clientOp(fn func(c *deezer.Client) error) C.int {
+	c, err := engine.Online()
 	if err != nil {
+		odlog.Warn("%v", err)
 		return 0
 	}
-	return 1
-}
-
-func curClient() *deezer.Client {
-	mu.Lock()
-	defer mu.Unlock()
-	return client
+	return ok(fn(c))
 }
 
 //export DZAddFavorite
 func DZAddFavorite(trackID *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.AddFavoriteTrack(C.GoString(trackID)))
+	id := C.GoString(trackID)
+	return clientOp(func(c *deezer.Client) error { return c.AddFavoriteTrack(id) })
 }
 
 //export DZRemoveFavorite
 func DZRemoveFavorite(trackID *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.RemoveFavoriteTrack(C.GoString(trackID)))
+	id := C.GoString(trackID)
+	return clientOp(func(c *deezer.Client) error { return c.RemoveFavoriteTrack(id) })
 }
 
 //export DZAddToPlaylist
 func DZAddToPlaylist(playlistID, trackID *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.AddToPlaylist(C.GoString(playlistID), C.GoString(trackID)))
+	pid, tid := C.GoString(playlistID), C.GoString(trackID)
+	return clientOp(func(c *deezer.Client) error { return c.AddToPlaylist(pid, tid) })
 }
 
 //export DZRemoveFromPlaylist
 func DZRemoveFromPlaylist(playlistID, trackID *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.RemoveFromPlaylist(C.GoString(playlistID), C.GoString(trackID)))
+	pid, tid := C.GoString(playlistID), C.GoString(trackID)
+	return clientOp(func(c *deezer.Client) error { return c.RemoveFromPlaylist(pid, tid) })
 }
 
 // DZCreatePlaylist creates an empty playlist and returns its id as a JSON
@@ -1013,45 +712,36 @@ func DZRemoveFromPlaylist(playlistID, trackID *C.char) C.int {
 //
 //export DZCreatePlaylist
 func DZCreatePlaylist(title *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	id, err := c.CreatePlaylist(C.GoString(title), nil)
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	return jsonStr(map[string]string{"id": id}, nil)
+	t := C.GoString(title)
+	return withClient(func(c *deezer.Client) (any, error) {
+		id, err := c.CreatePlaylist(t, nil)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"id": id}, nil
+	})
 }
 
 //export DZRenamePlaylist
 func DZRenamePlaylist(playlistID, title *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.RenamePlaylist(C.GoString(playlistID), C.GoString(title)))
+	pid, t := C.GoString(playlistID), C.GoString(title)
+	return clientOp(func(c *deezer.Client) error { return c.RenamePlaylist(pid, t) })
 }
 
 //export DZDeletePlaylist
 func DZDeletePlaylist(playlistID *C.char) C.int {
-	c := curClient()
-	if c == nil {
-		return 0
-	}
-	return ok(c.DeletePlaylist(C.GoString(playlistID)))
+	pid := C.GoString(playlistID)
+	return clientOp(func(c *deezer.Client) error { return c.DeletePlaylist(pid) })
 }
 
 // DZFlowJSON returns the user's Flow personalized stream: {tracks:[...]}.
 //
 //export DZFlowJSON
 func DZFlowJSON() *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.Flow()
-	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.Flow()
+		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
+	})
 }
 
 // DZTrackMixJSON returns a "song radio" mix seeded from a track (the seed track
@@ -1062,12 +752,11 @@ func DZFlowJSON() *C.char {
 //
 //export DZTrackMixJSON
 func DZTrackMixJSON(id *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.TrackMix(C.GoString(id))
-	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
+	tid := C.GoString(id)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.TrackMix(tid)
+		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
+	})
 }
 
 // DZArtistMixJSON returns an "artist radio" mix seeded from an artist:
@@ -1075,12 +764,11 @@ func DZTrackMixJSON(id *C.char) *C.char {
 //
 //export DZArtistMixJSON
 func DZArtistMixJSON(id *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ts, err := c.ArtistMix(C.GoString(id))
-	return jsonStr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
+	aid := C.GoString(id)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ts, err := c.ArtistMix(aid)
+		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
+	})
 }
 
 // DZHistoryRecentJSON returns the newest n entries of the machine-local
@@ -1088,17 +776,16 @@ func DZArtistMixJSON(id *C.char) *C.char {
 // control API's /history/recent serves); n <= 0 returns all. Empty/unavailable
 // history yields "[]". Release with DZFree.
 //
-// Each entry is {trackId,title,artist,album?,kind?,startedAt,durationPlayedSec}.
-// "kind" is omitted or "track" for a song and "episode" for a podcast episode —
-// a GUI routes replay on it: episode -> DZPlayEpisode(trackId), else DZPlay.
+// Each entry is {trackId,title,artist,album?,kind?,startedAt,durationPlayedSec,
+// artworkUrl?,durationMs?}. "kind" is omitted or "track" for a song and
+// "episode" for a podcast episode; a GUI routes replay on it: episode ->
+// DZPlayEpisode(trackId), else DZPlay. durationMs is the track's length. A song
+// recorded without artwork or length gets them from the track (looked up once
+// per id and process).
 //
 //export DZHistoryRecentJSON
 func DZHistoryRecentJSON(n C.int) *C.char {
-	st := historyStore()
-	if st == nil {
-		return C.CString("[]")
-	}
-	entries, err := st.Recent(int(n))
+	entries, err := engine.HistoryRecent(int(n))
 	if err != nil {
 		return C.CString("[]")
 	}
@@ -1118,51 +805,47 @@ func DZHistoryRecentJSON(n C.int) *C.char {
 //
 //export DZHistoryStatsJSON
 func DZHistoryStatsJSON(sinceDays C.int) *C.char {
-	return jsonStr(historyStats(int(sinceDays)), nil)
+	return jsonStr(engine.HistoryStats(int(sinceDays)), nil)
 }
 
-// ---- podcasts (v0.4) ----
+// ---- podcasts ----
 
 // DZSearchPodcastsJSON returns {podcasts:[...]} for a query.
 //
 //export DZSearchPodcastsJSON
 func DZSearchPodcastsJSON(q *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	ps, err := c.SearchPodcasts(C.GoString(q))
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	return jsonStr(map[string]any{"podcasts": bridge.FromPodcasts(ps)}, nil)
+	query := C.GoString(q)
+	return withClient(func(c *deezer.Client) (any, error) {
+		ps, err := c.SearchPodcasts(query)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"podcasts": bridge.FromPodcasts(ps)}, nil
+	})
 }
 
 // DZPodcastEpisodesJSON returns {episodes:[...]} for a show id.
 //
 //export DZPodcastEpisodesJSON
 func DZPodcastEpisodesJSON(podcastID *C.char) *C.char {
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	es, err := c.PodcastEpisodes(C.GoString(podcastID))
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	return jsonStr(map[string]any{"episodes": bridge.FromEpisodes(es)}, nil)
+	pid := C.GoString(podcastID)
+	return withClient(func(c *deezer.Client) (any, error) {
+		es, err := c.PodcastEpisodes(pid)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"episodes": bridge.FromEpisodes(es)}, nil
+	})
 }
 
-// ---- audio: devices, gapless, crossfade, preload (v0.4) ----
+// ---- audio: devices, gapless, crossfade, preload ----
 
 // DZAudioDevicesJSON returns the available output devices:
 // {devices:[{id,name,isDefault}]}. id "" is the system default.
 //
 //export DZAudioDevicesJSON
 func DZAudioDevicesJSON() *C.char {
-	mu.Lock()
-	p := player
-	mu.Unlock()
+	p := engine.Player()
 	if p == nil {
 		return jsonStr(nil, errNotReady)
 	}
@@ -1186,9 +869,7 @@ func DZAudioDevicesJSON() *C.char {
 //
 //export DZSetAudioDevice
 func DZSetAudioDevice(id *C.char) C.int {
-	mu.Lock()
-	p := player
-	mu.Unlock()
+	p := engine.Player()
 	if p == nil {
 		return 0
 	}
@@ -1199,38 +880,33 @@ func DZSetAudioDevice(id *C.char) C.int {
 //
 //export DZCurrentAudioDevice
 func DZCurrentAudioDevice() *C.char {
-	mu.Lock()
-	p := player
-	mu.Unlock()
-	if p == nil {
-		return C.CString("")
+	if p := engine.Player(); p != nil {
+		return C.CString(p.CurrentDevice())
 	}
-	return C.CString(p.CurrentDevice())
+	return C.CString("")
 }
 
+// DZSetGapless turns gapless playback on (1) or off (0) and saves it
+// (playback.json).
+//
 //export DZSetGapless
-func DZSetGapless(on C.int) { withPlayer(func(p *audio.Player) { p.SetGapless(on != 0) }) }
+func DZSetGapless(on C.int) { engine.SetGapless(on != 0) }
 
+// DZGapless returns 1 while gapless playback is on.
+//
 //export DZGapless
-func DZGapless() C.int {
-	v := 0
-	withPlayer(func(p *audio.Player) {
-		if p.Gapless() {
-			v = 1
-		}
-	})
-	return C.int(v)
-}
+func DZGapless() C.int { return cBool(engine.Gapless()) }
 
+// DZSetCrossfadeMS sets the crossfade length in ms (0 = off) and saves it
+// (playback.json).
+//
 //export DZSetCrossfadeMS
-func DZSetCrossfadeMS(ms C.int) { withPlayer(func(p *audio.Player) { p.SetCrossfadeMS(int(ms)) }) }
+func DZSetCrossfadeMS(ms C.int) { engine.SetCrossfadeMS(int(ms)) }
 
+// DZCrossfadeMS returns the crossfade length in ms.
+//
 //export DZCrossfadeMS
-func DZCrossfadeMS() C.int {
-	v := 0
-	withPlayer(func(p *audio.Player) { v = p.CrossfadeMS() })
-	return C.int(v)
-}
+func DZCrossfadeMS() C.int { return C.int(engine.CrossfadeMS()) }
 
 // DZSetSleepTimer arms the sleep timer: pause after `minutes` (with a fade-out),
 // or when the current track ends if endOfTrack != 0 (minutes ignored). Pass
@@ -1238,143 +914,71 @@ func DZCrossfadeMS() C.int {
 //
 //export DZSetSleepTimer
 func DZSetSleepTimer(minutes C.int, endOfTrack C.int) {
-	withPlayerNotify(func(p *audio.Player) {
-		p.SetSleepTimer(time.Duration(int(minutes))*time.Minute, endOfTrack != 0)
-	})
+	engine.SetSleepTimer(int(minutes), endOfTrack != 0)
 }
 
 // DZCancelSleepTimer disarms the sleep timer.
 //
 //export DZCancelSleepTimer
-func DZCancelSleepTimer() { withPlayerNotify(func(p *audio.Player) { p.CancelSleepTimer() }) }
+func DZCancelSleepTimer() { engine.CancelSleepTimer() }
 
 // DZSleepTimerActive returns 1 if a sleep timer is armed, else 0.
 //
 //export DZSleepTimerActive
 func DZSleepTimerActive() C.int {
-	v := 0
-	withPlayer(func(p *audio.Player) {
-		if p.SleepActive() {
-			v = 1
-		}
-	})
-	return C.int(v)
+	p := engine.Player()
+	return cBool(p != nil && p.SleepActive())
 }
 
 // DZSleepTimerEndOfTrack returns 1 if the armed timer is end-of-track mode.
 //
 //export DZSleepTimerEndOfTrack
 func DZSleepTimerEndOfTrack() C.int {
-	v := 0
-	withPlayer(func(p *audio.Player) {
-		if p.SleepEndOfTrack() {
-			v = 1
-		}
-	})
-	return C.int(v)
+	p := engine.Player()
+	return cBool(p != nil && p.SleepEndOfTrack())
 }
 
 // DZSleepTimerRemainingMS returns milliseconds until the timer fires (0 if none).
 //
 //export DZSleepTimerRemainingMS
 func DZSleepTimerRemainingMS() C.longlong {
-	var v int64
-	withPlayer(func(p *audio.Player) { v = p.SleepRemainingMS() })
-	return C.longlong(v)
+	if p := engine.Player(); p != nil {
+		return C.longlong(p.SleepRemainingMS())
+	}
+	return 0
 }
 
-// DZPreload resolves a track and preloads it for a gapless/crossfaded
-// transition after the current track ends.
+// DZPreload asks for a track to follow the current one gaplessly or with a
+// crossfade. It only records the request: the engine resolves and downloads
+// it once the current track has max(30 s, crossfade + 20 s) left (at once when
+// it is shorter or already there). A new request replaces the recorded one; a
+// request for the track already recorded or preloaded changes nothing. No-op
+// when routed to a Connect device.
 //
 //export DZPreload
 func DZPreload(trackID *C.char, durationMS C.longlong) {
-	mu.Lock()
-	c := client
-	p := player
-	mu.Unlock()
-	if c == nil || p == nil {
-		return
-	}
-	id := C.GoString(trackID)
-	plan, err := preparePlan(c, id)
-	if err != nil {
-		return
-	}
-	p.Preload(plan, int64(durationMS))
-	// Stash the armed track's identity so a gapless promote can move now-playing
-	// onto it even when the GUI never syncs its queue into engineQ. DZPreload is
-	// fully synchronous — the resolve runs on the caller's thread and nothing is
-	// armed after it returns — so no generation counter is needed to pair the
-	// stash with the player's preload.
-	setPreloadedTrack(deezer.Track{ID: id, DurationMS: int64(durationMS)})
+	engine.Preload(C.GoString(trackID), int64(durationMS))
 }
 
 // DZPlayEpisode resolves + plays a podcast episode (plain, unencrypted stream).
 // Mirrors DZPlay's now-playing pattern: sets the episode as the current track
 // immediately (with id + duration), then asynchronously enriches title / podcast
-// name / artwork via the REST /episode endpoint.
+// name / artwork via the REST /episode endpoint. Returns as DZPlay does: 1
+// started, 0 failed, 2 superseded by a newer play.
 //
 //export DZPlayEpisode
 func DZPlayEpisode(episodeID *C.char, durationMS C.longlong) C.int {
-	// A fresh user play supersedes any in-flight async auto-advance resolve. (B3)
-	playSeq.Add(1)
-	mu.Lock()
-	c := client
-	p := player
-	mu.Unlock()
-	if c == nil || p == nil {
-		return 0
-	}
-	id := C.GoString(episodeID)
-	plan, err := c.PodcastEpisodeStream(id)
-	if err != nil {
-		return 0
-	}
-	noteTrackTransition(p) // record the outgoing listen before the swap
-	if err := p.Play(plan, int64(durationMS)); err != nil {
-		return 0
-	}
-	clearPreloadedTrack() // p.Play discarded any pending preload; drop its stash too
-	// Track the now-playing so DZNowPlayingJSON reflects this episode;
-	// enrich with title / podcast name / artwork asynchronously. setCurrentEpisode
-	// (not setCurrentTrack) tags the media kind so this listen lands in history as
-	// Kind="episode" and native history screens replay it via DZPlayEpisode.
-	setCurrentEpisode(deezer.Track{ID: id, DurationMS: int64(durationMS)})
-	go fetchEpisodeMeta(c, id)
-	return 1
+	return C.int(engine.PlayEpisode(C.GoString(episodeID), int64(durationMS)))
 }
 
-// ---- equalizer + mono downmix (v1.7) ----
-
-// jEQState is the full EQ snapshot shared by every GUI: current settings plus
-// the core-owned band/preset tables so the UIs never hardcode them.
-type jEQState struct {
-	Enabled  bool      `json:"enabled"`
-	Mono     bool      `json:"mono"`
-	PreampDB float64   `json:"preampDb"`
-	GainsDB  []float64 `json:"gainsDb"`
-	Preset   string    `json:"preset"`
-	Bands    []float64 `json:"bands"`
-	Presets  []string  `json:"presets"`
-}
+// ---- equalizer + mono downmix ----
 
 // DZEQJSON returns the equalizer state:
 // {enabled,mono,preampDb,gainsDb:[10],preset,bands:[10],presets:[...]}.
 //
 //export DZEQJSON
 func DZEQJSON() *C.char {
-	var st jEQState
-	withPlayer(func(p *audio.Player) {
-		st = jEQState{
-			Enabled:  p.EQEnabled(),
-			Mono:     p.MonoDownmix(),
-			PreampDB: p.EQPreampDB(),
-			GainsDB:  p.EQGains(),
-			Preset:   p.EQPreset(),
-			Bands:    p.EQBands(),
-			Presets:  audio.EQPresetNames,
-		}
-	})
+	st, _ := engine.EQ()
 	return jsonStr(st, nil)
 }
 
@@ -1384,58 +988,14 @@ func DZEQJSON() *C.char {
 // any present key failed to apply (unknown preset, bad band index/length).
 //
 //export DZSetEQJSON
-func DZSetEQJSON(js *C.char) C.int {
-	var req struct {
-		Enabled  *bool      `json:"enabled"`
-		Mono     *bool      `json:"mono"`
-		PreampDB *float64   `json:"preampDb"`
-		GainsDB  *[]float64 `json:"gainsDb"`
-		Preset   *string    `json:"preset"`
-		Band     *struct {
-			Index  int     `json:"index"`
-			GainDB float64 `json:"gainDb"`
-		} `json:"band"`
-	}
-	if err := json.Unmarshal([]byte(C.GoString(js)), &req); err != nil {
-		return 0
-	}
-	ok := C.int(0)
-	withPlayer(func(p *audio.Player) {
-		ok = 1
-		if req.Enabled != nil {
-			p.SetEQEnabled(*req.Enabled)
-		}
-		if req.Mono != nil {
-			p.SetMonoDownmix(*req.Mono)
-		}
-		if req.PreampDB != nil {
-			p.SetEQPreamp(*req.PreampDB)
-		}
-		if req.Preset != nil {
-			if err := p.SetEQPreset(*req.Preset); err != nil {
-				ok = 0
-			}
-		}
-		if req.GainsDB != nil {
-			if err := p.SetEQGains(*req.GainsDB); err != nil {
-				ok = 0
-			}
-		}
-		if req.Band != nil {
-			if err := p.SetEQGain(req.Band.Index, req.Band.GainDB); err != nil {
-				ok = 0
-			}
-		}
-	})
-	return ok
-}
+func DZSetEQJSON(js *C.char) C.int { return cBool(engine.SetEQJSON(C.GoString(js))) }
 
 // DZClearPreload discards a preloaded next track. Call when the upcoming track
 // is no longer determined (shuffle/repeat toggled after a preload was armed) so
 // a stale preload can't be gaplessly swapped in.
 //
 //export DZClearPreload
-func DZClearPreload() { clearEnginePreload() }
+func DZClearPreload() { engine.ClearPreload() }
 
 // ---- engine queue sync (GUI queue -> engine) ----
 
@@ -1452,14 +1012,17 @@ func DZClearPreload() { clearEnginePreload() }
 // today's behavior exactly. Returns 1 on success, 0 on a parse error.
 //
 //export DZQueueSet
-func DZQueueSet(js *C.char) C.int {
-	ts, err := queueTracksFromJSON(C.GoString(js))
-	if err != nil {
-		return 0
-	}
-	engineQueueSet(ts)
-	return 1
-}
+func DZQueueSet(js *C.char) C.int { return ok(engine.QueueSet(C.GoString(js))) }
+
+// DZQueueAppend adds tracks to the end of the engine queue ("Add to queue")
+// without resending the queue: js is a JSON array in DZQueueSet's shape. The
+// cursor stays where it is; DZQueueVersion bumps when at least one track was
+// added. A preloaded next is dropped only when the track after the cursor
+// changed. Returns 1 on success ("[]" adds nothing), 0 on a parse error (the
+// queue is left as it was).
+//
+//export DZQueueAppend
+func DZQueueAppend(js *C.char) C.int { return ok(engine.QueueAppend(C.GoString(js))) }
 
 // DZQueueSetIndex moves the engine queue's cursor to i (clamped; no-op when the
 // queue is empty). Call it whenever the GUI changes the playing row so the
@@ -1467,14 +1030,14 @@ func DZQueueSet(js *C.char) C.int {
 // own auto-advance and gapless cursor sync for a synced queue.
 //
 //export DZQueueSetIndex
-func DZQueueSetIndex(i C.int) { engineQueueSetIndex(int(i)) }
+func DZQueueSetIndex(i C.int) { engine.QueueSetIndex(int(i)) }
 
 // DZQueueIndex returns the engine queue's cursor (-1 when empty/unsynced), so a
 // GUI can resync its own cursor after an engine-driven advance (natural finish,
 // remote /next|/prev, gapless promote).
 //
 //export DZQueueIndex
-func DZQueueIndex() C.int { return C.int(engineQueueIndex()) }
+func DZQueueIndex() C.int { return C.int(engine.QueueIndex()) }
 
 // DZQueueVersion returns a counter bumped on every engine-queue CONTENT change
 // (DZQueueSet, remote /queue/add|remove|move, /play/album, /play/mix/*) —
@@ -1482,7 +1045,7 @@ func DZQueueIndex() C.int { return C.int(engineQueueIndex()) }
 // only when a remote controller actually edited the queue.
 //
 //export DZQueueVersion
-func DZQueueVersion() C.longlong { return C.longlong(engineQueueVersion()) }
+func DZQueueVersion() C.longlong { return C.longlong(engine.QueueVersion()) }
 
 // DZQueueJSON returns the engine queue as {"version":N,"index":I,"tracks":[..]}
 // (tracks in the shared wire shape), so a GUI can adopt remote queue edits.
@@ -1490,7 +1053,7 @@ func DZQueueVersion() C.longlong { return C.longlong(engineQueueVersion()) }
 //
 //export DZQueueJSON
 func DZQueueJSON() *C.char {
-	ts, idx, ver := engineQueueSnapshot()
+	ts, idx, ver := engine.QueueSnapshot()
 	return jsonStr(map[string]any{
 		"version": ver,
 		"index":   idx,
@@ -1507,7 +1070,7 @@ func DZQueueJSON() *C.char {
 // state notify let a GUI resync its Up-Next via DZQueueVersion/DZQueueJSON.
 //
 //export DZQueueRemove
-func DZQueueRemove(i C.int) { _ = engineQueueRemove(int(i)) }
+func DZQueueRemove(i C.int) { _ = engine.QueueRemove(int(i)) }
 
 // DZQueueMove reorders the engine queue, moving the track at `from` to `to`. The
 // cursor, history and shuffle cycle follow the moved track (queue.Move), so what
@@ -1515,7 +1078,7 @@ func DZQueueRemove(i C.int) { _ = engineQueueRemove(int(i)) }
 // device. Bumps the version + notifies for GUI resync.
 //
 //export DZQueueMove
-func DZQueueMove(from, to C.int) { _ = engineQueueMove(int(from), int(to)) }
+func DZQueueMove(from, to C.int) { _ = engine.QueueMove(int(from), int(to)) }
 
 // DZQueueInsertNext splices tracks into the engine queue right after the playing
 // row ("play next"), for the GUI Up-Next editor. js is a single wire track
@@ -1524,96 +1087,4 @@ func DZQueueMove(from, to C.int) { _ = engineQueueMove(int(from), int(to)) }
 // changed) and the version bumps + state notifies for GUI/controller resync.
 //
 //export DZQueueInsertNext
-func DZQueueInsertNext(js *C.char) { engineQueueInsertNext(tracksFromInsertJSON(C.GoString(js))) }
-
-// ---- offline download (cache a full track's ciphertext for zero-network play) ----
-
-// DZDownloadForOffline pre-fetches trackID's raw (still-encrypted) ciphertext
-// into the on-disk media cache and persists its stream meta, so a later DZPlay
-// serves it with zero network (PrepareStreamCached returns a CDNURL=="" plan the
-// audio layer plays straight from cache). Returns {"status":...,"key":...} on
-// success ("downloaded" when freshly fetched, "cached" when already present) or
-// {"error":...}. Full encrypted tracks only — previews, podcast episodes and
-// plain streams are never cached (use DZDownloadTrack for a decoded file on
-// disk). Requires the media cache enabled (media.json mediaCacheMB>0). Blocking:
-// call it off the UI thread. Release the result with DZFree.
-//
-//export DZDownloadForOffline
-func DZDownloadForOffline(trackID *C.char) *C.char {
-	id := C.GoString(trackID)
-	if id == "" {
-		return jsonStr(nil, errors.New("empty track id"))
-	}
-	mc := curMediaCache()
-	if mc == nil {
-		return jsonStr(nil, errors.New("media cache disabled (set mediaCacheMB in media.json)"))
-	}
-	c := curClient()
-	if c == nil {
-		return jsonStr(nil, errNotReady)
-	}
-	// Prefer the cache: an already-downloaded track (its meta was persisted)
-	// short-circuits to a CDNURL=="" plan — report it cleanly, no re-fetch.
-	plan, err := c.PrepareStreamCached(id, mc)
-	if err != nil {
-		return jsonStr(nil, err)
-	}
-	key := plan.TrackID + "." + plan.Format
-	if plan.CDNURL == "" {
-		return jsonStr(map[string]string{"status": "cached", "key": key}, nil)
-	}
-	if !plan.Encrypted || plan.Preview {
-		// Only full encrypted tracks are cached at rest (mirrors the audio layer);
-		// previews/plain streams have nothing to serve offline from cache.
-		return jsonStr(nil, errors.New("track not eligible for offline (preview or unencrypted stream)"))
-	}
-	if err := fetchCiphertextToCache(mc, key, plan.CDNURL); err != nil {
-		return jsonStr(nil, err)
-	}
-	// Persist the meta so PrepareStreamCached finds it (making the cached body a
-	// zero-network plan). Best-effort: a meta write failure only costs a re-resolve.
-	_ = mc.PutMeta(key, mediacache.StreamMeta{
-		Format:    plan.Format,
-		Encrypted: plan.Encrypted,
-		GainDB:    plan.GainDB,
-		Preview:   plan.Preview,
-	})
-	return jsonStr(map[string]string{"status": "downloaded", "key": key}, nil)
-}
-
-// fetchCiphertextToCache downloads the raw stream body at url fully into memory,
-// then commits it to the media cache under key in one Put. Buffering first means
-// a torn download never commits a partial (a mediacache Put commits on Close
-// with any bytes written), so an offline entry is always the complete
-// ciphertext. Bounded body read guards against a runaway response.
-func fetchCiphertextToCache(mc *mediacache.Cache, key, url string) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 OpenDeezer")
-	resp, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("CDN returned %s", resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 256<<20)) // 256 MB ceiling
-	if err != nil {
-		return err
-	}
-	if len(body) == 0 {
-		return errors.New("empty stream body")
-	}
-	w, err := mc.Put(key)
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(body); err != nil {
-		_ = w.Close()
-		return err
-	}
-	return w.Close()
-}
+func DZQueueInsertNext(js *C.char) { engine.QueueInsertNext(C.GoString(js)) }

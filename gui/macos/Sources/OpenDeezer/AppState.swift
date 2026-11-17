@@ -174,8 +174,8 @@ final class AppState: ObservableObject {
     var queueTracks: [Track] { queue }
     var currentQueueIndex: Int { queueIndex }
 
-    // Track ids cached for zero-network playback (DZDownloadForOffline). Populated
-    // from a successful offline download; drives the "available offline" badge.
+    // Track ids kept for zero-network playback: seeded from DZOfflineIDsJSON at
+    // login, grown by each DZPinOffline; drives the "available offline" badge.
     @Published var offlineIDs: Set<String> = []
     // True once the queue has been mirrored into the engine (DZQueueSet). While
     // set, the engine owns auto-advance for natural finishes (DZFinishedCount
@@ -314,9 +314,14 @@ final class AppState: ObservableObject {
         // the like button is accurate on every track — even ones played from
         // Search / Charts / a shared link before the Liked view is ever opened.
         // Off the main thread (it hits the network); toggleLike reconciles later.
+        // The offline badges likewise, from the tracks this account keeps offline.
         Task.detached {
             let ids = Core.favoriteIDs()
-            await MainActor.run { self.likedIDs = Set(ids) }
+            let offline = Core.offlineIDs()
+            await MainActor.run {
+                self.likedIDs = Set(ids)
+                self.offlineIDs = Set(offline)
+            }
         }
     }
 
@@ -816,21 +821,13 @@ final class AppState: ObservableObject {
 
     // MARK: offline download (cache-for-offline)
 
-    // Result of DZDownloadForOffline — {"status":...,"key":...} or {"error":...}.
-    private struct OfflineResult: Decodable {
-        let status: String?
-        let key: String?
-        let error: String?
-    }
-
-    // True when `track` is cached for zero-network playback.
+    // True when `track` is kept for zero-network playback.
     func isOffline(_ track: Track) -> Bool { offlineIDs.contains(track.id) }
 
-    // Cache a track's ciphertext for offline (zero-network) playback via
-    // DZDownloadForOffline, off the main thread, with a status toast. Premium-only
-    // + gated exactly like download(_:). On success (freshly "downloaded" or
-    // already "cached") the id joins offlineIDs, lighting the "available offline"
-    // badge on its rows.
+    // Keep a track for offline (zero-network) playback via DZPinOffline, off the
+    // main thread, with a status toast. Premium-only + gated exactly like
+    // download(_:). Once the pin is taken (the engine fetches in the background)
+    // the id joins offlineIDs, lighting the "available offline" badge on its rows.
     func downloadForOffline(_ track: Track) {
         guard isPremium else {
             setDownloadStatus(L("Requires a paid Deezer plan"))
@@ -844,14 +841,13 @@ final class AppState: ObservableObject {
         let id = track.id
         setDownloadStatus(Lf("Saving “%@” for offline…", name), autoDismiss: false)
         Task.detached {
-            let js = Core.downloadForOffline(id)
-            let res = try? JSONDecoder().decode(OfflineResult.self, from: Data(js.utf8))
+            let err = Core.pinOffline(id)
             await MainActor.run {
-                if let status = res?.status, status == "downloaded" || status == "cached" {
+                if err == "" {
                     self.offlineIDs.insert(id)
                     self.setDownloadStatus(Lf("“%@” available offline", name))
                 } else {
-                    self.setDownloadStatus(res?.error ?? L("Offline download failed."))
+                    self.setDownloadStatus(err ?? L("Offline download failed."))
                 }
             }
         }

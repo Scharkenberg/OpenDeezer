@@ -63,16 +63,17 @@ func TestProgressiveStartMP3(t *testing.T) {
 	}
 }
 
-// TestProgressiveWatermarkReturnsEarly checks the streamBuffer watermark returns
-// once the margin is buffered without waiting for the whole stream.
+// TestProgressiveWatermarkReturnsEarly checks the stream watermark returns
+// once the margin is written without waiting for the whole stream.
 func TestProgressiveWatermarkReturnsEarly(t *testing.T) {
-	sb := newStreamBuffer()
+	sb := newStreamFile(nil)
+	defer sb.close()
 	done := make(chan struct{})
 	go func() {
 		sb.waitWatermark(256 * 1024)
 		close(done)
 	}()
-	sb.append(make([]byte, 256*1024)) // reach the watermark; stream NOT finished
+	_ = sb.write(make([]byte, 256*1024)) // reach the watermark; stream NOT finished
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):

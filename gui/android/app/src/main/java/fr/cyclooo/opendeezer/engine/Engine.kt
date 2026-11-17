@@ -124,11 +124,13 @@ object Engine {
 
     // ---- playback ----
 
+    // False only on a failure: the engine answers 1 started, 0 failed, 2 when a
+    // newer play (another tap, a remote) took over first, which is not one.
     suspend fun play(trackId: String, durationMs: Long): Boolean =
-        io { runCatching { Odmobile.play(trackId, durationMs) }.getOrDefault(false) }
+        io { runCatching { Odmobile.play(trackId, durationMs) != 0L }.getOrDefault(false) }
 
     suspend fun playEpisode(id: String, durationMs: Long = 0L): Boolean =
-        io { runCatching { Odmobile.playEpisodeMS(id, durationMs) }.getOrDefault(false) }
+        io { runCatching { Odmobile.playEpisodeMS(id, durationMs) != 0L }.getOrDefault(false) }
 
     // ---- gapless preload ----
     // Resolves and buffers the NEXT queue track so the engine swaps into it

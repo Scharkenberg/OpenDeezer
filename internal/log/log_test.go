@@ -2,6 +2,8 @@ package log
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -59,6 +61,90 @@ func TestLevelOffSilencesAll(t *testing.T) {
 	Error("should-not-appear")
 	if buf.Len() != 0 {
 		t.Errorf("LevelOff should silence everything, got %q", buf.String())
+	}
+}
+
+// The log file moves to opendeezer.log.old once it passes 512 KB.
+func TestLogFileRolls(t *testing.T) {
+	dir := t.TempDir()
+	if err := OpenFile(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		mu.Lock()
+		_ = out.(*rollingFile).f.Close()
+		mu.Unlock()
+		SetOutput(discardReset())
+	})
+	line := strings.Repeat("x", 1000)
+	for range 600 { // ~600 KB
+		Info("%s", line)
+	}
+	old, err := os.Stat(filepath.Join(dir, "opendeezer.log.old"))
+	if err != nil {
+		t.Fatalf("no rolled log: %v", err)
+	}
+	cur, err := os.Stat(filepath.Join(dir, "opendeezer.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.Size() < 512*1024 || cur.Size() >= 512*1024 {
+		t.Fatalf("old %d bytes, current %d bytes", old.Size(), cur.Size())
+	}
+}
+
+// When the move fails (another process holds the file on Windows) the log
+// tries again only after another 512 KB, not on every line.
+func TestFailedRollRetriesAfterAnother512KB(t *testing.T) {
+	dir := t.TempDir()
+	tries := 0
+	rename = func(string, string) error { tries++; return os.ErrPermission }
+	if err := OpenFile(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		rename = os.Rename
+		mu.Lock()
+		_ = out.(*rollingFile).f.Close()
+		mu.Unlock()
+		SetOutput(discardReset())
+	})
+	line := strings.Repeat("x", 1000)
+	for range 1100 { // ~1.1 MB
+		Info("%s", line)
+	}
+	if tries != 2 {
+		t.Fatalf("%d moves tried over 1.1 MB, want 2 (past 512 KB and past 1 MB)", tries)
+	}
+}
+
+// When the log cannot be opened again after a move, the next lines do not
+// try the move again each.
+func TestFailedReopenDoesNotRetryEachLine(t *testing.T) {
+	dir := t.TempDir()
+	tries := 0
+	rename = func(from, to string) error {
+		tries++
+		err := os.Rename(from, to)
+		_ = os.Mkdir(from, 0o700) // a folder where the log was: it cannot be opened
+		return err
+	}
+	if err := OpenFile(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		rename = os.Rename
+		mu.Lock()
+		_ = out.(*rollingFile).f.Close()
+		mu.Unlock()
+		SetOutput(discardReset())
+	})
+	line := strings.Repeat("x", 1000)
+	for range 600 { // ~600 KB
+		Info("%s", line)
+	}
+	if tries != 1 {
+		t.Fatalf("%d moves tried after the log could not be opened, want 1", tries)
 	}
 }
 

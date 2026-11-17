@@ -155,7 +155,7 @@ func (rc *RemoteClient) Stop() (State, error) { return rc.c.Stop() }
 func (rc *RemoteClient) Restart() (State, error) { return rc.c.Restart() }
 
 // SeekMS seeks to ms milliseconds from the start of the current track.
-func (rc *RemoteClient) SeekMS(ms int64) (State, error) { return rc.c.Seek(ms) }
+func (rc *RemoteClient) SeekMS(ms int64) (State, error) { return rc.c.SeekMS(ms) }
 
 // SetVolume sets the volume on the device (0.0 = silent, 1.0 = full).
 func (rc *RemoteClient) SetVolume(v float64) (State, error) { return rc.c.SetVolume(v) }

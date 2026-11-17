@@ -1,6 +1,7 @@
 package deezer
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -21,7 +22,7 @@ import (
 // Supply a no-op or fake for tests so no network calls are made.
 type ArtworkFetcher func(ctx context.Context, artworkURL string) ([]byte, error)
 
-// upgradeArtworkURL follows existing patterns (gwCover uses 250x250; API
+// upgradeArtworkURL follows existing patterns (gwImage uses 250x250; API
 // responses use cover_medium / picture_medium). We request a reasonably large
 // 500x500 variant suitable for embedded covers.
 func upgradeArtworkURL(u string) string {
@@ -49,7 +50,7 @@ func defaultArtworkFetcher(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", downloadUserAgent)
-	resp, err := downloadClient.Do(req)
+	resp, err := HTTPClient(0).Do(req)
 	if err != nil {
 		return nil, classifyNet(err)
 	}
@@ -63,8 +64,9 @@ func defaultArtworkFetcher(ctx context.Context, url string) ([]byte, error) {
 // tagFile attaches metadata (and optional cover) to a freshly written audio
 // file. On any error the audio bytes are left untouched (no partial tag
 // overwrite that would corrupt playback) and the error is returned for the
-// caller to log as non-fatal.
-func tagFile(ctx context.Context, path string, t Track, artworkURL string, trackNumber int, date string, fetch ArtworkFetcher) error {
+// caller to log as non-fatal. ext is the format ("mp3" or "flac"): the path is
+// a temp name that does not carry it.
+func tagFile(ctx context.Context, path, ext string, t Track, artworkURL string, trackNumber int, date string, fetch ArtworkFetcher) error {
 	if fetch == nil {
 		fetch = defaultArtworkFetcher
 	}
@@ -77,11 +79,7 @@ func tagFile(ctx context.Context, path string, t Track, artworkURL string, track
 		}
 	}
 
-	// saveTrack tags the in-progress "<name>.<ext>.part" temp file before
-	// renaming it over the final name, so dispatch on the real extension
-	// underneath the .part suffix.
-	lower := strings.ToLower(strings.TrimSuffix(path, ".part"))
-	if strings.HasSuffix(lower, ".flac") {
+	if ext == "flac" {
 		return tagFLAC(path, t, art, trackNumber, date)
 	}
 	return tagMP3(path, t, art, trackNumber, date)
@@ -128,10 +126,22 @@ func tagMP3(path string, t Track, art []byte, trackNumber int, date string) (err
 	return nil
 }
 
+// tagFLAC replaces the file's comment and picture blocks: it reads only the
+// metadata, writes the new metadata to a temp file, copies the frames after
+// it and renames the temp file over path.
 func tagFLAC(path string, t Track, art []byte, trackNumber int, date string) error {
-	f, err := flac.ParseFile(path)
+	src, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("flac open: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+	f, err := flac.ParseMetadata(src)
 	if err != nil {
 		return fmt.Errorf("flac parse: %w", err)
+	}
+	var sync [2]byte
+	if _, err := io.ReadFull(src, sync[:]); err != nil || sync[0] != 0xFF || sync[1]>>2 != 0x3E {
+		return fmt.Errorf("flac parse: %w", flac.ErrorNoSyncCode)
 	}
 
 	// Preserve StreamInfo (must be first). Drop prior comment/picture blocks
@@ -179,15 +189,12 @@ func tagFLAC(path string, t Track, art []byte, trackNumber int, date string) err
 		}
 	}
 
-	f.Meta = newMeta
-
-	// go-flac's Save is an in-place O_TRUNC rewrite of path: a short write
-	// (ENOSPC, crash) would destroy the just-downloaded audio while tagging
-	// errors are treated as non-fatal by callers. Write the tagged copy next
-	// to the original and atomically rename it over path only on full
-	// success; on any error the original bytes are never touched.
+	// A short write (ENOSPC, crash) must not destroy the just-downloaded audio
+	// while tagging errors are treated as non-fatal by callers. Write the
+	// tagged copy next to the original and atomically rename it over path only
+	// on full success; on any error the original bytes are never touched.
 	mode := os.FileMode(0o644)
-	if fi, serr := os.Stat(path); serr == nil {
+	if fi, serr := src.Stat(); serr == nil {
 		mode = fi.Mode().Perm()
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tag-*")
@@ -195,11 +202,27 @@ func tagFLAC(path string, t Track, art []byte, trackNumber int, date string) err
 		return fmt.Errorf("flac tag temp: %w", err)
 	}
 	tmpName := tmp.Name()
-	if _, err := tmp.Write(f.Marshal()); err != nil {
+	w := bufio.NewWriter(tmp)
+	_, _ = w.WriteString("fLaC")
+	for i, m := range newMeta {
+		_, _ = w.Write(m.Marshal(i == len(newMeta)-1))
+	}
+	_, _ = w.Write(sync[:])
+	_, err = io.Copy(w, src)
+	if err == nil {
+		err = w.Flush()
+	}
+	if err == nil {
+		// The tagged copy reaches the disk before it replaces the original.
+		err = tmp.Sync()
+	}
+	if err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("flac tag write: %w", err)
 	}
+	// Windows cannot rename over a file that is open.
+	_ = src.Close()
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("flac tag close: %w", err)

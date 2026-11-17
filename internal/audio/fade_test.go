@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"math"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -40,18 +39,6 @@ func TestApplyFadeOutRamp(t *testing.T) {
 	}
 }
 
-// newPlaybackTestPlayer builds a Player wired for driving readPCM directly (no
-// output device): unity volume/gain/sleep so full-scale PCM passes through
-// unattenuated, and a nil EQ config (applyEQ is then a no-op).
-func newPlaybackTestPlayer() *Player {
-	p := &Player{}
-	p.state.Store(int32(Stopped))
-	p.volume.Store(math.Float64bits(1))
-	p.gainFac.Store(math.Float64bits(1))
-	p.sleepGain.Store(math.Float64bits(1))
-	return p
-}
-
 // filledSource returns a source whose ring is pre-loaded with nbytes of
 // full-scale (0x7FFF) PCM, for driving readPCM without the download/decode
 // pipeline.
@@ -74,7 +61,7 @@ func filledSource(t *testing.T, nbytes int) *source {
 // PCM down instead of cutting it hard, and that once the ramp is spent the output
 // is muted until the deferred state flip.
 func TestReadPCMFadeOut(t *testing.T) {
-	p := newPlaybackTestPlayer()
+	p := newPlayer(&mockOutput{})
 	frames := int(fadeOutFrames)
 	src := filledSource(t, 4*frames*frameBytes)
 	p.cur.Store(src)
@@ -128,7 +115,7 @@ func TestReadPCMFadeOut(t *testing.T) {
 // emulating the callback's read order asserts it never appears.
 func TestFadeOutArmPublishesFramesFirst(t *testing.T) {
 	for iter := 0; iter < 200; iter++ {
-		p := newPlaybackTestPlayer()
+		p := newPlayer(&mockOutput{})
 		p.state.Store(int32(Playing))
 		var violated atomic.Bool
 		done := make(chan struct{})

@@ -8,13 +8,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
 )
 
 var (
-	baseDirMu       sync.RWMutex
-	baseDirOverride string
+	baseDirMu        sync.RWMutex
+	baseDirOverride  string
+	cacheDirOverride string
 )
 
 // SetBaseDir overrides the directory Dir returns. Hosts whose platform
@@ -37,6 +42,32 @@ func Dir() (string, error) {
 		return override, nil
 	}
 	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "opendeezer"), nil
+}
+
+// SetCacheBaseDir overrides the directory CacheBaseDir returns, for hosts
+// whose os.UserCacheDir is not an app-private path (Android: the app's cache
+// directory). "" restores the default.
+func SetCacheBaseDir(dir string) {
+	baseDirMu.Lock()
+	cacheDirOverride = strings.TrimSpace(dir)
+	baseDirMu.Unlock()
+}
+
+// CacheBaseDir holds what the engine can lose: <user cache dir>/opendeezer
+// (%LOCALAPPDATA%\opendeezer on Windows). Stream temp files go in its tmp
+// subfolder, and it is the default media cache folder.
+func CacheBaseDir() (string, error) {
+	baseDirMu.RLock()
+	override := cacheDirOverride
+	baseDirMu.RUnlock()
+	if override != "" {
+		return override, nil
+	}
+	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
@@ -79,13 +110,13 @@ func LoadControl() Control {
 	switch {
 	case v == "":
 		// Control isn't explicitly enabled — leave Enabled=false, but still fall
-		// through to read a configured token below. Callers that always start a
-		// LAN server regardless of this flag (the phone remote / Connect host via
-		// mobileStartServer) must honor a configured token; returning here would
-		// hand them an empty token and silently downgrade them to same-account
-		// auth (B9). Enable-gated callers (desktop startServices, corelib) still
-		// key off c.Enabled, so this only populates a field they'd otherwise skip.
-	case v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true"):
+		// through to read a configured token below. Callers that start a LAN
+		// server regardless of this flag (the phone remote and the Connect host)
+		// must honor a configured token; returning here would hand them an empty
+		// token and silently downgrade them to same-account auth. Enable-gated
+		// callers (startServices) still key off c.Enabled, so this only
+		// populates a field they'd otherwise skip.
+	case v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes"):
 		c.Enabled = true
 	case v == "0" || strings.EqualFold(v, "off") || strings.EqualFold(v, "false") || strings.EqualFold(v, "no"):
 		c.Enabled = false
@@ -107,10 +138,10 @@ func LoadControl() Control {
 	return c
 }
 
-// writeFile writes contents to a file under Dir(), creating the directory if
+// WriteFile writes contents to a file under Dir(), creating the directory if
 // needed. Unlike readFile it only ever targets the primary (platform) config
 // dir — there's exactly one place a setting should be written to.
-func writeFile(name, contents string) error {
+func WriteFile(name, contents string) error {
 	dir, err := Dir()
 	if err != nil {
 		return err
@@ -155,13 +186,13 @@ func SaveControlEnabled(enabled bool, addr string) error {
 	if enabled {
 		v = strings.TrimSpace(addr)
 	}
-	return writeFile("control.txt", v)
+	return WriteFile("control.txt", v)
 }
 
 // SaveControlToken persists the control-API bearer token. "" clears it, which
 // falls back to same-account auth on a LAN bind.
 func SaveControlToken(token string) error {
-	return writeFile("control-token.txt", strings.TrimSpace(token))
+	return WriteFile("control-token.txt", strings.TrimSpace(token))
 }
 
 // IsLoopbackAddr reports whether a host:port binds only the loopback interface.
@@ -274,7 +305,96 @@ func SaveEQ(eq EQ) error {
 	if err != nil {
 		return err
 	}
-	return writeFile("eq.json", string(b))
+	return WriteFile("eq.json", string(b))
+}
+
+// Playback is the persisted playback settings (playback.json in the config
+// dir), loaded and saved by the engine and the terminal UI alike, so every
+// client plays with the same ones.
+type Playback struct {
+	Quality     int  `json:"quality"` // 0 MP3 128, 1 MP3 320, 2 FLAC
+	Gapless     bool `json:"gapless"`
+	CrossfadeMS int  `json:"crossfadeMs"`
+	ReplayGain  bool `json:"replayGain"` // loudness normalization
+}
+
+// LoadPlayback reads playback.json. While it does not exist, the terminal
+// UI's older files (quality.txt, gapless.txt, crossfade.txt, replaygain.txt
+// in Dir) are written into it once, whichever client loads first. ok is false
+// when it is missing with none of those, or unparseable: the caller keeps its
+// own values (and a host that stored them itself writes them here with its
+// first setter).
+func LoadPlayback() (pb Playback, ok bool) {
+	s := readFile("playback.json")
+	if s == "" {
+		return migratePlayback()
+	}
+	if json.Unmarshal([]byte(s), &pb) != nil {
+		return Playback{}, false
+	}
+	return pb, true
+}
+
+// migratePlayback writes the terminal UI's older files into playback.json; ok
+// is false when there are none.
+func migratePlayback() (pb Playback, ok bool) {
+	dir, err := Dir()
+	if err != nil {
+		return Playback{}, false
+	}
+	read := func(name string) (string, bool) {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		ok = ok || err == nil
+		return strings.TrimSpace(string(b)), err == nil
+	}
+	pb = Playback{Gapless: true}
+	switch v, _ := read("quality.txt"); v {
+	case "high":
+		pb.Quality = 1
+	case "hifi", "flac", "lossless":
+		pb.Quality = 2
+	}
+	if v, found := read("gapless.txt"); found {
+		pb.Gapless = v != "0"
+	}
+	v, _ := read("crossfade.txt")
+	pb.CrossfadeMS, _ = strconv.Atoi(v)
+	pb.CrossfadeMS = max(pb.CrossfadeMS, 0)
+	v, _ = read("replaygain.txt")
+	pb.ReplayGain = v == "1"
+	if !ok {
+		return Playback{}, false
+	}
+	if err := SavePlayback(pb); err != nil {
+		odlog.Warn("playback.json: %v", err)
+	}
+	return pb, true
+}
+
+// SavePlayback writes playback.json.
+func SavePlayback(pb Playback) error {
+	b, err := json.Marshal(pb)
+	if err != nil {
+		return err
+	}
+	return WriteFile("playback.json", string(b))
+}
+
+// playbackMu serializes UpdatePlayback's read, edit and write.
+var playbackMu sync.Mutex
+
+// UpdatePlayback writes playback.json with edit applied to its values, or,
+// while it does not exist yet, to current(): the values the caller has in
+// force, which its first write migrates into the file.
+func UpdatePlayback(current func() Playback, edit func(*Playback)) error {
+	playbackMu.Lock()
+	defer playbackMu.Unlock()
+	pb, ok := LoadPlayback()
+	if !ok {
+		pb = current()
+	}
+	edit(&pb)
+	return SavePlayback(pb)
 }
 
 // Media is the persisted media/streaming configuration (media.json in the
@@ -285,11 +405,27 @@ type Media struct {
 	// (see internal/mediacache). 0 — the default — disables the cache
 	// entirely; negative values are clamped to 0.
 	MediaCacheMB int `json:"mediaCacheMB"`
+	// MediaCacheDir is the folder the user picked for the cache; "" (the
+	// default) is CacheBaseDir. The cache lives in its subfolder
+	// opendeezer-cache (CacheStoreDir).
+	MediaCacheDir string `json:"mediaCacheDir,omitempty"`
+	// MediaCacheMaxAgeDays removes cached tracks not played for longer than
+	// this many days; 0 (the default) keeps them. Negative values are
+	// clamped to 0.
+	MediaCacheMaxAgeDays int `json:"mediaCacheMaxAgeDays,omitempty"`
+	// OldCachesRemoved records that the caches older versions kept outside
+	// an opendeezer-cache folder were looked for and removed.
+	OldCachesRemoved bool `json:"oldCachesRemoved,omitempty"`
+}
+
+// CacheMaxAge is MediaCacheMaxAgeDays as a duration (0 = no limit).
+func (m Media) CacheMaxAge() time.Duration {
+	return time.Duration(m.MediaCacheMaxAgeDays) * 24 * time.Hour
 }
 
 // LoadMedia reads media.json from the config dir. A missing or unparseable
-// file yields the zero value (cache disabled). Negative cache sizes are
-// clamped to 0.
+// file yields the zero value (cache disabled). Negative cache sizes and ages
+// are clamped to 0.
 func LoadMedia() Media {
 	var m Media
 	if s := readFile("media.json"); s != "" {
@@ -297,10 +433,29 @@ func LoadMedia() Media {
 			m = Media{}
 		}
 	}
-	if m.MediaCacheMB < 0 {
-		m.MediaCacheMB = 0
-	}
+	m.MediaCacheMB = max(m.MediaCacheMB, 0)
+	m.MediaCacheMaxAgeDays = max(m.MediaCacheMaxAgeDays, 0)
 	return m
+}
+
+// CacheDir is the folder the media cache goes in: MediaCacheDir, else
+// CacheBaseDir.
+func (m Media) CacheDir() (string, error) {
+	if m.MediaCacheDir != "" {
+		return m.MediaCacheDir, nil
+	}
+	return CacheBaseDir()
+}
+
+// CacheStoreDir is the folder the media cache lives in: the subfolder
+// opendeezer-cache of CacheDir, which the cache creates. The cache deletes
+// nothing outside it.
+func (m Media) CacheStoreDir() (string, error) {
+	dir, err := m.CacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "opendeezer-cache"), nil
 }
 
 // SaveMedia persists the media settings to media.json in the config dir,
@@ -313,7 +468,7 @@ func SaveMedia(m Media) error {
 	if err != nil {
 		return err
 	}
-	return writeFile("media.json", string(b))
+	return WriteFile("media.json", string(b))
 }
 
 // LoadDiscordAppID returns the Discord application id for Rich Presence, from
@@ -349,7 +504,7 @@ func LanguageSetting() string {
 
 // SaveLanguage persists the UI language code. "" clears it (back to auto).
 func SaveLanguage(code string) error {
-	return writeFile("language.txt", strings.TrimSpace(code))
+	return WriteFile("language.txt", strings.TrimSpace(code))
 }
 
 // DefaultDownloadDir is where downloaded tracks land when the user hasn't chosen
@@ -384,7 +539,7 @@ func LoadDownloadDir() string {
 // SaveDownloadDir persists the download folder. "" clears it (back to the
 // default).
 func SaveDownloadDir(path string) error {
-	return writeFile("download-dir.txt", strings.TrimSpace(path))
+	return WriteFile("download-dir.txt", strings.TrimSpace(path))
 }
 
 // LoadAdsDisabled reports whether the user has opted out of Deezer Free's
@@ -406,5 +561,5 @@ func SaveAdsDisabled(disabled bool) error {
 	if disabled {
 		v = "1"
 	}
-	return writeFile("ads-disabled.txt", v)
+	return WriteFile("ads-disabled.txt", v)
 }

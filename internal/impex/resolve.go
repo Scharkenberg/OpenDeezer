@@ -2,8 +2,10 @@ package impex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
@@ -43,7 +45,7 @@ type ImportResult struct {
 // artist+title search) and creates a playlist with everything that matched.
 // progress, when non-nil, is called after each row with i = rows processed so
 // far (1..total). Unmatched rows are collected, not fatal; only zero matches
-// (or a creation failure) is an error — the partial result is still returned
+// (or a creation failure) is an error: the partial result is still returned
 // so the caller can show what went wrong.
 func ImportPlaylist(ctx context.Context, r Resolver, pc PlaylistCreator, title string,
 	rows []Row, progress func(i, total int, matched bool)) (*ImportResult, error) {
@@ -53,7 +55,12 @@ func ImportPlaylist(ctx context.Context, r Resolver, pc PlaylistCreator, title s
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
-		t, ok := resolveRow(r, row)
+		t, ok, err := resolveRow(r, row)
+		if err != nil {
+			// A quota or network failure is not "no match": stop rather than
+			// create a silently truncated playlist.
+			return res, fmt.Errorf("row %d (%s - %s): %w", i+1, row.Artist, row.Title, err)
+		}
 		if ok {
 			res.Matched = append(res.Matched, t)
 		} else {
@@ -79,20 +86,33 @@ func ImportPlaylist(ctx context.Context, r Resolver, pc PlaylistCreator, title s
 }
 
 // resolveRow tries ISRC first (exact, catalog-level id), then a fuzzy
-// artist+title search.
-func resolveRow(r Resolver, row Row) (deezer.Track, bool) {
+// artist+title search. err is a lookup failure other than "not found".
+func resolveRow(r Resolver, row Row) (deezer.Track, bool, error) {
+	if row.ID != "" {
+		t := deezer.Track{ID: row.ID, Name: row.Title}
+		if row.Artist != "" {
+			t.Artists = []deezer.Artist{{Name: row.Artist}}
+		}
+		return t, true, nil
+	}
 	if isrc := strings.TrimSpace(row.ISRC); isrc != "" {
-		if t, err := r.ByISRC(isrc); err == nil && t.ID != "" {
-			return t, true
+		t, err := r.ByISRC(isrc)
+		if err == nil && t.ID != "" {
+			return t, true, nil
+		}
+		if err != nil && !errors.Is(err, deezer.ErrNotFound) {
+			return deezer.Track{}, false, err
 		}
 	}
 	if strings.TrimSpace(row.Title) == "" {
-		return deezer.Track{}, false
+		return deezer.Track{}, false, nil
 	}
-	if cands, err := r.Search(row.Artist, row.Title); err == nil && len(cands) > 0 {
-		if t, ok := bestMatch(cands, row.Artist, row.Title); ok {
-			return t, true
-		}
+	cands, err := r.Search(row.Artist, row.Title)
+	if err != nil {
+		return deezer.Track{}, false, err
+	}
+	if t, ok := bestMatch(cands, row.Artist, row.Title); ok {
+		return t, true, nil
 	}
 	// The targeted artist+title query can be too strict (e.g. artist name
 	// spelled differently) or return only near-misses that bestMatch rejects;
@@ -100,13 +120,13 @@ func resolveRow(r Resolver, row Row) (deezer.Track, bool) {
 	// the same acceptance criteria, so this only widens the candidate pool,
 	// never what counts as a match.
 	if strings.TrimSpace(row.Artist) == "" {
-		return deezer.Track{}, false
+		return deezer.Track{}, false, nil
 	}
-	cands, err := r.Search("", row.Artist+" "+row.Title)
-	if err != nil || len(cands) == 0 {
-		return deezer.Track{}, false
+	if cands, err = r.Search("", row.Artist+" "+row.Title); err != nil {
+		return deezer.Track{}, false, err
 	}
-	return bestMatch(cands, row.Artist, row.Title)
+	t, ok := bestMatch(cands, row.Artist, row.Title)
+	return t, ok, nil
 }
 
 // bestMatch picks the first candidate whose normalized title+artist agree with
@@ -117,6 +137,9 @@ func bestMatch(cands []deezer.Track, artist, title string) (deezer.Track, bool) 
 	wantTitle := normalize(title)
 	wantBase := normalizeBase(title)
 	wantArtist := normalize(artist)
+	if wantTitle == "" {
+		return deezer.Track{}, false // nothing left to compare: "" would equal ""
+	}
 	for _, t := range cands {
 		if normalize(t.Name) == wantTitle && artistsMatch(t, wantArtist) {
 			return t, true
@@ -152,8 +175,9 @@ func artistsMatch(t deezer.Track, wantArtist string) bool {
 }
 
 // normalize lowercases, folds common accents to ASCII, unifies "&"/"and",
-// drops feat./ft./featuring credits, strips punctuation and collapses spaces —
-// so "Beyoncé feat. JAY-Z" and "beyonce" compare equal.
+// drops feat./ft./featuring credits, strips punctuation (letters and digits of
+// any script stay) and collapses spaces, so "Beyoncé feat. JAY-Z" and
+// "beyonce" compare equal.
 func normalize(s string) string {
 	s = foldAccents(strings.ToLower(s))
 	s = stripFeat(s)
@@ -163,7 +187,7 @@ func normalize(s string) string {
 	space := true // collapse runs; also trims leading spaces
 	for _, r := range s {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case unicode.IsLetter(r), unicode.IsDigit(r):
 			b.WriteRune(r)
 			space = false
 		default:

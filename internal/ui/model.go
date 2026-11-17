@@ -8,6 +8,7 @@ import (
 	"image"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,7 +21,9 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
 	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mpris"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/update"
 
@@ -68,6 +71,12 @@ const (
 type Model struct {
 	client *deezer.Client
 	player *audio.Player
+	// caches is the stream cache (its Current is nil while the budget is 0),
+	// read by the commands that resolve streams.
+	caches *mediacache.Host
+	// preloads preloads the queue's next track: requested when a track starts
+	// or the queue changes, resolved and armed by the player's near-end hook.
+	preloads *preload.Preloader
 
 	screen     screen
 	prevScreen screen // to restore after now-playing / credits
@@ -106,7 +115,8 @@ type Model struct {
 	lyricsTrack string
 
 	acct          deezer.Account // logged-in plan + entitlements
-	pendingSeek   int64          // ms to seek to once the next stream is ready (resume)
+	resumeID      string         // track the resume offset belongs to
+	resumeMS      int64          // ms to seek to once resumeID's stream is ready
 	searchPodcast bool           // search screen is in podcast mode
 	searchReturn  screen         // screen restored when search is cancelled
 	episodeMode   bool           // current queue is podcast episodes (plain streams)
@@ -124,6 +134,21 @@ type Model struct {
 
 	queueSel     int // queue-view cursor (row navigation on the 'u' screen)
 	lyricsOffset int // manual wheel-scroll offset for plain (unsynced) lyrics
+
+	nav      int  // navigation generation; results of older requests are dropped (navCmd)
+	navReq   int  // generation of the latest navCmd request
+	barY     int  // screen row of the progress bar in the last frame, -1 when not shown
+	spinning bool // a spinner tick is scheduled
+	ticking  bool // a UI tick is scheduled
+
+	// resolving is set from a pick until it plays (or fails, or is stopped).
+	// pickSeq counts picks and stops; a resolve or play command for an older
+	// one does nothing. playerMu runs the blocking player calls one at a time.
+	resolving bool
+	pickSeq   atomic.Uint64
+	playerMu  sync.Mutex
+
+	shutDown bool // Shutdown has run
 
 	// pageArtist is the artist whose profile page is currently shown on
 	// screenList ("" ID when the list is any other browse context) — the seed
@@ -164,8 +189,9 @@ type Model struct {
 	webRemoteActive bool
 	webRemoteCode   string // 6-digit pairing code
 	webRemoteURL    string
-	webRemoteQR     string // terminal QR block
-	ctrlEditToken   bool   // Web Remote screen: editing the control-API token
+	webRemoteQR     string        // terminal QR block
+	ctrlEditToken   bool          // Web Remote screen: editing the control-API token
+	webCtrlCfg      ControlConfig // control config shown on the Web Remote screen
 
 	// remote control: drive another OpenDeezer client over its control API.
 	remote        *control.Client
@@ -174,6 +200,7 @@ type Model struct {
 	remoteAddr    string               // peer host:port currently connected/connecting
 	remoteClient  string               // peer device type/client (from /whoami)
 	remoteVersion string               // peer OpenDeezer version (from /whoami)
+	remotePolling bool                 // a status poll of the peer is in flight
 	advertiser    *discovery.Responder // LAN advertisement (when our control API is LAN-bound)
 
 	finished chan bool // signalled by player onFinish; true = gapless swap, false = stop
@@ -199,10 +226,12 @@ type remoteConnMsg struct {
 	err        error
 }
 
-// remoteStateMsg carries a polled/post-command status from the connected peer.
+// remoteStateMsg carries a polled/post-command status from a peer.
 type remoteStateMsg struct {
-	state control.State
-	err   error
+	client *control.Client // the peer it came from
+	poll   bool            // reply to remotePoll
+	state  control.State
+	err    error
 }
 
 // controlCmdMsg is a command from the control API, delivered onto the update
@@ -424,6 +453,7 @@ func (m *Model) publishControl() {
 	st.SleepEndOfTrack = m.player.SleepEndOfTrack()
 	st.SleepRemainingMS = m.player.SleepRemainingMS()
 	st.Queue = m.ctrlQueueSnapshot()
+	st.QueueVersion = m.ctrlQueueVer
 	m.ctrlState.Store(&st)
 	if m.ctrlQueueVer != prevQueueVer || controlStateChanged(prev, &st) {
 		m.ctrl.NotifyStateChanged()
@@ -567,14 +597,18 @@ func newBrowseList() list.Model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.KeyMap.Filter = key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "filter"))
+	l.DisableQuitKeybindings() // handleKey quits, so main can save state
 	return l
 }
+
+// searchCharLimit bounds the shared text input, except while it edits a token.
+const searchCharLimit = 120
 
 // New builds the root model.
 func New(client *deezer.Client, player *audio.Player) *Model {
 	ti := textinput.New()
 	ti.Placeholder = i18n.T("Search Deezer…")
-	ti.CharLimit = 120
+	ti.CharLimit = searchCharLimit
 
 	l := newBrowseList()
 
@@ -608,12 +642,28 @@ func New(client *deezer.Client, player *audio.Player) *Model {
 	})
 	m.discord = discord.New(LoadDiscordAppID())
 	m.applyThemeByName(LoadTheme())
-	player.SetReplayGain(LoadReplayGain())
-	player.SetGapless(LoadGapless())
-	player.SetCrossfadeMS(LoadCrossfadeMS())
+	pb := loadPlayback()
+	player.SetReplayGain(pb.ReplayGain)
+	player.SetGapless(pb.Gapless)
+	player.SetCrossfadeMS(pb.CrossfadeMS)
+	client.SetQuality(pb.Quality)
 	if d := LoadAudioDevice(); d != "" {
 		_ = player.SetDevice(d)
 	}
+	// Optional on-disk raw-stream cache (media.json: mediaCacheMB > 0 enables).
+	// Best-effort: a cache that fails to open just means uncached streaming.
+	m.caches = &mediacache.Host{Attach: func(c *mediacache.Cache) {
+		if c != nil {
+			player.SetStreamCache(c)
+		} else {
+			player.SetStreamCache(nil)
+		}
+	}}
+	if err := m.caches.Open(); err != nil {
+		odlog.Warn("mediacache: %v (continuing without cache)", err)
+	}
+	m.preloads = preload.New(func() *audio.Player { return player }, m.resolvePreload)
+	m.preloads.Attach(player)
 	return m
 }
 
@@ -674,14 +724,18 @@ type lyricsMsg struct {
 type streamReadyMsg struct {
 	plan  *deezer.StreamPlan
 	track deezer.Track
+	seq   uint64 // the pick it resolves
+	err   error  // the resolve failed
+}
+
+// playStartedMsg reports a player.Play run off the update loop.
+type playStartedMsg struct {
+	track deezer.Track
+	seq   uint64
+	err   error
 }
 type errMsg struct{ err error }
 type statusMsg struct{ text string }
-type preloadMsg struct {
-	plan    *deezer.StreamPlan
-	dur     int64
-	trackID string // the queue's PeekNext at request time; drop if it changed
-}
 type devicesMsg struct{ devices []audio.Device }
 type tickMsg time.Time
 
@@ -701,10 +755,12 @@ type downloadDoneMsg struct {
 	err  error
 }
 
-// Init kicks off login + the UI tick. The update check runs alongside them in
-// the background (see updatecheck.go) and never delays startup.
+// Init kicks off login. The update check runs alongside it in the background
+// (see updatecheck.go) and never delays startup. The UI tick starts with
+// playback (Update).
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.loginCmd(), tickCmd(), m.waitFinish(), m.spinner.Tick, m.updateCheckCmd())
+	m.spinning = true
+	return tea.Batch(m.loginCmd(), m.waitFinish(), m.spinner.Tick, m.updateCheckCmd())
 }
 
 func tickCmd() tea.Cmd {
@@ -890,13 +946,13 @@ func (m *Model) episodesCmd(p deezer.Podcast) tea.Cmd {
 }
 
 // episodeStreamCmd resolves + plays a podcast episode (plain stream).
-func (m *Model) episodeStreamCmd(t deezer.Track) tea.Cmd {
+func (m *Model) episodeStreamCmd(t deezer.Track, seq uint64) tea.Cmd {
 	return func() tea.Msg {
 		plan, err := m.client.PodcastEpisodeStream(t.ID)
 		if err != nil {
-			return errMsg{fmt.Errorf("resolve episode %q: %w", t.Name, err)}
+			return streamReadyMsg{track: t, seq: seq, err: fmt.Errorf("resolve episode %q: %w", t.Name, err)}
 		}
-		return streamReadyMsg{plan: plan, track: t}
+		return streamReadyMsg{plan: plan, track: t, seq: seq}
 	}
 }
 
@@ -965,23 +1021,11 @@ func (m *Model) deletePlaylistCmd(p deezer.Playlist) tea.Cmd {
 	}
 }
 
-// preloadNextCmd resolves the deterministic next track and hands it to the
-// player for a gapless/crossfaded transition. No-op when not applicable.
-func (m *Model) preloadNextCmd() tea.Cmd {
-	if m.episodeMode || (!m.player.Gapless() && m.player.CrossfadeMS() == 0) {
-		return nil
-	}
-	t, ok := m.q.PeekNext()
-	if !ok {
-		return nil
-	}
-	return func() tea.Msg {
-		plan, err := m.client.PrepareStream(t.ID)
-		if err != nil {
-			return nil
-		}
-		return preloadMsg{plan: plan, dur: t.DurationMS, trackID: t.ID}
-	}
+// resolvePreload resolves a preload request (the player's near-end hook runs
+// it): from the cache when it holds the track, else over the network.
+func (m *Model) resolvePreload(req deezer.Track) (*deezer.StreamPlan, deezer.Track, error) {
+	plan, err := m.client.PrepareStreamCached(req.ID, m.caches.Current())
+	return plan, req, err
 }
 
 func (m *Model) devicesCmd() tea.Cmd {
@@ -994,13 +1038,14 @@ func (m *Model) devicesCmd() tea.Cmd {
 	}
 }
 
-func (m *Model) streamCmd(t deezer.Track) tea.Cmd {
+func (m *Model) streamCmd(t deezer.Track, seq uint64) tea.Cmd {
 	return func() tea.Msg {
-		plan, err := m.client.PrepareStream(t.ID)
+		plan, err := m.client.PrepareStreamCached(t.ID, m.caches.Current())
 		if err != nil {
-			return errMsg{fmt.Errorf("resolve %q: %w", t.Name, err)}
+			return streamReadyMsg{track: t, seq: seq, err: fmt.Errorf("resolve %q: %w", t.Name, err)}
 		}
-		return streamReadyMsg{plan: plan, track: t}
+		// Off the player lock: a pick made meanwhile drops this one.
+		return streamReadyMsg{plan: m.player.ReplanIfGone(plan), track: t, seq: seq}
 	}
 }
 

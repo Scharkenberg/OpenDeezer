@@ -1,235 +1,167 @@
-// P/Invoke bridge to the Go engine (libdeezercore.dll), the SAME C ABI the C++
-// front-end called over extern "C". The engine does login, browse, Blowfish
-// decrypt, MP3/FLAC decode and WASAPI playback in-process; this file is the
-// marshaling boundary only.
-//
-// Marshaling rules (must match the Go side exactly):
-//   * cdecl, all POD params: CallingConvention = Cdecl.
-//   * Go returns C strings (UTF-8) that MUST be freed with DZFree. So every
-//     char*-returning export is declared returning IntPtr; TakeJson() converts
-//     it with Marshal.PtrToStringUTF8 (NOT PtrToStringAnsi -- Go strings are
-//     UTF-8) and then calls DZFree, mirroring the C++ TakeJson helper.
-//   * char* params are marshalled as UnmanagedType.LPUTF8Str (UTF-8 to match Go).
-//   * DZFetch returns unsigned char* + an int* length: declared IntPtr + out int;
-//     Fetch() copies the bytes with Marshal.Copy then frees with DZFreeBytes.
-//   * long long -> long, double -> double, int -> int.
+// P/Invoke declarations for libdeezercore.dll: cdecl, UTF-8 strings. Every char* result
+// is freed with DZFree (TakeJson); the QR PNG with DZFreeBytes.
 
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization.Metadata;
 
 namespace OpenDeezer;
 
-internal static class DeezerCore
+internal static partial class DeezerCore
 {
     private const string Dll = "libdeezercore";
-    private const CallingConvention Cdecl = CallingConvention.Cdecl;
 
-    // ---- raw exports (mirror libdeezercore.def / the extern "C" block) -------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZInit([MarshalAs(UnmanagedType.LPUTF8Str)] string arl);
-    // Why the last DZInit(...) returned falsy: 0 ok, 1 ARL expired/invalid, 2 no internet, 3 other.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZLoginErrorKind();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZUserID();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZFavoritesJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZPlaylistsJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZPlaylistTracksJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZAlbumTracksJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZSearchJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string q);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZPlay([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID, long durationMS);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZPause();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZResume();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZTogglePause();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZStop();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSeek(long ms);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZState();          // 0 stop 1 load 2 play 3 pause 4 err
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern long DZPositionMS();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern long DZDurationMS();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetVolume(double v);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern double DZVolume();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZFinishedCount();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZLastErrorJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZFree(IntPtr s);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZFetch([MarshalAs(UnmanagedType.LPUTF8Str)] string url, out int outLen);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZFreeBytes(IntPtr p);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetQuality(int level);   // 0=MP3_128,1=MP3_320,2=FLAC
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZHighQuality();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZQuality();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZFormat();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZInit(string arl);
+    // Why the last DZInit failed: 1 ARL expired or invalid, 2 no internet, 4 no audio output, 0 or 3 other.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZLoginErrorKind();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFavoritesJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPlaylistsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPlaylistTracksJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZAlbumTracksJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZSearchJSON(string q);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZPlay(string trackID, long durationMS);   // 1 started, 0 failed, PlaySuperseded
+    // DZPlay's and DZPlayEpisode's answer when another play took over before this one started.
+    internal const int PlaySuperseded = 2;
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZPause();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZResume();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZTogglePause();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZStop();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSeek(long ms);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZState();          // 0 stop 1 load 2 play 3 pause 4 err
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZPositionMS();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZDurationMS();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetVolume(double v);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial double DZVolume();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZFinishedCount();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZLastErrorJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZFree(IntPtr s);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZFreeBytes(IntPtr p);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetQuality(int level);   // 0=MP3_128,1=MP3_320,2=FLAC
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZQuality();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFormat();
 
-    // ---- v0.3 additions ------------------------------------------------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZAccountJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZChartsJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZArtistTopJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZArtistProfileJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZLyricsJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetReplayGain(int on);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZReplayGain();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZAccountJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZChartsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistProfileJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZTrackInfoJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZLyricsJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetReplayGain(int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZReplayGain();
 
-    // ---- v0.4 additions ------------------------------------------------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZAddFavorite([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZRemoveFavorite([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZAddToPlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string playlistID, [MarshalAs(UnmanagedType.LPUTF8Str)] string trackID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZRemoveFromPlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string playlistID, [MarshalAs(UnmanagedType.LPUTF8Str)] string trackID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZCreatePlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string title);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZRenamePlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string playlistID, [MarshalAs(UnmanagedType.LPUTF8Str)] string title);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZDeletePlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string playlistID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZFlowJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZSearchPodcastsJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string q);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZPodcastEpisodesJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string podcastID);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZPlayEpisode([MarshalAs(UnmanagedType.LPUTF8Str)] string episodeID, long durationMS);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZAudioDevicesJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSetAudioDevice([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZCurrentAudioDevice();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetGapless(int on);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZGapless();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetCrossfadeMS(int ms);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZCrossfadeMS();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZPreload([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID, long durationMS);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZAddFavorite(string trackID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRemoveFavorite(string trackID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZAddToPlaylist(string playlistID, string trackID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRemoveFromPlaylist(string playlistID, string trackID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCreatePlaylist(string title);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRenamePlaylist(string playlistID, string title);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZDeletePlaylist(string playlistID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFlowJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZSearchPodcastsJSON(string q);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPodcastEpisodesJSON(string podcastID);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZPlayEpisode(string episodeID, long durationMS);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZAudioDevicesJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetAudioDevice(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCurrentAudioDevice();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetGapless(int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZGapless();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetCrossfadeMS(int ms);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZCrossfadeMS();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZPreload(string trackID, long durationMS);
 
-    // ---- OpenDeezer Connect (LAN device transfer) ---------------------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetClientInfo([MarshalAs(UnmanagedType.LPUTF8Str)] string client, [MarshalAs(UnmanagedType.LPUTF8Str)] string device);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDiscoverDevices(int timeoutMS);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZConnectDevice([MarshalAs(UnmanagedType.LPUTF8Str)] string addr);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZDisconnectDevice();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZConnectedDevice();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZNowPlayingJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetClientInfo(string client, string device);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDiscoverDevices(int timeoutMS);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZConnectDevice(string addr);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZDisconnectDevice();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZConnectedDevice();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZNowPlayingJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZNowPlayingVersion();
 
-    // ---- v1.0 additions (repeat/shuffle forwarding to connected remote) -----
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetRepeat(int mode);   // 0=off,1=all,2=one
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetShuffle(int on);    // 0/1
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetRepeat(int mode);   // 0=off,1=all,2=one
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetShuffle(int on);    // 0/1
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetShuffleHostOwned(int on);   // 1: the flag is recorded, never applied
 
-    // ---- web remote (phone pairing) ------------------------------------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZWebRemoteSetEnabled(int on);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZWebRemoteInfoJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZWebRemoteQRPNG(out int outLen);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZWebRemoteSetEnabled(int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZWebRemoteInfoJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZWebRemoteQRPNG(out int outLen);
 
-    // ---- remote control (control API / phone remote settings) ---------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZControlConfigJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetControlConfig(int enabled, [MarshalAs(UnmanagedType.LPUTF8Str)] string addr, [MarshalAs(UnmanagedType.LPUTF8Str)] string token);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZControlConfigJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetControlConfig(int enabled, string addr, string token);
 
-    // ---- Home aggregator -------------------------------------------------------
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZHomeJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZHomeJSON();
 
-    // ---- update check (GitHub releases; never downloads/installs anything) ---
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZCheckUpdateJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCheckUpdateJSON();
 
-    // ---- v1.6 additions (sleep timer) ----------------------------------------
-    // Pause after `minutes` (with an auto fade-out) or when the current track ends
-    // if endOfTrack != 0. minutes<=0 && endOfTrack==0 cancels.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZSetSleepTimer(int minutes, int endOfTrack);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZCancelSleepTimer();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSleepTimerActive();      // 1/0
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSleepTimerEndOfTrack();   // 1/0
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern long DZSleepTimerRemainingMS();
+    // Pauses after `minutes` with a fade-out, or at the end of the track; 0 and 0 cancels.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetSleepTimer(int minutes, int endOfTrack);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZCancelSleepTimer();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSleepTimerActive();      // 1/0
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSleepTimerEndOfTrack();   // 1/0
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZSleepTimerRemainingMS();
 
-    // ---- v1.7 additions (10-band equalizer / mono downmix) --------------------
-    // DZEQJSON -> {enabled,mono,preampDb,gainsDb:[10],preset,bands:[10],presets:[...]}.
-    // DZSetEQJSON takes a PARTIAL update (every key optional): enabled, mono,
-    // preampDb, gainsDb ([10]), preset, band:{index,gainDb}. Returns 1 on success,
-    // 0 if any present key failed (unknown preset, bad band index). EQ state +
-    // persistence live in the engine (eq.json) -- the app never saves EQ itself.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZEQJSON();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSetEQJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string js);
-    // Discard a preloaded next track once it is no longer the deterministic next
-    // (shuffle / repeat toggled after a gapless preload was armed).
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZClearPreload();
+    // DZSetEQJSON takes a partial update and returns 0 when any key is refused. The engine persists EQ in eq.json.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZEQJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetEQJSON(string js);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZClearPreload();
 
-    // ---- v1.9 additions (offline track export; PREMIUM-ONLY) -----------------
-    // DZDownloadTrack decrypts + writes the full track to destDir and returns
-    // malloc'd UTF-8 JSON {"path":"..."} on success or {"error":"..."} on failure
-    // (free with DZFree, like every char* export). An empty destDir ("") targets
-    // the shared default download folder. DZDownloadDir / DZSetDownloadDir read and
-    // change that folder (SetDownloadDir returns 1 ok / 0 fail). DZIsPreview reports
-    // whether the CURRENT stream is a 30-second preview rather than the full track.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDownloadTrack([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID, [MarshalAs(UnmanagedType.LPUTF8Str)] string destDir);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDownloadDir();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSetDownloadDir([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZIsPreview();
+    // Downloads are Premium only and block on network and decrypt. An empty destDir is the default folder.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDownloadTrack(string trackID, string destDir);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDownloadDir();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetDownloadDir(string path);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZIsPreview();
 
-    // Ad-report opt-out for Deezer Free (Premium has no ads). DZAdsDisabled reports
-    // the current state (1 = plays are NOT reported / ads suppressed); DZSetAdsDisabled
-    // persists it engine-side and returns 1 on success. See the disclaimer shown next
-    // to the Settings toggle -- disabling reporting breaches Deezer's terms of use.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZAdsDisabled();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSetAdsDisabled(int disabled);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZAdsDisabled();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetAdsDisabled(int disabled);
 
-    // ---- v2.2 additions ------------------------------------------------------
-    // Radio mixes: {tracks:[...]} exactly like DZFlowJSON, so the GUI reuses its
-    // Flow parsing (Wire.ParseTracks). DZTrackMixJSON keeps the seed track first.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZTrackMixJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZArtistMixJSON([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    // Machine-local listening history. DZHistoryRecentJSON returns a BARE JSON
-    // array [{trackId,title,artist,album,startedAt,durationPlayedSec}] (newest
-    // first; n<=0 = all). DZHistoryStatsJSON returns
-    // {topTracks:[{trackId,title,artist,plays,totalSec}],
-    //  topArtists:[{artist,plays,totalSec}], totalSeconds:N} over the last
-    // sinceDays (<=0 = all). Both free with DZFree.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZHistoryRecentJSON(int n);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZHistoryStatsJSON(int sinceDays);
-    // Batch offline export (PREMIUM-ONLY, blocking -- call off the UI thread like
-    // the single-track download). Returns {saved,failed,dir,error} JSON to the
-    // shared download folder. Release with DZFree.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDownloadAlbum([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDownloadPlaylist([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
-    // On-disk raw-stream cache budget in MB (media.json; 0 = off). The cache is
-    // attached to the player once at startup, so a change applies NEXT launch.
-    // DZSetMediaCacheMB returns 1 on success.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZMediaCacheMB();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZSetMediaCacheMB(int mb);
-    // Engine queue sync (GUI queue -> engine, so remote controllers see it on
-    // /status and the engine can own auto-advance). DZQueueSet takes a JSON array
-    // of tracks ({id,name,durationMs,artistLine,artistId,artists,albumName,
-    // artworkUrl,explicit}); only id is required. "[]" clears it. The cursor
-    // resets to 0 -> follow with DZQueueSetIndex to point it at the playing row.
-    // Once aligned the ENGINE owns natural-finish advance (DZFinishedCount no
-    // longer bumps for queue-owned finishes) -- poll DZQueueIndex to keep the GUI
-    // cursor aligned. DZQueueSet returns 1 on success, 0 on a parse error;
-    // DZQueueIndex returns the engine cursor (-1 when empty/unsynced).
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZQueueSet([MarshalAs(UnmanagedType.LPUTF8Str)] string js);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZQueueSetIndex(int i);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZQueueIndex();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZTrackMixJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistMixJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZHistoryRecentJSON(int n);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZHistoryStatsJSON(int sinceDays);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDownloadAlbum(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDownloadPlaylist(string id);
+    // The stream cache: a new size applies at once (0 stops caching and removes unpinned entries).
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZMediaCacheMB();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetMediaCacheMB(int mb);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZMediaCacheStatsJSON();
+    // Cached songs not played for this many days are removed (0: never); applies at once.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZMediaCacheMaxAgeDays();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetMediaCacheMaxAgeDays(int days);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZClearMediaCache(int includePinned);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZSetMediaCacheDir(string dir);
+    // DZQueueSet resets the cursor to 0. Once the cursor matches the playing track the engine owns
+    // auto-advance and DZFinishedCount does not count those finishes.
+    // The queue calls take NUL-terminated UTF-8 the caller already holds. DZQueueAppend adds at the end, cursor kept.
+    [LibraryImport(Dll), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZQueueSet(in byte js);
+    [LibraryImport(Dll), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZQueueAppend(in byte js);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZQueueSetIndex(int i);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZQueueIndex();
+    // Bumps on every DZQueueSet and on any other change of the list, not on cursor moves.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZQueueVersion();
 
-    // ---- v3.0 additions (engine-truth transport + liked-ids cache) -----------
-    // DZGetRepeat / DZGetShuffle report the ENGINE's current repeat/shuffle state;
-    // when casting over Connect these mirror the remote device, so the transport
-    // bar reconciles its displayed state from them each poll tick (fixes drift and
-    // reflects the remote). DZGetRepeat is a plain string ("off"/"all"/"one",
-    // free with DZFree like every char*); DZGetShuffle is 0/1.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZGetRepeat();
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern int DZGetShuffle();
-    // Bare JSON array of the account's favorite track ids (["123",...]); seeds the
-    // GUI liked-ids cache so the now-playing heart reflects real library state.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZFavoriteIDsJSON();
+    // "off", "all" or "one". When casting both report the remote device.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZGetRepeat();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZGetShuffle();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFavoriteIDsJSON();
 
-    // ---- v3.0 additions (Up-Next queue editing + offline caching) ------------
-    // Granular edits applied to the ENGINE queue, which the GUI keeps mirror-
-    // identical to its own _queue (same index space). After each structural edit
-    // the GUI re-asserts the cursor with DZQueueSetIndex from its authoritative
-    // model, so these never have to guess how the edit should shift the cursor.
-    //   DZQueueRemove(i)      -- drop the row at index i.
-    //   DZQueueMove(from,to)  -- relocate the row at `from` to `to`.
-    //   DZQueueInsertNext(js) -- insert ONE track (a JSON object with the same
-    //                            shape as a DZQueueSet element; only "id" is
-    //                            required) right after the current cursor.
-    // Void like DZQueueSetIndex (the sibling cursor mutator); all blocking DZ*
-    // calls, so the GUI runs them off the UI thread.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZQueueRemove(int i);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZQueueMove(int from, int to);
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern void DZQueueInsertNext([MarshalAs(UnmanagedType.LPUTF8Str)] string trackJson);
-    // The engine's current queue as {tracks:[...]} (same shape DZFlowJSON returns,
-    // so Wire.ParseTracks reads it). Present for parity with remote /status reads;
-    // the GUI renders Up-Next from its own _queue model and only falls back here.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZQueueJSON();
-    // Cache a track for offline playback. Returns malloc'd UTF-8 JSON
-    // {"status":"...","key":"<trackId>"} on success or {"error":"..."} on failure
-    // (free with DZFree, like every char* export). PREMIUM-ONLY and blocking (per-
-    // track network + decrypt) -> call off the UI thread like the single-track
-    // download. The returned "key" is the offline track id -> the GUI adds it to its
-    // offline-ids set and stamps a "downloaded" glyph on that row.
-    [DllImport(Dll, CallingConvention = Cdecl)] internal static extern IntPtr DZDownloadForOffline([MarshalAs(UnmanagedType.LPUTF8Str)] string trackID);
+    // The engine refuses to remove its playing row. DZQueueInsertNext inserts after the cursor.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZQueueRemove(int i);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZQueueMove(int from, int to);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZQueueInsertNext(in byte trackJson);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZQueueJSON();
+    // Offline music: kind is "track", "album" or "playlist". A pin is recorded at once and fetched in
+    // the background (DZOfflineProgressJSON); pins belong to the signed-in account. Offline mode is on
+    // after a sign-in that failed for want of a network, or when set: nothing is requested then and
+    // only pinned or cached tracks play.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPinOffline(string kind, string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZUnpinOffline(string kind, string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZOfflineProgressJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZOfflineCollectionsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZOfflineTracksJSON(string kind, string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZOfflineIDsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetOfflineMode(int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZOfflineMode();
 
-    // ---- helpers -------------------------------------------------------------
-    // Own a DZ*JSON / char* result, copy it (UTF-8) and release it with DZFree.
-    // Mirrors the C++ TakeJson(char*).
     internal static string TakeJson(IntPtr p)
     {
         if (p == IntPtr.Zero) return "";
@@ -238,96 +170,106 @@ internal static class DeezerCore
         return s;
     }
 
-    // Fetch raw bytes (cover art): copy outLen bytes then free with DZFreeBytes.
-    // Mirrors the C++ FetchBytes.
-    internal static byte[] Fetch(string url)
+    // A reply read straight from the engine's UTF-8 buffer, then freed.
+    private static T Read<T>(IntPtr p, JsonTypeInfo<T> type) where T : new()
     {
-        IntPtr p = DZFetch(url, out int len);
-        if (p == IntPtr.Zero) return Array.Empty<byte>();
-        byte[] data = len > 0 ? new byte[len] : Array.Empty<byte>();
-        if (len > 0) Marshal.Copy(p, data, 0, len);
-        DZFreeBytes(p);
-        return data;
+        try { return Dto.Read(Utf8(p), type); }
+        finally { DZFree(p); }
     }
 
-    // ---- typed convenience wrappers (keep MainWindow code clean) ------------
-    internal static Account Account() => Wire.ParseAccount(TakeJson(DZAccountJSON()));
-    internal static System.Collections.Generic.List<Track> Favorites() => Wire.ParseTracks(TakeJson(DZFavoritesJSON()));
-    internal static System.Collections.Generic.List<Track> Flow() => Wire.ParseTracks(TakeJson(DZFlowJSON()));
-    internal static System.Collections.Generic.List<Track> PlaylistTracks(string id) => Wire.ParseTracks(TakeJson(DZPlaylistTracksJSON(id)));
-    internal static System.Collections.Generic.List<Track> AlbumTracks(string id) => Wire.ParseTracks(TakeJson(DZAlbumTracksJSON(id)));
-    internal static System.Collections.Generic.List<Playlist> Playlists() => Wire.ParsePlaylists(TakeJson(DZPlaylistsJSON()));
-    internal static ArtistProfile ArtistProfile(string id) => Wire.ParseArtistProfile(TakeJson(DZArtistProfileJSON(id)));
-    internal static Lyrics Lyrics(string id) => Wire.ParseLyrics(TakeJson(DZLyricsJSON(id)));
+    private static (T[] Items, string Error) ReadArray<T>(IntPtr p, JsonTypeInfo<T[]> type)
+    {
+        try { return Dto.ReadArray(Utf8(p), type); }
+        finally { DZFree(p); }
+    }
 
-    internal static bool Play(string id, long durMs) => DZPlay(id, durMs) != 0;
-    internal static bool PlayEpisode(string id, long durMs) => DZPlayEpisode(id, durMs) != 0;
+    // The now-playing reply as bytes: the poll compares them before reading any.
+    internal static byte[] NowPlayingUtf8()
+    {
+        var p = DZNowPlayingJSON();
+        try { return Utf8(p).ToArray(); }
+        finally { DZFree(p); }
+    }
+
+    private static unsafe ReadOnlySpan<byte> Utf8(IntPtr p) =>
+        p == IntPtr.Zero ? default : MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)p);
+
+    internal static Account Account() => Read(DZAccountJSON(), WireJson.Default.Account);
+    internal static HomeReply Home() => Read(DZHomeJSON(), WireJson.Default.HomeReply);
+    internal static CatalogReply Charts() => Read(DZChartsJSON(), WireJson.Default.CatalogReply);
+    internal static CatalogReply Search(string q) => Read(DZSearchJSON(q), WireJson.Default.CatalogReply);
+    internal static PlaylistsReply Playlists() => Read(DZPlaylistsJSON(), WireJson.Default.PlaylistsReply);
+    internal static TracksReply Favorites() => Read(DZFavoritesJSON(), WireJson.Default.TracksReply);
+    internal static TracksReply Flow() => Read(DZFlowJSON(), WireJson.Default.TracksReply);
+    internal static TracksReply PlaylistTracks(string id) => Read(DZPlaylistTracksJSON(id), WireJson.Default.TracksReply);
+    internal static TracksReply AlbumTracks(string id) => Read(DZAlbumTracksJSON(id), WireJson.Default.TracksReply);
+    internal static TracksReply TrackMix(string id) => Read(DZTrackMixJSON(id), WireJson.Default.TracksReply);
+    internal static TracksReply ArtistMix(string id) => Read(DZArtistMixJSON(id), WireJson.Default.TracksReply);
+    internal static ArtistProfile ArtistProfile(string id) => Read(DZArtistProfileJSON(id), WireJson.Default.ArtistProfile);
+    internal static TrackInfo TrackInfo(string id) => Read(DZTrackInfoJSON(id), WireJson.Default.TrackInfo);
+    internal static Lyrics Lyrics(string id) => Read(DZLyricsJSON(id), WireJson.Default.Lyrics);
+    internal static PodcastsReply SearchPodcasts(string q) => Read(DZSearchPodcastsJSON(q), WireJson.Default.PodcastsReply);
+    internal static EpisodesReply PodcastEpisodes(string id) => Read(DZPodcastEpisodesJSON(id), WireJson.Default.EpisodesReply);
+    internal static CreatedReply CreatePlaylist(string name) => Read(DZCreatePlaylist(name), WireJson.Default.CreatedReply);
+    internal static QueueReply Queue() => Read(DZQueueJSON(), WireJson.Default.QueueReply);
+    internal static string LastError() => Read(DZLastErrorJSON(), WireJson.Default.Reply).Error;
+    internal static DevicesReply AudioDevices() => Read(DZAudioDevicesJSON(), WireJson.Default.DevicesReply);
+    internal static ControlConfig ControlConfig() => Read(DZControlConfigJSON(), WireJson.Default.ControlConfig);
+    internal static WebRemoteInfo WebRemoteInfo() => Read(DZWebRemoteInfoJSON(), WireJson.Default.WebRemoteInfo);
+    internal static EQState EQ() => Read(DZEQJSON(), WireJson.Default.EQState);
+    internal static HistoryStats HistoryStats(int sinceDays) => Read(DZHistoryStatsJSON(sinceDays), WireJson.Default.HistoryStats);
+    internal static UpdateInfo CheckUpdate() => Read(DZCheckUpdateJSON(), WireJson.Default.UpdateInfo).ForApp(Config.AppVersion());
+    internal static SavedReply Download(string id, string dir) => Read(DZDownloadTrack(id, dir), WireJson.Default.SavedReply);
+    internal static BatchReply DownloadAlbum(string id) => Read(DZDownloadAlbum(id), WireJson.Default.BatchReply);
+    internal static BatchReply DownloadPlaylist(string id) => Read(DZDownloadPlaylist(id), WireJson.Default.BatchReply);
+    // "" when the pin was taken, else the reason.
+    internal static string PinOffline(string kind, string id, bool on) =>
+        Read(on ? DZPinOffline(kind, id) : DZUnpinOffline(kind, id), WireJson.Default.Reply).Error;
+    internal static OfflineProgress OfflineProgress() => Read(DZOfflineProgressJSON(), WireJson.Default.OfflineProgress);
+    internal static OfflineCollectionsReply OfflineCollections() => Read(DZOfflineCollectionsJSON(), WireJson.Default.OfflineCollectionsReply);
+    internal static TracksReply OfflineTracks(string kind, string id) => Read(DZOfflineTracksJSON(kind, id), WireJson.Default.TracksReply);
+    internal static OfflineIdsReply OfflineIds() => Read(DZOfflineIDsJSON(), WireJson.Default.OfflineIdsReply);
+
+    internal static (string[] Ids, string Error) FavoriteIds() => ReadArray(DZFavoriteIDsJSON(), WireJson.Default.StringArray);
+    internal static ConnectDevice[] DiscoverDevices(int timeoutMs) => ReadArray(DZDiscoverDevices(timeoutMs), WireJson.Default.ConnectDeviceArray).Items;
+
+    internal static List<Track> HistoryRecent(int n)
+    {
+        var list = new List<Track>();
+        foreach (var e in ReadArray(DZHistoryRecentJSON(n), WireJson.Default.HistoryEntryArray).Items)
+            if (e.TrackId.Length > 0) list.Add(e.ToTrack());
+        return list;
+    }
 
     internal static string Format() => TakeJson(DZFormat());
     internal static string ConnectedDevice() => TakeJson(DZConnectedDevice());
     internal static string CurrentAudioDevice() => TakeJson(DZCurrentAudioDevice());
-    internal static string NowPlaying() => TakeJson(DZNowPlayingJSON());
-    internal static string WebRemoteInfo() => TakeJson(DZWebRemoteInfoJSON());
+    internal static string DownloadDir() => TakeJson(DZDownloadDir());
+    internal static bool SetDownloadDir(string p) => DZSetDownloadDir(p) == 1;
+    internal static bool IsPreview() => DZIsPreview() == 1;
+    internal static bool AdsDisabled() => DZAdsDisabled() == 1;
+    internal static bool SetAdsDisabled(bool off) => DZSetAdsDisabled(off ? 1 : 0) == 1;
+    internal static int MediaCacheMB() => DZMediaCacheMB();
+    internal static bool SetMediaCacheMB(int mb) => DZSetMediaCacheMB(mb) == 1;
+    internal static MediaCacheStats MediaCacheStats() => Read(DZMediaCacheStatsJSON(), WireJson.Default.MediaCacheStats);
+    // "" when the folder was taken, else the reason.
+    internal static string SetMediaCacheDir(string dir) => Read(DZSetMediaCacheDir(dir), WireJson.Default.Reply).Error;
+    internal static bool GetShuffle() => DZGetShuffle() != 0;
+
+    internal static RepeatMode GetRepeat() => TakeJson(DZGetRepeat()) switch
+    {
+        "one" or "2" => RepeatMode.One,
+        "all" or "1" => RepeatMode.All,
+        _ => RepeatMode.Off,
+    };
+
     internal static byte[] WebRemoteQRPng()
     {
         IntPtr p = DZWebRemoteQRPNG(out int len);
-        if (p == IntPtr.Zero) return Array.Empty<byte>();
-        byte[] data = len > 0 ? new byte[len] : Array.Empty<byte>();
+        if (p == IntPtr.Zero) return [];
+        byte[] data = len > 0 ? new byte[len] : [];
         if (len > 0) Marshal.Copy(p, data, 0, len);
         DZFreeBytes(p);
         return data;
     }
-    internal static HomeData Home() => Wire.ParseHome(TakeJson(DZHomeJSON()));
-    internal static string ControlConfig() => TakeJson(DZControlConfigJSON());
-    internal static EQState EQ() => Wire.ParseEQ(TakeJson(DZEQJSON()));
-
-    // Download a track to `dir` ("" = shared default folder); returns the raw
-    // {"path":...} / {"error":...} JSON. DownloadDir/SetDownloadDir read + change
-    // the default folder; IsPreview flags a 30-second preview of the current track.
-    internal static string Download(string id, string dir) => TakeJson(DZDownloadTrack(id, dir));
-    internal static string DownloadDir() => TakeJson(DZDownloadDir());
-    internal static bool SetDownloadDir(string p) => DZSetDownloadDir(p) == 1;
-    internal static bool IsPreview() => DZIsPreview() == 1;
-
-    // Deezer Free ad-report opt-out (see DZAdsDisabled / DZSetAdsDisabled above).
-    internal static bool AdsDisabled() => DZAdsDisabled() == 1;
-    internal static bool SetAdsDisabled(bool off) => DZSetAdsDisabled(off ? 1 : 0) == 1;
-
-    // {current,latest,hasUpdate,url,notes}; network failure -> HasUpdate=false.
-    internal static UpdateInfo CheckUpdate() => Wire.ParseUpdateInfo(TakeJson(DZCheckUpdateJSON()));
-
-    // ---- v2.2 typed wrappers -------------------------------------------------
-    // Radio mixes parse exactly like Flow ({tracks:[...]}).
-    internal static System.Collections.Generic.List<Track> TrackMix(string id) => Wire.ParseTracks(TakeJson(DZTrackMixJSON(id)));
-    internal static System.Collections.Generic.List<Track> ArtistMix(string id) => Wire.ParseTracks(TakeJson(DZArtistMixJSON(id)));
-    // Listening history: recent plays (as id-playable Tracks) + aggregate stats.
-    internal static System.Collections.Generic.List<Track> HistoryRecent(int n) => Wire.ParseHistoryRecent(TakeJson(DZHistoryRecentJSON(n)));
-    internal static HistoryStats HistoryStats(int sinceDays) => Wire.ParseHistoryStats(TakeJson(DZHistoryStatsJSON(sinceDays)));
-
-    // Media (raw-stream) cache budget in MB; SetMediaCacheMB applies next launch.
-    internal static int MediaCacheMB() => DZMediaCacheMB();
-    internal static bool SetMediaCacheMB(int mb) => DZSetMediaCacheMB(mb) == 1;
-
-    // ---- v3.0 typed wrappers -------------------------------------------------
-    // Engine-truth transport state. Repeat maps the engine string onto the 0/1/2
-    // the GUI already uses (off/all/one); anything unexpected falls back to off so
-    // the display degrades safely. A numeric string is tolerated too.
-    internal static int GetRepeat()
-    {
-        switch (TakeJson(DZGetRepeat()))
-        {
-            case "one": case "2": return 2;
-            case "all": case "1": return 1;
-            default: return 0; // "off" / "" / unknown
-        }
-    }
-    internal static bool GetShuffle() => DZGetShuffle() != 0;
-    // Favorite track ids (bare JSON id array) for the liked-ids cache.
-    internal static System.Collections.Generic.List<string> FavoriteIDs() => Wire.ParseIdArray(TakeJson(DZFavoriteIDsJSON()));
-
-    // Engine queue read (parity/remote); GUI normally renders Up-Next from _queue.
-    internal static System.Collections.Generic.List<Track> Queue() => Wire.ParseTracks(TakeJson(DZQueueJSON()));
-    // Cache a track for offline playback; returns the raw {"status","key"} /
-    // {"error"} JSON (PREMIUM-ONLY, blocking -- call off the UI thread).
-    internal static string DownloadForOffline(string id) => TakeJson(DZDownloadForOffline(id));
 }

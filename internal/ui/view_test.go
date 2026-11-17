@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -46,7 +47,7 @@ func TestPadToFitsExactHeight(t *testing.T) {
 }
 
 func TestFooterHelpCompactsForNarrowTerminals(t *testing.T) {
-	wide := (&Model{width: 130}).footerHelp("on", "all", 80)
+	wide := (&Model{width: 140}).footerHelp("on", "all", 80)
 	if !strings.Contains(wide, "shuf:on") || !strings.Contains(wide, "^f") {
 		t.Fatalf("wide footer should include playback state and the filter key: %q", wide)
 	}
@@ -68,5 +69,36 @@ func TestHelpViewScrollsWithinAvailableRows(t *testing.T) {
 	later := m.helpView(8)
 	if later == first || !strings.Contains(later, "6-10/") {
 		t.Fatalf("help did not advance to the requested page: %q", later)
+	}
+}
+
+// The footer legend fits on one line at every width and locale.
+func TestFooterLegendFitsWidth(t *testing.T) {
+	defer i18n.SetLocale("en")
+	for _, loc := range []string{"en", "fr", "ru", "es", "zh", "ar", "hi"} {
+		i18n.SetLocale(loc)
+		for w := 10; w <= 220; w++ {
+			got := (&Model{width: w}).footerHelp("off", i18n.T("off"), 100)
+			if lipgloss.Width(got) > w && w >= 20 {
+				t.Fatalf("%s at width %d: legend is %d wide", loc, w, lipgloss.Width(got))
+			}
+		}
+	}
+}
+
+// View records the row of the progress bar it rendered.
+func TestBarRowMatchesRenderedFooter(t *testing.T) {
+	m := interactionModel(screenList)
+	m.ready = true
+	m.width, m.height = 126, 30
+	m.status = strings.Repeat("long status ", 30) // wraps over several rows
+	rows := strings.Split(m.View(), "\n")
+	if r := m.barY; r < 0 || !strings.Contains(rows[r], "━") {
+		t.Fatalf("barY %d is not the bar: %q", r, rows[max(r, 0)])
+	}
+	m.height = 6 // the footer is cut and the bar is not shown
+	_ = m.View()
+	if r := m.barY; r >= 0 {
+		t.Fatalf("barY %d with no bar on screen", r)
 	}
 }

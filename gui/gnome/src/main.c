@@ -209,7 +209,8 @@ extern char *DZQueueJSON(void);
 extern void  DZQueueRemove(int i);
 extern void  DZQueueMove(int from, int to);
 extern void  DZQueueInsertNext(char *js);
-extern char *DZDownloadForOffline(char *js);
+extern char *DZPinOffline(char *kind, char *id);
+extern char *DZOfflineIDsJSON(void);
 
 /* Deezer "Electric Violet". */
 #define ACCENT "#A238FF"
@@ -304,9 +305,9 @@ typedef struct {
   gboolean              cur_liked;     /* like state for the current track (from liked_ids) */
   GHashTable           *liked_ids;     /* set of liked track ids (id -> id); seeded from
                                         * DZFavoriteIDsJSON so the heart is truthful per track */
-  GHashTable           *offline_ids;   /* set of track ids saved for offline (id -> id); grows
-                                        * as DZDownloadForOffline succeeds (its "key" field) so
-                                        * lists can show a "downloaded" indicator */
+  GHashTable           *offline_ids;   /* set of track ids saved for offline (id -> id); seeded
+                                        * from DZOfflineIDsJSON at login, grows as DZPinOffline
+                                        * succeeds, so lists can show a "downloaded" indicator */
   gboolean              playing_episode; /* a podcast episode is playing (no queue) */
   int                   preloaded_index; /* track_store idx last DZPreload'd, -1 none */
 
@@ -867,7 +868,7 @@ static char *dztrack_json(DzTrack *t) {
                         t->artwork, t->duration_ms, t->explicit);
 }
 
-/* offline-ids set (session-local; seeded by each DZDownloadForOffline "key") */
+/* offline-ids set (seeded from DZOfflineIDsJSON, plus each DZPinOffline'd id) */
 static gboolean is_offline(App *a, const char *id) {
   return a && a->offline_ids && id && *id && g_hash_table_contains(a->offline_ids, id);
 }
@@ -1229,8 +1230,10 @@ static void play_ctx_free(gpointer p) { PlayCtx *c = p; g_free(c->id); g_free(c)
 static void play_worker(GTask *task, gpointer src, gpointer data, GCancellable *c) {
   (void)src; (void)c;
   PlayCtx *p = data;
-  int ok = DZPlay(p->id, p->dur); /* network: prepare stream + decode + play */
-  g_task_return_boolean(task, ok == 1);
+  /* network: prepare stream + decode + play. 2 = a newer play (another click,
+   * a remote) took over first: not a failure. */
+  int r = DZPlay(p->id, p->dur);
+  g_task_return_boolean(task, r != 0);
 }
 static void play_done(GObject *src, GAsyncResult *res, gpointer data) {
   (void)src; (void)data;
@@ -2714,24 +2717,42 @@ static void liked_set(App *a, const char *id, gboolean liked) {
   else       g_hash_table_remove(a->liked_ids, id);
 }
 
-/* Seed the liked-ids set from DZFavoriteIDsJSON. The favourites fetch BLOCKS, so
- * it runs on a worker; the JSON string array is parsed into the set on the main
- * loop (an {"error":...} object is a non-array node and is simply skipped). */
+/* Seed the liked-ids set from DZFavoriteIDsJSON and the offline-ids set from
+ * DZOfflineIDsJSON. The favourites fetch BLOCKS, so both run on a worker; the
+ * JSON is parsed into the sets on the main loop (an {"error":...} object in
+ * place of the liked array is a non-array node and is simply skipped). */
+typedef struct { char *liked; char *offline; } SeedIds;
+static void seed_ids_free(gpointer p) { SeedIds *s = p; g_free(s->liked); g_free(s->offline); g_free(s); }
+static char *take_dup(char *j, const char *fallback) {
+  char *dup = g_strdup(j ? j : fallback);
+  if (j) DZFree(j);
+  return dup;
+}
 static void liked_seed_worker(GTask *task, gpointer src, gpointer data, GCancellable *c) {
   (void)src; (void)data; (void)c;
-  char *j = DZFavoriteIDsJSON();
-  char *dup = g_strdup(j ? j : "[]");
-  if (j) DZFree(j);
-  g_task_return_pointer(task, dup, g_free);
+  SeedIds *s = g_new0(SeedIds, 1);
+  s->liked = take_dup(DZFavoriteIDsJSON(), "[]");
+  s->offline = take_dup(DZOfflineIDsJSON(), "{}");
+  g_task_return_pointer(task, s, seed_ids_free);
 }
 static void liked_seed_done(GObject *src, GAsyncResult *res, gpointer data) {
   (void)src; (void)data;
-  char *json = g_task_propagate_pointer(G_TASK(res), NULL);
-  if (!json) return;
+  SeedIds *s = g_task_propagate_pointer(G_TASK(res), NULL);
+  if (!s) return;
+  const char *json = s->liked;
   if (APP->liked_ids) g_hash_table_remove_all(APP->liked_ids); /* replace on account switch */
-  /* the offline set is per-account too; drop it so another account's downloaded
-   * indicators don't linger (it re-seeds as this account saves tracks) */
+  /* the offline set is per-account too: replaced by this account's */
   if (APP->offline_ids) g_hash_table_remove_all(APP->offline_ids);
+  JsonParser *op = json_parser_new();
+  if (json_parser_load_from_data(op, s->offline, -1, NULL)) {
+    JsonNode *root = json_parser_get_root(op);
+    JsonObject *o = root && JSON_NODE_HOLDS_OBJECT(root) ? json_node_get_object(root) : NULL;
+    JsonArray *ids = o && json_object_has_member(o, "ids") ? json_object_get_array_member(o, "ids") : NULL;
+    for (guint i = 0; ids && i < json_array_get_length(ids); i++)
+      offline_mark(APP, json_array_get_string_element(ids, i));
+  }
+  g_object_unref(op);
+  update_offline_button(APP);
   JsonParser *p = json_parser_new();
   if (json_parser_load_from_data(p, json, -1, NULL)) {
     JsonNode *root = json_parser_get_root(p);
@@ -2745,7 +2766,7 @@ static void liked_seed_done(GObject *src, GAsyncResult *res, gpointer data) {
     }
   }
   g_object_unref(p);
-  g_free(json);
+  seed_ids_free(s);
   /* the track already showing may be in the freshly-seeded set — refresh the heart */
   if (APP->np_id && *APP->np_id) {
     APP->cur_liked = liked_contains(APP, APP->np_id);
@@ -2814,28 +2835,26 @@ static void start_download(App *a, const char *id, const char *name) {
 }
 
 /* ---- save a track for offline playback (Premium only) ----
- * DZDownloadForOffline blocks (network + Blowfish decrypt) just like
- * DZDownloadTrack, so it runs on a GTask worker. It returns {"key":"<id>"} on
- * success (the id now available offline) or {"error":"..."}. On success we record
- * the key in offline_ids so lists show a "downloaded" indicator. `js` is one
- * wire-shape track object (built with track_obj_json/dztrack_json). */
-typedef struct { char *js; char *name; gboolean ok; char *key; char *err; } OffCtx;
+ * DZPinOffline("track", id) records the pin and fetches the track in the
+ * background; it answers {"error":""} once the pin is taken, else the reason.
+ * It may resolve over the network first, so it runs on a GTask worker. On
+ * success the id joins offline_ids so lists show a "downloaded" indicator. */
+typedef struct { char *id; char *name; gboolean ok; char *err; } OffCtx;
 static void off_ctx_free(gpointer p) {
-  OffCtx *c = p; g_free(c->js); g_free(c->name); g_free(c->key); g_free(c->err); g_free(c);
+  OffCtx *c = p; g_free(c->id); g_free(c->name); g_free(c->err); g_free(c);
 }
 static void off_worker(GTask *task, gpointer src, gpointer data, GCancellable *c) {
   (void)src; (void)c;
   OffCtx *x = data;
-  char *st = DZDownloadForOffline(x->js);
+  char *st = DZPinOffline("track", x->id);
   if (st) {
     JsonParser *p = json_parser_new();
     if (json_parser_load_from_data(p, st, -1, NULL)) {
       JsonNode *root = json_parser_get_root(p);
       if (root && JSON_NODE_HOLDS_OBJECT(root)) {
-        JsonObject *o = json_node_get_object(root);
-        char *err = jstr(o, "error"); /* jstr never returns NULL */
-        if (*err) { x->err = g_steal_pointer(&err); }
-        else      { g_free(err); x->ok = TRUE; x->key = jstr(o, "key"); }
+        char *err = jstr(json_node_get_object(root), "error"); /* jstr never returns NULL */
+        if (*err) x->err = g_steal_pointer(&err);
+        else      { g_free(err); x->ok = TRUE; }
       }
     }
     g_object_unref(p);
@@ -2848,7 +2867,7 @@ static void off_done(GObject *src, GAsyncResult *res, gpointer data) {
   OffCtx *x = g_task_get_task_data(G_TASK(res));
   gboolean ok = g_task_propagate_boolean(G_TASK(res), NULL);
   if (ok) {
-    offline_mark(APP, (x->key && *x->key) ? x->key : NULL);
+    offline_mark(APP, x->id);
     if (x->name && *x->name) toastf(APP, _("“%s” is available offline"), x->name);
     else                     toast(APP, _("Saved for offline"));
     update_offline_button(APP); /* light the now-playing indicator if it's the current track */
@@ -2861,12 +2880,12 @@ static void off_done(GObject *src, GAsyncResult *res, gpointer data) {
   }
 }
 /* Kick off an offline save. Premium-gated exactly like the single-track download. */
-static void start_offline_download(App *a, const char *js, const char *name) {
+static void start_offline_download(App *a, const char *id, const char *name) {
   if (!a || !a->premium) { toast(a, _("Downloads require Deezer Premium")); return; }
-  if (!js || !*js) return;
+  if (!id || !*id) return;
   toast(a, _("Saving for offline…"));
   OffCtx *x = g_new0(OffCtx, 1);
-  x->js = g_strdup(js);
+  x->id = g_strdup(id);
   x->name = g_strdup(name ? name : "");
   GTask *t = g_task_new(NULL, NULL, off_done, NULL);
   g_task_set_task_data(t, x, off_ctx_free);
@@ -2898,7 +2917,7 @@ static void on_offline_clicked(GtkButton *b, gpointer data) {
   DzTrack *t = mpris_current_track(a);
   if (!t) { toast(a, _("Play a track first")); return; }
   if (is_offline(a, t->id)) { g_object_unref(t); return; } /* already saved */
-  start_offline_download(a, t->id, t->name); /* DZDownloadForOffline takes a bare track id */
+  start_offline_download(a, t->id, t->name);
   g_object_unref(t);
 }
 
@@ -3080,7 +3099,7 @@ static void on_tm_offline(GtkButton *b, gpointer mb) {
   tm_popdown(mb);
   if (!APP || !APP->premium) { toast(APP, _("Downloads require Deezer Premium")); return; }
   if (!id || !*id) return;
-  start_offline_download(APP, id, nm); /* DZDownloadForOffline takes a bare track id */
+  start_offline_download(APP, id, nm);
 }
 
 static GtkWidget *make_track_menu_button(void) {
@@ -5613,7 +5632,7 @@ static void episode_ctx_free(gpointer p) { EpisodeCtx *c = p; g_free(c->id); g_f
 static void episode_worker(GTask *task, gpointer src, gpointer data, GCancellable *c) {
   (void)src; (void)c;
   EpisodeCtx *e = data;
-  g_task_return_boolean(task, DZPlayEpisode(e->id, e->dur) == 1);
+  g_task_return_boolean(task, DZPlayEpisode(e->id, e->dur) != 0); /* 2 = superseded, not a failure */
 }
 static void episode_done(GObject *src, GAsyncResult *res, gpointer data) {
   (void)src; (void)data;
@@ -7127,8 +7146,8 @@ static void on_activate(GApplication *app, gpointer data) {
   /* liked-track set; keys are owned strings freed on removal/replace. Populated
    * from DZFavoriteIDsJSON at login (load_liked_ids_async) so the heart is truthful. */
   a->liked_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-  /* offline-track set; grows as DZDownloadForOffline succeeds (session-local — the
-   * engine exposes no "list offline ids" call, so it seeds from each save's key) */
+  /* offline-track set; seeded from DZOfflineIDsJSON at login (load_liked_ids_async),
+   * grows as DZPinOffline succeeds */
   a->offline_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
   APP = a;
 

@@ -1,29 +1,40 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // interactionModel builds a UI-only model (no client / audio device) with the
-// production browse-list configuration, for exercising key handling.
+// production browse-list configuration, for exercising key handling. The zero
+// audio.Player has no output: it reports Stopped and its non-output calls work.
 func interactionModel(s screen) *Model {
 	l := newBrowseList()
 	l.SetSize(80, 24)
-	return &Model{
+	m := &Model{
 		screen: s,
 		list:   l,
 		search: textinput.New(),
 		q:      queue.New(),
+		player: &audio.Player{},
+		caches: &mediacache.Host{},
 		width:  80,
 		height: 24,
 	}
+	m.preloads = preload.New(func() *audio.Player { return m.player }, m.resolvePreload)
+	return m
 }
 
 func testTracks(n int) []deezer.Track {
@@ -484,3 +495,428 @@ var errFake = errFakeT{}
 type errFakeT struct{}
 
 func (errFakeT) Error() string { return "fake failure" }
+
+var keyEnter = tea.KeyMsg{Type: tea.KeyEnter}
+
+func curID(m *Model) string {
+	t, _ := m.q.Current()
+	return t.ID
+}
+
+func useTempConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("APPDATA", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+}
+
+// The ARL, playback and theme files are replaced whole, with no temp file left.
+func TestSettingsFilesWrittenAtomically(t *testing.T) {
+	useTempConfig(t)
+	for range 2 {
+		if err := SaveARL(" arl-value "); err != nil {
+			t.Fatal(err)
+		}
+		if err := config.SavePlayback(config.Playback{Quality: 2}); err != nil {
+			t.Fatal(err)
+		}
+		if err := SaveTheme("nord"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if pb, _ := config.LoadPlayback(); LoadARL() != "arl-value" || pb.Quality != 2 || LoadTheme() != "nord" {
+		t.Fatalf("read back %q %d %q", LoadARL(), pb.Quality, LoadTheme())
+	}
+	dir, _ := configDir()
+	if tmps, _ := filepath.Glob(filepath.Join(dir, "*.tmp*")); len(tmps) != 0 {
+		t.Fatalf("temp files left: %v", tmps)
+	}
+}
+
+// A queue edit must not change what Enter on a row plays.
+func TestEnterPlaysRowTrackAfterQueueRemoval(t *testing.T) {
+	m := interactionModel(screenList)
+	setTrackList(m, testTracks(3))
+	_, _ = m.handleKey(keyEnter) // queue a b c, playing a
+	m.queueRemove(1)             // drop b from the queue
+	m.list.Select(1)             // row b
+	_, _ = m.handleKey(keyEnter)
+	if curID(m) != "b" {
+		t.Fatalf("Enter on row b played %q", curID(m))
+	}
+}
+
+// A row whose track is not in the browse slice plays that track alone.
+func TestEnterOnRowMissingFromBrowsePlaysRowTrack(t *testing.T) {
+	m := interactionModel(screenList)
+	setTrackList(m, testTracks(2))
+	m.browse = testTracks(1)
+	m.list.Select(1)
+	_, _ = m.handleKey(keyEnter)
+	if curID(m) != "b" || m.q.Len() != 1 {
+		t.Fatalf("played %q (queue %d), want b alone", curID(m), m.q.Len())
+	}
+}
+
+// A new list clears the filter of the previous one.
+func TestNewListClearsFilter(t *testing.T) {
+	m := interactionModel(screenList)
+	setTrackList(m, testTracks(3))
+	m.list.SetFilterText("Track a")
+	_, _ = m.Update(tracksMsg{title: "Album", tracks: testTracks(2)})
+	if m.list.FilterState() != list.Unfiltered || len(m.list.VisibleItems()) != 2 {
+		t.Fatalf("filter state %v, %d visible", m.list.FilterState(), len(m.list.VisibleItems()))
+	}
+}
+
+// Enter, g/G, list keys and D on an overlay leave the hidden list alone.
+func TestOverlayKeysDoNotActOnHiddenList(t *testing.T) {
+	for _, s := range []screen{screenNowPlaying, screenHelp, screenCredits} {
+		m := interactionModel(s)
+		setTrackList(m, testTracks(3))
+		m.acct.Premium = true
+		_, _ = m.handleKey(keyEnter)
+		if m.q.Len() != 0 {
+			t.Fatalf("screen %v: Enter replaced the queue", s)
+		}
+		keyRunes(m, 'G')
+		_, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyDown})
+		if m.list.Index() != 0 {
+			t.Fatalf("screen %v: list cursor moved to %d", s, m.list.Index())
+		}
+		keyRunes(m, 'D')
+		if m.downloading {
+			t.Fatalf("screen %v: D downloaded the hidden row", s)
+		}
+	}
+}
+
+// G with a filter applied selects the last visible row.
+func TestGWithFilterSelectsLastVisible(t *testing.T) {
+	m := interactionModel(screenList)
+	setTrackList(m, []deezer.Track{{ID: "1", Name: "Alpha"}, {ID: "2", Name: "Beta"}, {ID: "3", Name: "Gamma"}})
+	m.list.SetFilterText("Beta")
+	keyRunes(m, 'G')
+	if it, ok := m.list.SelectedItem().(row); !ok || it.track.ID != "2" {
+		t.Fatalf("G selected %v", m.list.SelectedItem())
+	}
+}
+
+// Control-API queue edits keep the queue view's cursor on its track.
+func TestControlQueueEditsKeepQueueCursor(t *testing.T) {
+	m := interactionModel(screenQueue)
+	m.q.Set(testTracks(5), 0)
+	m.queueSel = 3 // d
+	reply := make(chan error, 1)
+	_, _ = m.Update(controlQueueEditMsg{kind: "remove", i: 1, reply: reply})
+	if <-reply != nil || m.q.Tracks()[m.queueSel].ID != "d" {
+		t.Fatalf("after remove the cursor is on %q", m.q.Tracks()[m.queueSel].ID)
+	}
+	_, _ = m.Update(controlQueueEditMsg{kind: "move", i: 3, j: 1, reply: reply}) // e before d
+	if <-reply != nil || m.q.Tracks()[m.queueSel].ID != "d" {
+		t.Fatalf("after move the cursor is on %q", m.q.Tracks()[m.queueSel].ID)
+	}
+}
+
+// A track change on the lyrics screen loads the new track's lyrics.
+func TestTrackChangeOnLyricsScreenReloadsLyrics(t *testing.T) {
+	m := interactionModel(screenLyrics)
+	ts := testTracks(2)
+	m.lyricsTrack = "a"
+	cmd := m.onTrackChanged(ts[1])
+	if m.lyricsTrack != "b" || cmd == nil {
+		t.Fatalf("lyricsTrack = %q, cmd nil = %v", m.lyricsTrack, cmd == nil)
+	}
+}
+
+// A track start only records the next track: nothing is resolved until the
+// player's near-end hook runs, which arms the queue's next track once.
+func TestPreloadWaitsForNearEnd(t *testing.T) {
+	m := interactionModel(screenList)
+	ts := testTracks(3)
+	m.q.Set(ts, 0)
+	var resolved []string
+	m.player.SetGapless(true)
+	m.preloads = preload.New(func() *audio.Player { return m.player }, func(req deezer.Track) (*deezer.StreamPlan, deezer.Track, error) {
+		resolved = append(resolved, req.ID)
+		return &deezer.StreamPlan{TrackID: req.ID}, req, nil
+	})
+	_, _ = m.Update(playStartedMsg{track: ts[0], seq: m.pickSeq.Load()})
+	if len(resolved) != 0 {
+		t.Fatalf("a track start resolved %v", resolved)
+	}
+	m.preloads.Resolve() // the near-end hook
+	if len(resolved) != 1 || resolved[0] != "b" {
+		t.Fatalf("near end resolved %v, want [b]", resolved)
+	}
+	m.preloads.Resolve()
+	if len(resolved) != 1 {
+		t.Fatalf("a second run of the hook resolved %v", resolved)
+	}
+}
+
+// A track ending while a pick resolves must not advance past the pick.
+func TestFinishDuringPendingPickDoesNotAdvance(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(3), 0)
+	_ = m.playCurrent()
+	_, _ = m.Update(trackFinishedMsg{swapped: false})
+	if curID(m) != "a" {
+		t.Fatalf("finish advanced over the pending pick to %q", curID(m))
+	}
+}
+
+// The delete prompt is visible, and is dropped by a mouse action or a screen
+// change, so a later y cannot delete.
+func TestPlaylistDeletePromptVisibleAndDisarmed(t *testing.T) {
+	m := interactionModel(screenMenu)
+	m.ready = true
+	_, _ = m.Update(playlistsMsg{title: "My Playlists", playlists: []deezer.Playlist{{ID: "p1", Name: "Mix"}}})
+	keyRunes(m, 'X')
+	m.status = "something else"
+	if !strings.Contains(m.View(), "Delete playlist Mix?") {
+		t.Fatal("delete prompt not rendered")
+	}
+	_, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	if m.plConfirm {
+		t.Fatal("mouse action left the delete armed")
+	}
+	keyRunes(m, 'X')
+	_, _ = m.Update(tracksMsg{title: "Album", tracks: testTracks(1)})
+	if m.plConfirm {
+		t.Fatal("list change left the delete armed")
+	}
+}
+
+// Ctrl+C quits from every input, including a pending confirm and an active
+// filter.
+func TestCtrlCAlwaysQuits(t *testing.T) {
+	ctrlC := tea.KeyMsg{Type: tea.KeyCtrlC}
+	for _, s := range []screen{screenSearch, screenRemoteInput, screenPlaylistPrompt, screenList} {
+		m := interactionModel(s)
+		m.plConfirm = s == screenList
+		_, cmd := m.handleKey(ctrlC)
+		if cmd == nil {
+			t.Fatalf("screen %v: ctrl+c did nothing", s)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatalf("screen %v: ctrl+c did not quit", s)
+		}
+	}
+	m := interactionModel(screenList)
+	setTrackList(m, testTracks(2))
+	_, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlF})
+	if _, cmd := m.handleKey(ctrlC); cmd == nil {
+		t.Fatal("ctrl+c while filtering did nothing")
+	} else if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("ctrl+c while filtering did not quit")
+	}
+}
+
+// A list that arrives after the user has moved on does not switch the screen,
+// so the keys typed meanwhile stay in the search box.
+func TestLateResultDoesNotSwitchScreen(t *testing.T) {
+	m := interactionModel(screenList)
+	m.list.SetItems([]list.Item{albumRow(deezer.Album{ID: "al", Name: "LP"})})
+	_, _ = m.Update(keyEnter) // request the album
+	gen := m.nav
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	_, _ = m.Update(navMsg{gen: gen, msg: tracksMsg{title: "LP", tracks: testTracks(2)}})
+	if m.screen != screenSearch {
+		t.Fatalf("late result switched the screen to %v", m.screen)
+	}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if m.search.Value() != "q" {
+		t.Fatalf("q did not reach the search box (value %q)", m.search.Value())
+	}
+	if cmd != nil {
+		if _, quit := cmd().(tea.QuitMsg); quit {
+			t.Fatal("q quit")
+		}
+	}
+	// A current result is shown.
+	_, _ = m.Update(navMsg{gen: m.nav, msg: tracksMsg{title: "LP", tracks: testTracks(2)}})
+	if m.screen != screenList {
+		t.Fatalf("current result not shown: screen %v", m.screen)
+	}
+}
+
+// A stale result keeps the spinner of a newer request; a result made stale
+// only by leaving the screen stops it.
+func TestStaleResultKeepsNewerRequestLoading(t *testing.T) {
+	m := interactionModel(screenMenu)
+	first := m.navCmd(func() tea.Msg { return tracksMsg{title: "A"} })
+	_ = m.navCmd(func() tea.Msg { return tracksMsg{title: "B"} })
+	m.loading = true
+	_, _ = m.Update(first())
+	if !m.loading {
+		t.Fatal("a stale result stopped the newer request's spinner")
+	}
+	m.nav++ // the user leaves the screen: the newer result is stale too
+	_, _ = m.Update(navMsg{gen: m.navReq, msg: tracksMsg{title: "B"}})
+	if m.loading {
+		t.Fatal("the last request's stale result left the spinner on")
+	}
+}
+
+// The resume offset applies only to its own track.
+func TestResumeOffsetStaysWithItsTrack(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(2), 0)
+	m.resumeID, m.resumeMS = "a", 5000
+	_ = m.playCurrent()
+	if m.resumeMS != 5000 {
+		t.Fatal("playCurrent dropped the offset of its own track")
+	}
+	m.q.Next()
+	_ = m.playCurrent()
+	if m.resumeID != "" || m.resumeMS != 0 {
+		t.Fatalf("offset leaked onto the next track: %q %d", m.resumeID, m.resumeMS)
+	}
+}
+
+// Shutdown writes the resume state once (at position 0 it clears a saved one);
+// a second call does nothing.
+func TestShutdownIdempotent(t *testing.T) {
+	useTempConfig(t)
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(1), 0)
+	m.playing = true
+	saved := func() bool {
+		r := LoadResume()
+		return r != nil
+	}
+	if err := SaveResume(testTracks(1)[0], 5000, false); err != nil {
+		t.Fatal(err)
+	}
+	m.Shutdown()
+	if saved() {
+		t.Fatal("Shutdown at position 0 kept the old resume state")
+	}
+	if err := SaveResume(testTracks(1)[0], 5000, false); err != nil {
+		t.Fatal(err)
+	}
+	m.Shutdown()
+	if !saved() {
+		t.Fatal("a second Shutdown wrote the resume state again")
+	}
+}
+
+// Resuming a podcast episode restores episode mode.
+func TestResumeRestoresEpisodeMode(t *testing.T) {
+	useTempConfig(t)
+	ep := deezer.Track{ID: "ep1", Name: "Episode", DurationMS: 600000}
+	if err := SaveResume(ep, 5000, true); err != nil {
+		t.Fatal(err)
+	}
+	if r := LoadResume(); r == nil || !r.Episode {
+		t.Fatalf("resume state %+v lost the episode flag", r)
+	}
+	m := interactionModel(screenMenu)
+	m.showMenu()
+	_, _ = m.Update(keyEnter) // the Resume row
+	if !m.episodeMode || curID(m) != "ep1" || m.resumeMS != 5000 {
+		t.Fatalf("episodeMode %v, current %q, resume %d", m.episodeMode, curID(m), m.resumeMS)
+	}
+}
+
+// The spinner ticks only while loading.
+func TestSpinnerTicksOnlyWhileLoading(t *testing.T) {
+	m := interactionModel(screenList)
+	m.spinning = true
+	if _, cmd := m.Update(spinner.TickMsg{}); cmd != nil || m.spinning {
+		t.Fatal("idle spinner kept ticking")
+	}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}) // starts a load
+	if cmd == nil || !m.spinning {
+		t.Fatal("loading did not restart the spinner")
+	}
+}
+
+// The UI tick runs only while a track is loaded or a peer is driven.
+func TestTickOnlyWhilePlaying(t *testing.T) {
+	m := interactionModel(screenList)
+	m.ticking = true
+	if _, cmd := m.Update(tickMsg{}); cmd != nil || m.ticking {
+		t.Fatal("tick kept running with nothing playing")
+	}
+	_, _ = m.Update(playStartedMsg{track: testTracks(1)[0], seq: m.pickSeq.Load()})
+	if !m.playing || !m.ticking {
+		t.Fatal("a play did not start the tick")
+	}
+	// The zero player reports Stopped: the tick closes the play and ends.
+	if _, _ = m.Update(tickMsg{}); m.playing || m.ticking {
+		t.Fatal("tick kept running after the player stopped")
+	}
+}
+
+// The token editor takes tokens longer than a search.
+func TestTokenEditorHasNoLengthLimit(t *testing.T) {
+	useTempConfig(t)
+	m := interactionModel(screenWebRemote)
+	m.search.CharLimit = searchCharLimit
+	keyRunes(m, 't')
+	tok := strings.Repeat("x", 200)
+	_, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tok)})
+	if m.search.Value() != tok {
+		t.Fatalf("token cut to %d characters", len(m.search.Value()))
+	}
+	_, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.search.CharLimit != searchCharLimit {
+		t.Fatalf("search limit %d after editing", m.search.CharLimit)
+	}
+}
+
+// Play and SetDevice run in commands (the zero player has no output and would
+// panic inside Update). A play command whose pick a stop superseded does not
+// play, and a stream resolved for it is dropped.
+func TestBlockingPlayerCallsLeaveUpdate(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(2), 0)
+	_ = m.playCurrent()
+	ready := streamReadyMsg{plan: &deezer.StreamPlan{}, track: testTracks(1)[0], seq: m.pickSeq.Load()}
+	_, play := m.Update(ready)
+	if play == nil {
+		t.Fatal("stream ready did not start a play command")
+	}
+	_, _ = m.Update(playStartedMsg{track: ready.track, seq: ready.seq})
+	if !m.playing || m.resolving || m.loading {
+		t.Fatalf("play started: playing %v, resolving %v, loading %v", m.playing, m.resolving, m.loading)
+	}
+
+	_ = m.playCurrent()
+	ready.seq = m.pickSeq.Load()
+	_, play = m.Update(ready)
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if msg := play(); msg != nil {
+		t.Fatalf("superseded play command ran Play: %v", msg)
+	}
+	if _, cmd := m.Update(ready); cmd != nil || m.loading {
+		t.Fatal("stop did not cancel the pending play")
+	}
+
+	d := interactionModel(screenDevices)
+	d.prevScreen = screenList
+	d.list.SetItems([]list.Item{deviceRow("x", "X", false)})
+	if _, cmd := d.Update(keyEnter); cmd == nil || d.screen != screenList {
+		t.Fatalf("device switch: command %v, screen %v; want a command and the list back", cmd != nil, d.screen)
+	}
+}
+
+// The same track picked twice in a row plays once: the first pick's resolve
+// is stale once the second pick is made.
+func TestSameTrackPickedTwicePlaysOnce(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(2), 0)
+	_ = m.playCurrent()
+	first := m.pickSeq.Load()
+	_ = m.playCurrent()
+	m.spinning = true // no spinner tick in the returned commands
+	track := testTracks(1)[0]
+	if _, cmd := m.Update(streamReadyMsg{plan: &deezer.StreamPlan{}, track: track, seq: first}); cmd != nil {
+		t.Fatal("the first pick's resolve started a play")
+	}
+	if _, cmd := m.Update(streamReadyMsg{plan: &deezer.StreamPlan{}, track: track, seq: m.pickSeq.Load()}); cmd == nil {
+		t.Fatal("the second pick's resolve did not start a play")
+	}
+}

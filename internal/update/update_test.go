@@ -15,6 +15,8 @@ func TestNewer(t *testing.T) {
 		{"1.5.1", "1.5.0", true},
 		{"1.5.1-rc1", "1.5.0", true}, // pre-release suffix stripped
 		{"v1.5.1", "v1.5.0", true},   // (parts strips no 'v'; caller trims — test the numeric path)
+		{"3.1.0", "3.1.0-rc1", true}, // the release is newer than its rc
+		{"3.1.0-rc1", "3.1.0", false},
 	}
 	for _, c := range cases {
 		if got := newer(c.a, c.b); got != c.want {

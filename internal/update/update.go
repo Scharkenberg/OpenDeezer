@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Repo is the GitHub owner/name that publishes releases.
@@ -69,14 +70,19 @@ func Check(current string) (Info, error) {
 	info.URL = rel.HTMLURL
 	info.Notes = strings.TrimSpace(rel.Body)
 	if len(info.Notes) > 2000 {
-		info.Notes = info.Notes[:2000]
+		n := 2000
+		for !utf8.RuneStart(info.Notes[n]) { // never split a rune
+			n--
+		}
+		info.Notes = info.Notes[:n]
 	}
 	info.HasUpdate = newer(info.Latest, info.Current)
 	return info, nil
 }
 
 // newer reports whether version a is strictly greater than b (dotted numeric,
-// e.g. "1.5.1" > "1.5.0"). Non-numeric or missing parts compare as 0.
+// e.g. "1.5.1" > "1.5.0"). Non-numeric or missing parts compare as 0. At equal
+// numbers a release is newer than its pre-release ("3.1.0" > "3.1.0-rc1").
 func newer(a, b string) bool {
 	pa, pb := parts(a), parts(b)
 	for i := 0; i < 3; i++ {
@@ -84,7 +90,7 @@ func newer(a, b string) bool {
 			return pa[i] > pb[i]
 		}
 	}
-	return false
+	return !strings.Contains(a, "-") && strings.Contains(b, "-")
 }
 
 func parts(v string) [3]int {

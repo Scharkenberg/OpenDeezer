@@ -18,6 +18,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"strconv"
 	"sync"
@@ -75,6 +76,14 @@ type Responder struct {
 	baseIPs     []string // IP baseline captured in Advertise (before the supervisor goroutine starts)
 }
 
+// bindHost is the address both sockets bind: every interface. Tests bind loopback,
+// which the OS firewall never asks about.
+var bindHost = ""
+
+// listenPort is the UDP port the responder binds: Port. Tests use a free
+// port the OS picked, so a running OpenDeezer does not answer them.
+var listenPort = Port
+
 // Advertise starts the discovery responder on UDP :Port (reuse-port so multiple
 // instances on one host coexist) and joins the multicast group on every capable
 // interface. info supplies the current identity; controlPort is the control API
@@ -115,7 +124,7 @@ func (r *Responder) rebind() error {
 	}
 
 	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error { return setReusePort(c) }}
-	pc, err := lc.ListenPacket(context.Background(), "udp4", ":"+strconv.Itoa(Port))
+	pc, err := lc.ListenPacket(context.Background(), "udp4", bindHost+":"+strconv.Itoa(listenPort))
 	if err != nil {
 		return err
 	}
@@ -137,7 +146,10 @@ func (r *Responder) serve(conn *net.UDPConn) {
 	for {
 		n, src, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			return // socket closed
+			if retryableRead(err) {
+				continue
+			}
+			return // closed, or a socket that cannot recover
 		}
 		if string(buf[:n]) != probeMagic || !isLAN(src.IP) {
 			continue
@@ -197,7 +209,7 @@ func (r *Responder) Close() {
 // directly via unicast.
 func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Device, error) {
 	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error { return setBroadcast(c) }}
-	pc, err := lc.ListenPacket(context.Background(), "udp4", ":0") // ephemeral
+	pc, err := lc.ListenPacket(context.Background(), "udp4", bindHost+":0") // ephemeral
 	if err != nil {
 		return nil, err
 	}
@@ -207,15 +219,15 @@ func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Dev
 	probe := []byte(probeMagic)
 	group := &net.UDPAddr{IP: groupIP, Port: Port}
 
-	// Send initial probes
-	sendProbes(conn, probe, group, staticPeers)
-
-	// Send periodically every 2 seconds in a background goroutine
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	// Probes go out from a goroutine, now and every 2 s: resolving a hostname
+	// peer must not delay the collection below, which the deadline bounds.
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
+		sendProbes(conn, probe, group, staticPeers)
 		for {
 			select {
 			case <-ticker.C:
@@ -226,15 +238,17 @@ func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Dev
 		}
 	}()
 
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	locals := localIPs()
 	seen := map[string]bool{}
 	var out []Device
 	buf := make([]byte, maxPacket)
 	for {
 		n, src, err := conn.ReadFromUDP(buf)
+		if ne, ok := err.(net.Error); ok && ne.Timeout() || errors.Is(err, net.ErrClosed) {
+			break
+		}
 		if err != nil {
-			break // deadline
+			continue // an oversized datagram or an ICMP reset from a unicast peer
 		}
 		var rep reply
 		// Bound the port so a forged reply can't produce a bad address.
@@ -384,8 +398,11 @@ func multicastInterfaces() []net.Interface {
 	return out
 }
 
-// isLAN reports whether ip is a private/loopback/link-local address (safe to
-// answer; refuses public sources to avoid being a reflection amplifier).
+// isLAN reports whether ip is a private/loopback/link-local or carrier-grade
+// NAT (100.64.0.0/10, Tailscale) address: safe to answer; public sources are
+// refused to avoid being a reflection amplifier.
 func isLAN(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || cgnat.Contains(ip)
 }
+
+var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}

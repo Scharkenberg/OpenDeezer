@@ -265,7 +265,7 @@ func buildTools(tgt *target) []tool {
 				if err != nil {
 					return "", err
 				}
-				return stateText(tgt.client().Seek(int64(ms)))
+				return stateText(tgt.client().SeekMS(int64(ms)))
 			}},
 		{"play_track", "Play a specific Deezer track by id (replaces the queue).",
 			objSchema(map[string]any{"id": map[string]any{"type": "string", "description": "Deezer track id"}}, "id"),

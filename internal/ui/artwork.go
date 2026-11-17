@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -26,8 +27,7 @@ func artworkSupported() bool {
 
 // fetchCover downloads and decodes an artwork image.
 func fetchCover(url string) (image.Image, error) {
-	cl := &http.Client{Timeout: 10 * time.Second}
-	resp, err := cl.Get(url)
+	resp, err := deezer.HTTPClient(10 * time.Second).Get(url)
 	if err != nil {
 		return nil, err
 	}

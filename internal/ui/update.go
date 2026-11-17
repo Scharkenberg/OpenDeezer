@@ -7,6 +7,7 @@ import (
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
 	"github.com/charmbracelet/bubbles/list"
@@ -40,9 +41,90 @@ func (m *Model) menuRows() []list.Item {
 	return rows
 }
 
-// Update handles all messages.
+// setList shows a new list. The filter of the previous list is cleared first:
+// left applied, it would hide the new items.
+func (m *Model) setList(title string, items []list.Item) {
+	m.list.ResetFilter()
+	m.list.Title = title
+	m.list.SetItems(items)
+	m.list.ResetSelected()
+	m.plConfirm = false
+}
+
+// showMenu returns to the home screen.
+func (m *Model) showMenu() {
+	m.setList("OpenDeezer", m.menuRows())
+	m.screen = screenMenu
+}
+
+// onListScreen reports whether m.list is the visible body, so list keys
+// (Enter, g/G, cursor keys, D on a row) may act on it.
+func (m *Model) onListScreen() bool {
+	switch m.screen {
+	case screenMenu, screenList, screenDevices, screenRemote, screenPlaylistPick:
+		return true
+	}
+	return false
+}
+
+// navMsg is the result of a navigation request, tagged with the navigation
+// generation it was made in.
+type navMsg struct {
+	gen int
+	msg tea.Msg
+}
+
+// navCmd starts a navigation request. Its result is dropped when the user has
+// navigated or made another request since.
+func (m *Model) navCmd(c tea.Cmd) tea.Cmd {
+	m.nav++
+	gen := m.nav
+	m.navReq = gen
+	return func() tea.Msg { return navMsg{gen: gen, msg: c()} }
+}
+
+// Update handles all messages. A screen change makes pending navigation
+// results stale, drops a delete confirmation and detaches from a peer the new
+// screen does not drive. The spinner ticks only while something is loading,
+// the UI tick only while a track is loaded or playing or a peer is driven.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	prev := m.screen
+	_, cmd := m.update(msg)
+	if m.screen != prev {
+		m.nav++
+		m.plConfirm = false
+		if m.remote != nil && m.peer() == nil {
+			m.detachRemote()
+		}
+	}
+	if m.loading && !m.spinning {
+		m.spinning = true
+		cmd = tea.Batch(cmd, m.spinner.Tick)
+	}
+	if st := m.player.State(); !m.ticking && (m.playing || st == audio.Loading || st == audio.Playing || m.peer() != nil) {
+		m.ticking = true
+		cmd = tea.Batch(cmd, tickCmd())
+	}
+	return m, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case navMsg:
+		if msg.gen == m.nav {
+			return m.update(msg.msg)
+		}
+		if msg.gen == m.navReq {
+			m.loading = false // no newer request is loading
+		}
+		// An explicit play still plays; it just does not take over the screen.
+		if p, ok := msg.msg.(playNowMsg); ok && len(p.tracks) > 0 {
+			m.q.Set(p.tracks, 0)
+			m.episodeMode = p.episodes
+			return m, m.playCurrent()
+		}
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -58,7 +140,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			switch {
 			case errors.Is(msg.err, deezer.ErrNoNetwork):
-				// Connectivity loss, not an auth problem — show the No-Internet
+				// Connectivity loss, not an auth problem: show the No-Internet
 				// screen with a retry rather than telling the user to re-login.
 				m.screen = screenNoInternet
 				m.status = ""
@@ -72,7 +154,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.acct = m.client.Account()
 		m.publishAccount()                                // identity snapshot for the control API (race-free read)
 		m.client.SetAdsDisabled(config.LoadAdsDisabled()) // free-tier ads opt-out
-		m.screen = screenMenu
+		m.showMenu()
 		if m.acct.Name != "" {
 			m.status = i18n.Tf("Logged in as %s · %s", m.acct.Name, m.acct.Offer)
 		} else {
@@ -88,8 +170,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Warn if the chosen quality exceeds the plan's entitlement.
 			m.status += "  " + i18n.T("(plan can't stream that quality — will fall back)")
 		}
-		m.list.Title = "OpenDeezer"
-		m.list.SetItems(m.menuRows())
 		// Seed the liked-ids cache in the background so the 'f' toggle knows the
 		// current state before the Liked Songs view is ever opened.
 		return m, m.likedIDsCmd()
@@ -105,17 +185,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = trackRow(t)
 		}
 		if msg.favorites {
-			// The Liked Songs list is the authoritative liked set — refresh the cache.
+			// The Liked Songs list is the authoritative liked set: refresh the cache.
 			m.likedIDs = likedSet(msg.tracks)
 		}
-		// Browsing must not touch the live play queue — hold the tracks aside and
+		// Browsing must not touch the live play queue: hold the tracks aside and
 		// only commit to the queue on an explicit play (see activate).
 		m.browse = msg.tracks
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = msg.title
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(msg.title, items)
 		m.screen = screenList
 		m.status = ""
 		return m, nil
@@ -147,9 +225,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browse = p.Top
 		m.ownPlaylists = false
 		m.pageArtist = p.Artist // 'm' with no seed row starts this artist's radio
-		m.list.Title = "♪ " + p.Artist.Name
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList("♪ "+p.Artist.Name, items)
 		if len(items) > 1 {
 			m.list.Select(1) // start on the first entry, not the section header
 		}
@@ -165,9 +241,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = msg.title
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(msg.title, items)
 		m.screen = screenList
 		m.status = ""
 		return m, nil
@@ -180,13 +254,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = episodeRow(e)
 			browse[i] = e.AsTrack()
 		}
-		// Held aside until the user plays a row — see tracksMsg.
+		// Held aside until the user plays a row: see tracksMsg.
 		m.browse = browse
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = msg.title
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(msg.title, items)
 		m.screen = screenList
 		m.status = ""
 		return m, nil
@@ -218,9 +290,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// playlistsCmd), so the N/R/X playlist write ops apply here.
 		m.ownPlaylists = true
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = msg.title
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(msg.title, items)
 		m.screen = screenList
 		m.status = ""
 		return m, nil
@@ -248,17 +318,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playlistPickMsg:
 		// Snapshot the list the picker replaces (it borrows m.list), exactly like
-		// the device picker — see devicesMsg for the prevScreen rationale.
-		if m.screen != screenPlaylistPick {
-			m.devSavedItems = m.list.Items()
-			m.devSavedTitle = m.list.Title
-			m.devSavedIndex = m.list.Index()
-			switch m.screen {
-			case screenNowPlaying, screenCredits, screenQueue, screenLyrics, screenHelp:
-			default:
-				m.prevScreen = m.screen
-			}
-		}
+		// the device picker: see devicesMsg for the prevScreen rationale.
+		m.openPicker(screenPlaylistPick)
 		m.pickTrack = msg.track
 		items := []list.Item{row{
 			kind: rowMenu, action: actNewPlaylist,
@@ -267,9 +328,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, p := range msg.playlists {
 			items = append(items, playlistRow(p))
 		}
-		m.list.Title = "➕ " + i18n.T("Add to playlist")
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList("➕ "+i18n.T("Add to playlist"), items)
 		m.screen = screenPlaylistPick
 		m.loading = false
 		m.status = ""
@@ -286,7 +345,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// when it is what's on screen (create-from-picker returns to a browse list).
 		if msg.refresh && m.screen == screenList && m.ownPlaylists {
 			m.loading = true
-			return m, m.playlistsCmd()
+			return m, m.navCmd(m.playlistsCmd())
 		}
 		return m, nil
 
@@ -309,73 +368,63 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browse = msg.results.Tracks
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = i18n.T("Results")
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(i18n.T("Results"), items)
 		m.screen = screenList
 		m.status = ""
 		return m, nil
 
 	case streamReadyMsg:
-		m.loading = false
-		// Drop a stale resolve: if the user has since selected a different track,
-		// the queue's current no longer matches — don't override the newer choice.
-		if t, ok := m.q.Current(); !ok || t.ID != msg.track.ID {
+		// Drop a stale resolve: the user has picked again (maybe the same
+		// track) or stopped.
+		if msg.seq != m.pickSeq.Load() {
 			return m, nil
 		}
-		if err := m.player.Play(msg.plan, msg.track.DurationMS); err != nil {
-			m.status = i18n.Tf("Playback error: %s", err.Error())
+		if msg.err != nil {
+			m.resolving = false
+			return m.update(errMsg{msg.err})
+		}
+		var seek int64
+		if m.resumeID == msg.track.ID {
+			seek = m.resumeMS
+			m.resumeID, m.resumeMS = "", 0
+		}
+		return m, m.playerCmd(func() tea.Msg {
+			if m.pickSeq.Load() != msg.seq {
+				return nil // a newer pick or a stop came first
+			}
+			err := m.player.Play(msg.plan, msg.track.DurationMS)
+			if err == nil && seek > 0 {
+				m.player.SeekMS(seek) // resume
+			}
+			return playStartedMsg{track: msg.track, seq: msg.seq, err: err}
+		})
+
+	case playStartedMsg:
+		if msg.seq != m.pickSeq.Load() {
+			return m, nil
+		}
+		m.resolving = false
+		m.loading = false
+		if msg.err != nil {
+			m.status = i18n.Tf("Playback error: %s", msg.err.Error())
 			return m, nil
 		}
 		m.playing = true
 		m.status = ""
-		// Resume: seek to the saved position once the stream is live.
-		if m.pendingSeek > 0 {
-			m.player.SeekMS(m.pendingSeek)
-			m.pendingSeek = 0
-		}
 		cmd := m.onTrackChanged(msg.track)
-		// Preload the next track for a gapless/crossfaded transition, and report the
-		// play to Deezer (log.listen) unless the user disabled ads/reporting.
-		return m, tea.Batch(cmd, m.preloadNextCmd(), m.nowPlayingCmd(msg.track.ID))
-
-	case preloadMsg:
-		if msg.plan == nil {
-			return m, nil
-		}
-		// Drop a stale preload: if repeat/shuffle changed the upcoming track (or made
-		// it non-deterministic) while this resolve was in flight, don't install it —
-		// otherwise it would defeat the ClearPreload() done on those toggles.
-		if t, ok := m.q.PeekNext(); !ok || t.ID != msg.trackID {
-			return m, nil
-		}
-		m.player.Preload(msg.plan, msg.dur)
-		return m, nil
+		// Ask for the next track for a gapless/crossfaded transition, and report
+		// the play to Deezer (log.listen) unless the user disabled ads/reporting.
+		m.requestPreload()
+		return m, tea.Batch(cmd, m.nowPlayingCmd(msg.track.ID))
 
 	case devicesMsg:
-		// Snapshot the list the picker is about to replace (it reuses m.list) and
-		// remember the return screen — but only when not already on the picker, so
-		// re-opening 'd' from itself can't overwrite either with device rows. Skip
-		// recording an overlay as prevScreen (mirrors toggleScreen) to avoid an
-		// esc self-loop when the picker is opened from another overlay.
-		if m.screen != screenDevices {
-			m.devSavedItems = m.list.Items()
-			m.devSavedTitle = m.list.Title
-			m.devSavedIndex = m.list.Index()
-			switch m.screen {
-			case screenNowPlaying, screenCredits, screenQueue, screenLyrics, screenHelp:
-			default:
-				m.prevScreen = m.screen
-			}
-		}
+		m.openPicker(screenDevices)
 		items := make([]list.Item, len(msg.devices))
 		cur := m.player.CurrentDevice()
 		for i, d := range msg.devices {
 			items[i] = deviceRow(d.ID, d.Name, d.ID == cur)
 		}
-		m.list.Title = i18n.T("Output device")
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(i18n.T("Output device"), items)
 		m.screen = screenDevices
 		m.loading = false
 		m.status = ""
@@ -403,17 +452,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Branch on msg.swapped (captured at the finish signal), not the live player
 		// state, which a pause/stop/selection racing the signal could have changed.
 		switch {
+		case m.resolving:
+			// A pick is still resolving: it decides what plays next.
+			return m, m.waitFinish()
 		case msg.swapped && m.player.State() != audio.Stopped:
 			// The player gaplessly swapped in the preloaded next, which is always
 			// the deterministic linear next (PeekNext). Advance the cursor to that
-			// same track — NOT via Next(), which would re-evaluate shuffle/repeat at
+			// same track: NOT via Next(), which would re-evaluate shuffle/repeat at
 			// finish time and could jump to a different track than the audio. No
 			// re-Play(), so a user pause survives the transition.
 			m.histMarkFull() // the outgoing track played to its natural end
 			m.q.AdvanceLinear()
 			m.playing = true
+			m.preloads.Take() // the player consumed it
 			if t, ok := m.q.Current(); ok {
-				return m, tea.Batch(m.onTrackChanged(t), m.preloadNextCmd(), m.waitFinish())
+				m.requestPreload()
+				return m, tea.Batch(m.onTrackChanged(t), m.waitFinish())
 			}
 			return m, tea.Batch(m.historyFlushCmd(), m.waitFinish())
 		case m.player.State() == audio.Stopped:
@@ -421,7 +475,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.histMarkFull() // natural end; advance() flushes if playback stops here
 			return m, tea.Batch(m.advance(), m.waitFinish())
 		default:
-			// A user selection is already loading/playing — don't advance over it.
+			// A user selection is already loading/playing: don't advance over it.
 			return m, m.waitFinish()
 		}
 
@@ -450,7 +504,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.updateInfo = msg.info
 		}
-		// The silent startup check never touches m.status — the footer notice (see
+		// The silent startup check never touches m.status: the footer notice (see
 		// footer()) is enough when an update exists. Only a manual re-check (About
 		// screen) surfaces feedback here.
 		if wasManual {
@@ -466,15 +520,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
+		m.ticking = false // Update schedules the next one while it is wanted
 		var histFlush tea.Cmd
-		// The end-of-track sleep timer stops the player without firing onFinish (so
-		// the queue can't auto-advance), leaving m.playing stale. Reconcile it so the
-		// footer stops showing "playing" and quit won't persist a bogus end-of-track
-		// resume point.
-		if m.playing && m.player.State() == audio.Stopped {
+		// The player can stop without firing onFinish (end-of-track sleep timer) or
+		// fail (Errored), leaving m.playing stale. Reconcile it so the footer stops
+		// showing "playing" and quit won't persist a bogus resume point.
+		if st := m.player.State(); m.playing && (st == audio.Stopped || st == audio.Errored) {
 			m.playing = false
-			// The player stopped without a track change (end-of-track sleep timer):
-			// close the listening session at the last observed position.
+			if st == audio.Errored {
+				m.status = i18n.Tf("Playback error: %s", m.player.LastError())
+			}
+			// Close the listening session at the last observed position.
 			histFlush = m.historyFlushCmd()
 		}
 		m.histSyncPos() // keep the session's listened-position sample fresh
@@ -482,10 +538,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.publishControl()
 		// Poll the peer on the remote-control screen and while viewing its lyrics
 		// (so synced lyrics scroll with the peer's position).
-		if m.remote != nil && (m.screen == screenRemoteCtl || m.screen == screenLyrics) {
-			return m, tea.Batch(tickCmd(), remotePollCmd(m.remote), histFlush)
+		if m.peer() != nil {
+			return m, tea.Batch(m.remotePoll(), histFlush)
 		}
-		return m, tea.Batch(tickCmd(), histFlush)
+		return m, histFlush
 
 	case remoteConnMsg:
 		m.loading = false
@@ -509,11 +565,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case remoteStateMsg:
+		if msg.poll {
+			m.remotePolling = false
+		}
+		if msg.client != m.remote {
+			return m, nil // a reply for a peer we have detached from
+		}
 		if msg.err != nil {
 			m.status = i18n.Tf("Remote: %s", msg.err.Error())
 			return m, nil
 		}
 		m.remoteState = msg.state
+		if t := msg.state.Track; t != nil && m.screen == screenLyrics && t.ID != m.lyricsTrack {
+			m.lyrics = nil
+			m.lyricsTrack = t.ID
+			m.lyricsOffset = 0
+			return m, m.lyricsCmd(remoteTrack(t))
+		}
 		return m, nil
 
 	case webRemoteMsg:
@@ -550,9 +618,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, p := range msg.peers {
 			items = append(items, peerRow(p))
 		}
-		m.list.Title = i18n.T("Connect to a device")
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(i18n.T("Connect to a device"), items)
 		m.screen = screenRemote
 		if len(msg.peers) == 0 {
 			m.status = i18n.T("No devices found — enable OPENDEEZER_CONTROL=:7654 on the target.")
@@ -562,26 +628,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case mediaCmdMsg:
+		var cmd tea.Cmd
 		switch msg.kind {
 		case "playpause":
 			m.player.TogglePause()
 		case "next":
-			return m, tea.Batch(m.next(), nil)
+			cmd = m.next()
 		case "prev":
-			return m, m.prev()
+			cmd = m.prev()
 		case "stop":
-			m.histSyncPos() // sample the position before the player forgets it
-			m.player.Stop()
-			m.playing = false
-			m.publishMedia()
-			return m, m.historyFlushCmd()
+			cmd = m.stop()
 		case "seek":
-			m.player.SeekMS(m.player.PositionMS() + msg.arg/1000)
+			cmd = m.seekCmd(m.player.PositionMS() + msg.arg/1000)
 		case "setpos":
-			m.player.SeekMS(msg.arg / 1000)
+			cmd = m.seekCmd(msg.arg / 1000)
 		}
 		m.publishMedia()
-		return m, nil
+		return m, cmd
 
 	case controlCmdMsg:
 		var cmd tea.Cmd
@@ -593,50 +656,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "prev":
 			cmd = m.prev()
 		case "stop":
-			m.histSyncPos() // sample the position before the player forgets it
-			m.player.Stop()
-			m.playing = false
-			cmd = m.historyFlushCmd()
+			cmd = m.stop()
 		case "restart":
-			m.player.SeekMS(0)
+			cmd = m.seekCmd(0)
 		case "repeat":
-			if m.remote != nil {
+			if rc := m.peer(); rc != nil {
 				m.publishMedia()
 				m.publishControl()
-				return m, remoteCmd(m.remote.CycleRepeat)
+				return m, remoteCmd(rc, rc.CycleRepeat)
 			}
 			m.q.CycleRepeat()
-			m.player.ClearPreload() // upcoming track may differ under the new mode
-			cmd = m.preloadNextCmd()
+			m.invalidatePreload() // upcoming track may differ under the new mode
 		case "shuffle":
-			if m.remote != nil {
+			if rc := m.peer(); rc != nil {
 				m.publishMedia()
 				m.publishControl()
-				return m, remoteCmd(m.remote.ToggleShuffle)
+				return m, remoteCmd(rc, rc.ToggleShuffle)
 			}
 			m.q.ToggleShuffle()
-			m.player.ClearPreload()
-			cmd = m.preloadNextCmd()
+			m.invalidatePreload()
 		case "repeat-set":
 			// SET variant: absolute repeat mode from a GUI/web/SDK controller.
-			if m.remote != nil {
+			if rc := m.peer(); rc != nil {
 				m.publishMedia()
 				m.publishControl()
-				return m, remoteSetRepeatCmd(m.remote, msg.mode)
+				return m, remoteCmd(rc, func() (control.State, error) { return rc.SetRepeat(msg.mode) })
 			}
 			m.q.SetRepeat(parseRepeatMode(msg.mode))
-			cmd = m.invalidatePreload() // upcoming track may differ under the new mode
+			m.invalidatePreload() // upcoming track may differ under the new mode
 		case "shuffle-set":
 			// SET variant: absolute shuffle state from a GUI/web/SDK controller.
-			if m.remote != nil {
+			if rc := m.peer(); rc != nil {
 				m.publishMedia()
 				m.publishControl()
-				return m, remoteSetShuffleCmd(m.remote, msg.on)
+				return m, remoteCmd(rc, func() (control.State, error) { return rc.SetShuffle(msg.on) })
 			}
 			m.q.SetShuffle(msg.on)
-			cmd = m.invalidatePreload()
+			m.invalidatePreload()
 		case "seek":
-			m.player.SeekMS(msg.ms)
+			cmd = m.seekCmd(msg.ms)
 		case "volume":
 			m.player.SetVolume(msg.vol)
 		case "playtrack":
@@ -667,9 +725,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.episodeMode = msg.episodes
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = i18n.T("Now Playing")
-		m.list.SetItems(items)
-		m.list.ResetSelected()
+		m.setList(i18n.T("Now Playing"), items)
 		m.screen = screenList
 		return m, m.playCurrent()
 
@@ -678,9 +734,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browse = nil // stats rows play by id, not through the browse slice
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
-		m.list.Title = "📊 " + i18n.T("Stats")
-		m.list.SetItems(statsItems(msg))
-		m.list.ResetSelected()
+		m.setList("📊 "+i18n.T("Stats"), statsItems(msg))
 		m.screen = screenList
 		m.status = ""
 		return m, nil
@@ -689,6 +743,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleControlQueueEdit(msg)
 
 	case spinner.TickMsg:
+		if !m.loading {
+			m.spinning = false
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
@@ -714,11 +772,36 @@ func (m *Model) delegate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// openPicker snapshots the list a picker (devices, add-to-playlist) is about to
+// replace and remembers the return screen, but only when not already on that
+// picker, so re-opening it can't overwrite either with picker rows. An overlay
+// is not recorded as prevScreen (mirrors toggleScreen) to avoid an esc
+// self-loop when the picker is opened from another overlay.
+func (m *Model) openPicker(s screen) {
+	if m.screen == s {
+		return
+	}
+	m.devSavedItems = m.list.Items()
+	m.devSavedTitle = m.list.Title
+	m.devSavedIndex = m.list.Index()
+	switch m.screen {
+	case screenNowPlaying, screenCredits, screenQueue, screenLyrics, screenHelp:
+	default:
+		m.prevScreen = m.screen
+	}
+}
+
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Ctrl+C quits from every screen and input; main saves state after the
+	// program returns (see Shutdown).
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
 	// No-Internet screen: retry re-establishes the session (a fresh login round-
 	// trip doubles as a connectivity probe); on success loginDoneMsg lands us back
 	// in the app. If the session is still valid (in-session drop), retry still just
-	// re-logs in — cheap and it confirms the network is back.
+	// re-logs in: cheap and it confirms the network is back.
 	if m.screen == screenNoInternet {
 		switch msg.String() {
 		case "r", "enter":
@@ -728,8 +811,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			m.status = ""
 			return m, m.loginCmd()
-		case "q", "ctrl+c":
-			m.shutdown()
+		case "q":
 			return m, tea.Quit
 		}
 		return m, nil
@@ -742,10 +824,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.screen == screenRemoteInput {
 		switch msg.String() {
 		case "esc":
-			m.screen = screenMenu
-			m.list.Title = "OpenDeezer"
-			m.list.SetItems(m.menuRows())
-			m.list.ResetSelected()
+			m.showMenu()
 			m.status = ""
 			return m, nil
 		case "enter":
@@ -754,7 +833,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.loading = true
 			m.status = i18n.T("Connecting…")
-			return m, m.remoteConnectCmd(m.search.Value(), true) // manual: trusted, may use token
+			return m, m.navCmd(m.remoteConnectCmd(m.search.Value(), true)) // manual: trusted, may use token
 		}
 		var cmd tea.Cmd
 		m.search, cmd = m.search.Update(msg)
@@ -765,7 +844,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleWebRemoteKey(msg)
 	}
 
-	// Playlist title prompt (create / rename) — a text input like remote entry.
+	// Playlist title prompt (create / rename): a text input like remote entry.
 	if m.screen == screenPlaylistPrompt {
 		switch msg.String() {
 		case "esc":
@@ -814,12 +893,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.loading = true
-			if m.searchPodcast {
-				m.status = i18n.T("Searching…")
-				return m, m.podcastSearchCmd(q)
-			}
 			m.status = i18n.T("Searching…")
-			return m, m.searchCmd(q)
+			if m.searchPodcast {
+				return m, m.navCmd(m.podcastSearchCmd(q))
+			}
+			return m, m.navCmd(m.searchCmd(q))
 		}
 		var cmd tea.Cmd
 		m.search, cmd = m.search.Update(msg)
@@ -907,19 +985,23 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.deletePlaylistCmd(m.plTarget)
 		case "n", "N", "esc":
 			m.plConfirm = false
-			m.status = ""
 		}
 		return m, nil
 	}
 
+	// Lyrics opened from the remote screen: transport keys drive the peer.
+	if rc := m.peer(); rc != nil {
+		if cmd, ok := m.remoteKey(rc, msg.String()); ok {
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
-	case "ctrl+c", "q":
-		m.shutdown()
+	case "q":
 		return m, tea.Quit
 	case " ":
-		// Driving a peer: transport keys target the peer, not the local player.
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.PlayPause)
+		if m.player.State() == audio.Errored {
+			return m, m.playCurrent() // the track failed: try it again
 		}
 		m.player.TogglePause()
 		return m, nil
@@ -930,12 +1012,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.q.InsertAfterCurrent(t)
 			m.publishControl()
 			m.status = i18n.Tf("Playing next: %s", t.Name)
-			return m, m.invalidatePreload()
-		}
-		// Transport "next": drive the peer when connected (e.g. on the remote
-		// lyrics/now-playing screens), otherwise the local queue.
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.Next)
+			m.invalidatePreload()
+			return m, nil
 		}
 		return m, m.next()
 	case "e":
@@ -944,13 +1022,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.q.Append(t)
 			m.publishControl()
 			m.status = i18n.Tf("Added to queue: %s", t.Name)
-			return m, m.invalidatePreload()
+			m.invalidatePreload()
+			return m, nil
 		}
 		return m, nil
 	case "p":
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.Prev)
-		}
 		return m, m.prev()
 	case "m":
 		// Start radio: a mix seeded from the selected track/artist (browse lists,
@@ -984,40 +1060,32 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if it, ok := m.list.SelectedItem().(row); ok && it.kind == rowTrack && m.screen == screenList {
 			m.loading = true
 			m.status = i18n.T("Loading…")
-			return m, m.playlistPickCmd(it.track)
+			return m, m.navCmd(m.playlistPickCmd(it.track))
 		}
 		return m, nil
 	case "r":
-		// Driving a peer: forward the repeat cycle and let the peer's reported
-		// state drive the display — do NOT mutate the local queue (it would drift
-		// from the peer). Mirrors controlCmdMsg's remote handling.
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.CycleRepeat)
-		}
 		m.status = i18n.Tf("Repeat: %s", i18n.T(m.q.CycleRepeat().String()))
 		m.publishControl()
 		// The upcoming track may have changed; drop the stale linear preload and
 		// re-preload for the new mode (no-op preload when now non-deterministic).
-		m.player.ClearPreload()
-		return m, m.preloadNextCmd()
+		m.invalidatePreload()
+		return m, nil
 	case "z":
-		// Driving a peer: forward the shuffle toggle without mutating local state.
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.ToggleShuffle)
-		}
 		if m.q.ToggleShuffle() {
 			m.status = i18n.T("Shuffle on")
 		} else {
 			m.status = i18n.T("Shuffle off")
 		}
 		m.publishControl()
-		m.player.ClearPreload()
-		return m, m.preloadNextCmd()
+		m.invalidatePreload()
+		return m, nil
 	case "g":
-		m.list.Select(0)
+		if m.onListScreen() {
+			m.list.Select(0)
+		}
 		return m, nil
 	case "G":
-		if n := len(m.list.Items()); n > 0 {
+		if n := len(m.list.VisibleItems()); n > 0 && m.onListScreen() {
 			m.list.Select(n - 1)
 		}
 		return m, nil
@@ -1059,7 +1127,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		on := !m.player.ReplayGain()
 		m.player.SetReplayGain(on)
-		_ = SaveReplayGain(on)
+		m.savePlayback(func(pb *config.Playback) { pb.ReplayGain = on })
 		if on {
 			m.status = i18n.T("ReplayGain on (loudness normalization)")
 		} else {
@@ -1107,22 +1175,43 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Output device picker.
 		m.loading = true
 		m.status = i18n.T("Loading…")
-		return m, m.devicesCmd()
+		return m, m.navCmd(m.devicesCmd())
 	case "x":
 		// Cycle crossfade: 0 → 3s → 6s → 12s → 0.
 		next := map[int]int{0: 3000, 3000: 6000, 6000: 12000, 12000: 0}[m.player.CrossfadeMS()]
 		m.player.SetCrossfadeMS(next)
-		_ = SaveCrossfadeMS(next)
+		m.savePlayback(func(pb *config.Playback) { pb.CrossfadeMS = next })
 		if next == 0 {
 			m.status = i18n.T("Crossfade off")
 		} else {
 			m.status = i18n.Tf("Crossfade %ds", next/1000)
 		}
 		return m, nil
+	case "C":
+		// Cycle the stream cache size: off → 1 → 2 → 5 → 10 → 20 GB → off,
+		// applied at once.
+		media := config.LoadMedia()
+		next := 0
+		for _, mb := range cacheSizesMB {
+			if mb > media.MediaCacheMB {
+				next = mb
+				break
+			}
+		}
+		err := m.caches.SetMB(next)
+		switch {
+		case err != nil:
+			m.status = i18n.Tf("Error: %s", err.Error())
+		case next == 0:
+			m.status = i18n.T("Stream cache off")
+		default:
+			m.status = i18n.Tf("Stream cache %d GB", next>>10)
+		}
+		return m, nil
 	case "ctrl+g":
 		on := !m.player.Gapless()
 		m.player.SetGapless(on)
-		_ = SaveGapless(on)
+		m.savePlayback(func(pb *config.Playback) { pb.Gapless = on })
 		if on {
 			m.status = i18n.T("Gapless on")
 		} else {
@@ -1130,10 +1219,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "l":
-		// Show synced lyrics for the current track. When a remote device is
-		// connected, use the remote's now-playing track instead of the local queue.
+		// Show synced lyrics for the current track (the peer's, on its lyrics screen).
 		var t deezer.Track
-		if m.remote != nil && m.remoteState.Track != nil {
+		if m.peer() != nil && m.remoteState.Track != nil {
 			t = remoteTrack(m.remoteState.Track)
 		} else if ct, ok := m.q.Current(); ok {
 			t = ct
@@ -1149,35 +1237,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "+", "=":
-		// Driving a peer: adjust the peer's volume (from its reported state).
-		if m.remote != nil {
-			return m, remoteVolumeCmd(m.remote, m.remoteState.Volume+0.1)
-		}
 		m.status = volStatus(m.player.AddVolume(0.1))
 		return m, nil
 	case "-", "_":
-		if m.remote != nil {
-			return m, remoteVolumeCmd(m.remote, m.remoteState.Volume-0.1)
-		}
 		m.status = volStatus(m.player.AddVolume(-0.1))
 		return m, nil
 	case "left":
-		// Driving a peer: seek the peer relative to its reported position.
-		if m.remote != nil {
-			return m, remoteSeekCmd(m.remote, m.remoteState.PositionMS-10000)
-		}
-		m.player.SeekMS(m.player.PositionMS() - 10000)
-		return m, nil
+		return m, m.seekCmd(m.player.PositionMS() - 10000)
 	case "right":
-		if m.remote != nil {
-			return m, remoteSeekCmd(m.remote, m.remoteState.PositionMS+10000)
-		}
-		m.player.SeekMS(m.player.PositionMS() + 10000)
-		return m, nil
+		return m, m.seekCmd(m.player.PositionMS() + 10000)
 	case "h":
 		q := (m.client.Quality() + 1) % 3
 		m.client.SetQuality(q)
-		_ = SaveQuality(q)
+		m.savePlayback(func(pb *config.Playback) { pb.Quality = q })
 		switch q {
 		case 2:
 			m.status = i18n.T("Audio quality: HiFi (FLAC)")
@@ -1191,7 +1263,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Download a full track to disk (premium-only). Prefer the highlighted
 		// track row; otherwise fall back to the current track (not podcasts).
 		var t deezer.Track
-		if it, ok := m.list.SelectedItem().(row); ok && it.kind == rowTrack {
+		if it, ok := m.list.SelectedItem().(row); ok && it.kind == rowTrack && m.onListScreen() {
 			t = it.track
 		} else if ct, ok := m.q.Current(); ok && !m.episodeMode {
 			t = ct
@@ -1226,14 +1298,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "s":
-		// Driving a peer: stop the peer's playback, not the local player.
-		if m.remote != nil {
-			return m, remoteCmd(m.remote.Stop)
-		}
-		m.histSyncPos() // sample the position before the player forgets it
-		m.player.Stop()
-		m.playing = false
-		return m, m.historyFlushCmd()
+		return m, m.stop()
 	case "/":
 		m.openSearch(false)
 		return m, nil
@@ -1259,11 +1324,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "X":
 		// On the playlists screen, X deletes the highlighted playlist (after a
-		// y/n confirm). Elsewhere it dismisses the update notice.
+		// y/n confirm the footer shows). Elsewhere it dismisses the update notice.
 		if p, ok := m.selectedOwnPlaylist(); ok {
 			m.plConfirm = true
 			m.plTarget = p
-			m.status = i18n.Tf("Delete playlist %s? (y/n)", p.Name)
 			return m, nil
 		}
 		// Dismiss the footer's "update available" notice for this session.
@@ -1283,10 +1347,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+f":
 		// Start the local list filter (the list's Filter binding is ctrl+f, "/"
-		// being Deezer search) — but only where the list is the visible body, so
+		// being Deezer search), but only where the list is the visible body, so
 		// an overlay can't put the hidden list into filtering mode.
-		switch m.screen {
-		case screenMenu, screenList, screenDevices, screenRemote, screenPlaylistPick:
+		if m.onListScreen() {
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
 			return m, cmd
@@ -1296,12 +1359,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// An applied local filter clears first; a second esc then navigates.
 		// (While typing the filter, the FilterState()==Filtering block above owns
 		// esc via the list's cancel binding.)
-		if m.list.FilterState() == list.FilterApplied {
-			switch m.screen {
-			case screenMenu, screenList, screenDevices, screenRemote, screenPlaylistPick:
-				m.list.ResetFilter()
-				return m, nil
-			}
+		if m.list.FilterState() == list.FilterApplied && m.onListScreen() {
+			m.list.ResetFilter()
+			return m, nil
 		}
 		switch m.screen {
 		case screenNowPlaying, screenCredits, screenQueue, screenLyrics, screenHelp:
@@ -1310,16 +1370,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.restoreList() // the picker replaced m.list; put the browse list back
 			m.screen = m.prevScreen
 		case screenList, screenRemote:
-			m.screen = screenMenu
-			m.list.Title = "OpenDeezer"
-			m.list.SetItems(m.menuRows())
-			m.list.ResetSelected()
+			m.showMenu()
 		}
 		return m, nil
 	case "enter":
-		return m.activate()
+		if m.onListScreen() {
+			return m.activate()
+		}
+		return m, nil
 	}
 
+	if !m.onListScreen() {
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
@@ -1335,7 +1398,7 @@ func (m *Model) startRadio() (tea.Model, tea.Cmd) {
 	radio := func(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 		m.loading = true
 		m.status = i18n.T("Starting radio…")
-		return m, cmd
+		return m, m.navCmd(cmd)
 	}
 	if m.screen == screenList {
 		if it, ok := m.list.SelectedItem().(row); ok {
@@ -1383,40 +1446,36 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	load := func(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+		m.status = i18n.T("Loading…")
+		m.loading = true
+		return m, m.navCmd(cmd)
+	}
 	switch it.kind {
 	case rowMenu:
 		switch it.action {
 		case actLiked:
-			m.status = i18n.T("Loading…")
-			m.loading = true
-			return m, m.favoritesCmd()
+			return load(m.favoritesCmd())
 		case actPlaylists:
-			m.status = i18n.T("Loading…")
-			m.loading = true
-			return m, m.playlistsCmd()
+			return load(m.playlistsCmd())
 		case actCharts:
-			m.status = i18n.T("Loading…")
-			m.loading = true
-			return m, m.chartsCmd()
+			return load(m.chartsCmd())
 		case actFlow:
-			m.status = i18n.T("Loading…")
-			m.loading = true
-			return m, m.flowCmd()
+			return load(m.flowCmd())
 		case actSearch:
 			m.openSearch(false)
 			return m, nil
 		case actStats:
-			m.status = i18n.T("Loading…")
-			m.loading = true
-			return m, m.statsCmd()
+			return load(m.statsCmd())
 		case actPodcasts:
 			m.openSearch(true)
 			return m, nil
 		case actRemote:
 			m.loading = true
 			m.status = i18n.T("Scanning…")
-			return m, m.discoverDevicesCmd()
+			return m, m.navCmd(m.discoverDevicesCmd())
 		case actWebRemote:
+			m.webCtrlCfg = LoadControl()
 			m.screen = screenWebRemote
 			m.status = ""
 			return m, nil
@@ -1426,7 +1485,7 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 			// its items; overlays/footer re-read T() every frame on their own).
 			name := m.cycleLanguage()
 			idx := m.list.Index()
-			m.list.SetItems(m.menuRows())
+			m.setList("OpenDeezer", m.menuRows())
 			if idx >= 0 && idx < len(m.list.Items()) {
 				m.list.Select(idx)
 			}
@@ -1441,8 +1500,8 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 		case actResume:
 			if r := LoadResume(); r != nil {
 				m.q.Set([]deezer.Track{r.Track()}, 0)
-				m.episodeMode = false
-				m.pendingSeek = r.PositionMS
+				m.episodeMode = r.Episode
+				m.resumeID, m.resumeMS = r.ID, r.PositionMS
 				return m, m.playCurrent()
 			}
 			return m, nil
@@ -1462,39 +1521,27 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 	case rowTrack:
 		// Explicit play: commit the browsed list to the play queue at this row.
 		// This is the only place browsing turns into the live queue.
-		m.playBrowsed(it.track.ID, false)
+		m.playBrowsed(it.track, false)
 		return m, m.playCurrent()
 	case rowHistory:
-		// Stats rows carry only the track id — fetch the full track and play it
+		// Stats rows carry only the track id: fetch the full track and play it
 		// (same path as the control API's "play track <id>").
 		if it.histID == "" {
 			return m, nil
 		}
-		m.status = i18n.T("Loading…")
-		m.loading = true
-		return m, m.playTrackByIDCmd(it.histID)
+		return load(m.playTrackByIDCmd(it.histID))
 	case rowArtist:
-		m.status = i18n.T("Loading…")
-		m.loading = true
-		return m, m.artistPageCmd(it.artist)
+		return load(m.artistPageCmd(it.artist))
 	case rowPodcast:
-		m.status = i18n.T("Loading…")
-		m.loading = true
-		return m, m.episodesCmd(it.podcast)
+		return load(m.episodesCmd(it.podcast))
 	case rowEpisode:
 		// Explicit play: commit the browsed episodes to the play queue at this row.
-		m.playBrowsed(it.episode.ID, true)
+		m.playBrowsed(it.episode.AsTrack(), true)
 		return m, m.playCurrent()
 	case rowDevice:
-		if err := m.player.SetDevice(it.deviceID); err != nil {
-			m.status = i18n.Tf("Device error: %s", err.Error())
-		} else {
-			_ = SaveAudioDevice(it.deviceID)
-			m.status = i18n.Tf("Output: %s", it.title)
-		}
 		m.restoreList() // the picker replaced m.list; put the browse list back
 		m.screen = m.prevScreen
-		return m, nil
+		return m, m.setDeviceCmd(it.deviceID, it.title)
 	case rowPlaylist:
 		// Inside the add-to-playlist picker, enter adds the picked track here
 		// instead of opening the playlist.
@@ -1506,31 +1553,32 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 			m.status = i18n.T("Loading…")
 			return m, m.addToPlaylistCmd(it.playlist, t)
 		}
-		m.status = i18n.T("Loading…")
-		m.loading = true
-		return m, m.playlistTracksCmd(it.playlist)
+		return load(m.playlistTracksCmd(it.playlist))
 	case rowAlbum:
-		m.status = i18n.T("Loading…")
-		m.loading = true
-		return m, m.albumTracksCmd(it.album)
+		return load(m.albumTracksCmd(it.album))
 	case rowPeer:
 		m.loading = true
 		m.status = i18n.Tf("Connecting to %s…", it.title)
-		return m, m.remoteConnectCmd(it.peerAddr, false) // discovered: account-only
+		return m, m.navCmd(m.remoteConnectCmd(it.peerAddr, false)) // discovered: account-only
 	}
 	return m, nil
 }
 
 // playBrowsed replaces the play queue with the browsed list, positioned at the
 // activated row (mapped by the visible index, falling back to an ID search when
-// filtering or non-track rows shift it), and sets the episode mode. Called only
-// on an explicit play so browsing never clobbers the live queue.
-func (m *Model) playBrowsed(id string, episodes bool) {
+// filtering or non-track rows shift it), and sets the episode mode. A row whose
+// track is not in the browsed list plays alone. Called only on an explicit play
+// so browsing never clobbers the live queue.
+func (m *Model) playBrowsed(t deezer.Track, episodes bool) {
 	idx := m.list.Index()
-	if idx < 0 || idx >= len(m.browse) || m.browse[idx].ID != id {
-		idx = m.findInBrowse(id)
+	if idx < 0 || idx >= len(m.browse) || m.browse[idx].ID != t.ID {
+		idx = m.findInBrowse(t.ID)
 	}
-	m.q.Set(m.browse, idx)
+	if idx < 0 {
+		m.q.Set([]deezer.Track{t}, 0)
+	} else {
+		m.q.Set(m.browse, idx)
+	}
 	m.episodeMode = episodes
 }
 
@@ -1540,7 +1588,7 @@ func (m *Model) findInBrowse(id string) int {
 			return i
 		}
 	}
-	return 0
+	return -1
 }
 
 // restoreList puts back the list the device picker temporarily replaced.
@@ -1548,8 +1596,7 @@ func (m *Model) restoreList() {
 	if m.devSavedItems == nil {
 		return
 	}
-	m.list.SetItems(m.devSavedItems)
-	m.list.Title = m.devSavedTitle
+	m.setList(m.devSavedTitle, m.devSavedItems)
 	if m.devSavedIndex >= 0 && m.devSavedIndex < len(m.devSavedItems) {
 		m.list.Select(m.devSavedIndex)
 	}
@@ -1566,12 +1613,56 @@ func (m *Model) playCurrent() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if m.resumeID != t.ID {
+		m.resumeID, m.resumeMS = "", 0 // the resume offset belongs to another track
+	}
+	// Until this pick plays, the finish handler must not advance over it, and a
+	// preload of the old next track must not be swapped in.
+	m.resolving = true
+	seq := m.pickSeq.Add(1)
+	m.preloads.Clear()
 	m.status = i18n.Tf("Loading: %s", t.Name)
 	m.loading = true
 	if m.episodeMode {
-		return m.episodeStreamCmd(t)
+		return m.episodeStreamCmd(t, seq)
 	}
-	return m.streamCmd(t)
+	return m.streamCmd(t, seq)
+}
+
+// stop halts local playback and cancels a pick that is still resolving.
+func (m *Model) stop() tea.Cmd {
+	m.histSyncPos() // sample the position before the player forgets it
+	m.resolving = false
+	m.pickSeq.Add(1)
+	m.loading = false
+	m.playing = false
+	return tea.Batch(m.playerCmd(func() tea.Msg { m.player.Stop(); return nil }), m.historyFlushCmd())
+}
+
+// playerCmd runs a player call that can block (fade-outs, device switches) off
+// the update loop, one at a time.
+func (m *Model) playerCmd(f func() tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		m.playerMu.Lock()
+		defer m.playerMu.Unlock()
+		return f()
+	}
+}
+
+// seekCmd seeks the local player to ms.
+func (m *Model) seekCmd(ms int64) tea.Cmd {
+	return m.playerCmd(func() tea.Msg { m.player.SeekMS(ms); return nil })
+}
+
+// setDeviceCmd switches the output device and reports the result.
+func (m *Model) setDeviceCmd(id, title string) tea.Cmd {
+	return m.playerCmd(func() tea.Msg {
+		if err := m.player.SetDevice(id); err != nil {
+			return statusMsg{i18n.Tf("Device error: %s", err.Error())}
+		}
+		_ = SaveAudioDevice(id)
+		return statusMsg{i18n.Tf("Output: %s", title)}
+	})
 }
 
 // playTrackByIDCmd fetches a track by id and plays it (control API).
@@ -1597,7 +1688,7 @@ func (m *Model) playPlaylistByIDCmd(id string) tea.Cmd {
 }
 
 // selectedBrowseTrack returns the highlighted track row on a browse list, for
-// the n/e queue-building keys. Episode queues are excluded — mixing a music
+// the n/e queue-building keys. Episode queues are excluded: mixing a music
 // track into a plain-stream episode queue would break playback resolution.
 func (m *Model) selectedBrowseTrack() (deezer.Track, bool) {
 	if m.screen != screenList || m.episodeMode {
@@ -1611,7 +1702,7 @@ func (m *Model) selectedBrowseTrack() (deezer.Track, bool) {
 }
 
 // selectedOwnPlaylist returns the highlighted playlist when the user's own
-// playlists screen is showing — the gate for the N/R/X write ops.
+// playlists screen is showing: the gate for the N/R/X write ops.
 func (m *Model) selectedOwnPlaylist() (deezer.Playlist, bool) {
 	if m.screen != screenList || !m.ownPlaylists {
 		return deezer.Playlist{}, false
@@ -1624,15 +1715,23 @@ func (m *Model) selectedOwnPlaylist() (deezer.Playlist, bool) {
 }
 
 // invalidatePreload drops a possibly-stale gapless preload after the upcoming
-// track changed (queue edit, jump), mirroring what the repeat/shuffle toggles
-// do, and re-preloads for the new order. Nil-player safe so pure-UI tests can
-// exercise queue editing without an audio device.
-func (m *Model) invalidatePreload() tea.Cmd {
-	if m.player == nil {
-		return nil
+// track changed (queue edit, repeat/shuffle change) and asks for the next
+// track of the new order.
+func (m *Model) invalidatePreload() {
+	m.preloads.Clear()
+	m.requestPreload()
+}
+
+// requestPreload asks for the queue's deterministic next track to follow the
+// playing one gaplessly or with a crossfade; the player's near-end hook
+// resolves it. Nothing for podcast episodes or an undetermined next track.
+func (m *Model) requestPreload() {
+	if m.episodeMode {
+		return
 	}
-	m.player.ClearPreload()
-	return m.preloadNextCmd()
+	if t, ok := m.q.PeekNext(); ok {
+		m.preloads.Request(t.ID, t.DurationMS)
+	}
 }
 
 // queueJump plays the queue entry under the queue-view cursor.
@@ -1642,16 +1741,11 @@ func (m *Model) queueJump(i int) tea.Cmd {
 	}
 	m.q.SetIndex(i)
 	m.publishControl()
-	// The upcoming track changed with the cursor; drop the stale preload (the
-	// stream-ready handler re-preloads once the picked track is playing).
-	if m.player != nil {
-		m.player.ClearPreload()
-	}
 	return m.playCurrent()
 }
 
 // queueRemove deletes the queue entry under the queue-view cursor. The playing
-// track can't be removed — the queue cursor must keep matching the audio.
+// track can't be removed: the queue cursor must keep matching the audio.
 func (m *Model) queueRemove(i int) tea.Cmd {
 	if i < 0 || i >= m.q.Len() {
 		return nil
@@ -1664,22 +1758,35 @@ func (m *Model) queueRemove(i int) tea.Cmd {
 	if !m.q.Remove(i) {
 		return nil
 	}
+	if i < m.queueSel {
+		m.queueSel-- // keep the cursor on its track
+	}
 	if m.queueSel >= m.q.Len() {
 		m.queueSel = max(0, m.q.Len()-1)
 	}
 	m.publishControl()
 	m.status = i18n.Tf("Removed from queue: %s", name)
-	return m.invalidatePreload()
+	m.invalidatePreload()
+	return nil
 }
 
-// queueMove moves the queue entry under the cursor to j (J/K), cursor following.
+// queueMove moves the queue entry at i to j. The cursor follows its track:
+// the moved one (J/K) or the one the move shifted.
 func (m *Model) queueMove(i, j int) tea.Cmd {
 	if !m.q.Move(i, j) {
 		return nil
 	}
-	m.queueSel = j
+	switch {
+	case i == m.queueSel:
+		m.queueSel = j
+	case i < m.queueSel && j >= m.queueSel:
+		m.queueSel--
+	case i > m.queueSel && j <= m.queueSel:
+		m.queueSel++
+	}
 	m.publishControl()
-	return m.invalidatePreload()
+	m.invalidatePreload()
+	return nil
 }
 
 func (m *Model) next() tea.Cmd {
@@ -1703,14 +1810,14 @@ func (m *Model) advance() tea.Cmd {
 	}
 	m.playing = false
 	m.saveResume()
-	// End of the queue: nothing new will flush the session — record it now
+	// End of the queue: nothing new will flush the session, so record it now
 	// (histMarkFull already ran on the finish message).
 	return m.historyFlushCmd()
 }
 
 // onTrackChanged refreshes now-playing state (media, lyrics, cover) for a newly
 // active track, records the outgoing track's listening-history session, and
-// returns the follow-up commands (history write + cover fetch) if applicable.
+// returns the follow-up commands (history write, cover and lyrics fetch).
 func (m *Model) onTrackChanged(t deezer.Track) tea.Cmd {
 	flush := m.historyFlushCmd() // record the outgoing track (if any)
 	m.histStartSession(t)
@@ -1720,17 +1827,19 @@ func (m *Model) onTrackChanged(t deezer.Track) tea.Cmd {
 	m.lyrics = nil
 	m.lyricsTrack = ""
 	m.lyricsOffset = 0
+	var lyrics tea.Cmd
+	if m.screen == screenLyrics && m.peer() == nil {
+		m.lyricsTrack = t.ID
+		lyrics = m.lyricsCmd(t)
+	}
 	m.curImg = nil
 	m.curCover = ""
 	m.curImgTrack = t.ID
+	var cover tea.Cmd
 	if artworkSupported() && t.ArtworkURL != "" {
-		cover := m.coverCmd(t.ID, t.ArtworkURL)
-		if flush != nil {
-			return tea.Batch(flush, cover)
-		}
-		return cover
+		cover = m.coverCmd(t.ID, t.ArtworkURL)
 	}
-	return flush
+	return tea.Batch(flush, cover, lyrics)
 }
 
 // toggleScreen flips to dst (remembering the screen to return to) or back.
@@ -1755,14 +1864,18 @@ func (m *Model) toggleScreen(dst screen) {
 // saveResume persists the current track + position so it can be resumed later.
 func (m *Model) saveResume() {
 	if t, ok := m.q.Current(); ok && m.playing {
-		_ = SaveResume(t, m.player.PositionMS())
+		_ = SaveResume(t, m.player.PositionMS(), m.episodeMode)
 	}
 }
 
-// shutdown persists resume state and closes every background service. Shared by
-// all quit paths so they can't drift (missing a saveResume or a Close leaks or
-// loses state).
-func (m *Model) shutdown() {
+// Shutdown saves the resume point and the listening session and closes every
+// background service. main calls it once the program has returned, whatever
+// ended it (a quit key, a signal, a recovered panic). Later calls do nothing.
+func (m *Model) Shutdown() {
+	if m.shutDown {
+		return
+	}
+	m.shutDown = true
 	m.histSyncPos()
 	m.historyFlushNow() // synchronous: a goroutine could be killed mid-write on quit
 	m.saveResume()

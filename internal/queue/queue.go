@@ -5,6 +5,7 @@ package queue
 
 import (
 	"math/rand"
+	"slices"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
@@ -71,7 +72,11 @@ func (q *Queue) rnd(n int) int {
 }
 
 // pushHistory records a visited index, keeping history bounded by maxHistory.
+// -1 (no current track) is not a place Prev can return to and is skipped.
 func (q *Queue) pushHistory(i int) {
+	if i < 0 {
+		return
+	}
 	q.history = append(q.history, i)
 	if len(q.history) > maxHistory {
 		// Drop the oldest entries into a fresh backing array so memory is bounded.
@@ -109,7 +114,7 @@ func (q *Queue) shuffleOrder(first int) {
 }
 
 // ensureOrder rebuilds the shuffle permutation if it has drifted out of sync
-// with the track list (e.g. after Append).
+// with the track list (e.g. after InsertAfterCurrent with no current track).
 func (q *Queue) ensureOrder() {
 	if len(q.order) != len(q.tracks) {
 		q.shuffleOrder(q.index)
@@ -130,10 +135,10 @@ func (q *Queue) syncPos() {
 	}
 }
 
-// Set replaces the queue contents and positions the cursor at start (clamped).
-// History is cleared.
+// Set replaces the queue contents with a copy of tracks and positions the
+// cursor at start (clamped). History is cleared.
 func (q *Queue) Set(tracks []deezer.Track, start int) {
-	q.tracks = tracks
+	q.tracks = slices.Clone(tracks)
 	q.version++
 	q.history = nil
 	q.order = nil
@@ -153,13 +158,24 @@ func (q *Queue) Set(tracks []deezer.Track, start int) {
 }
 
 // Append adds tracks to the end without moving the cursor. Under shuffle the
-// stale permutation is rebuilt lazily (see ensureOrder).
+// new tracks go to random positions after the current one, so the part of the
+// cycle already played is not replayed.
 func (q *Queue) Append(tracks ...deezer.Track) {
 	if len(tracks) == 0 {
 		return
 	}
+	n := len(q.tracks)
 	q.tracks = append(q.tracks, tracks...)
 	q.version++
+	if q.shuffle && len(q.order) == n {
+		lo := q.pos + 1
+		if q.index < 0 {
+			lo = 0
+		}
+		for i := n; i < len(q.tracks); i++ {
+			q.order = slices.Insert(q.order, lo+q.rnd(len(q.order)-lo+1), i)
+		}
+	}
 }
 
 // InsertAfterCurrent inserts tracks immediately after the current one (at the
@@ -368,6 +384,11 @@ func (q *Queue) Next() bool {
 	}
 	if q.shuffle && len(q.tracks) > 1 {
 		q.ensureOrder()
+		if q.index < 0 { // nothing current yet: the cycle starts at its head
+			q.pos = 0
+			q.index = q.order[0]
+			return true
+		}
 		if q.pos+1 < len(q.order) {
 			q.pushHistory(q.index)
 			q.pos++
@@ -384,16 +405,15 @@ func (q *Queue) Next() bool {
 		q.index = q.order[q.pos]
 		return true
 	}
-	q.pushHistory(q.index)
-	switch {
-	case q.index+1 < len(q.tracks):
-		q.index++
-	case q.repeat == RepeatAll:
-		q.index = 0
-	default:
-		q.history = q.history[:len(q.history)-1] // nothing to advance to
-		return false
+	ni := q.index + 1
+	if ni >= len(q.tracks) {
+		if q.repeat != RepeatAll {
+			return false
+		}
+		ni = 0
 	}
+	q.pushHistory(q.index)
+	q.index = ni
 	return true
 }
 

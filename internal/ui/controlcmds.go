@@ -153,7 +153,7 @@ func (m *Model) handleControlQueueEdit(msg controlQueueEditMsg) (tea.Model, tea.
 			} else {
 				m.q.Append(msg.track)
 			}
-			cmd = m.invalidatePreload()
+			m.invalidatePreload()
 		}
 	case "jump":
 		if msg.i < 0 || msg.i >= m.q.Len() {

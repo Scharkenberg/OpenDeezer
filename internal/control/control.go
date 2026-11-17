@@ -48,6 +48,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
@@ -77,6 +78,11 @@ type State struct {
 	Shuffle    bool    `json:"shuffle"`
 	Format     string  `json:"format,omitempty"`
 	Queue      []Track `json:"queue,omitempty"`
+	// QueueVersion changes whenever Queue's content does (0: the host does not
+	// version its queue). GET /status always carries Queue; GET /events carries
+	// it only when QueueVersion differs from the one it last sent on that
+	// stream, so a reader keeps its last queue while the version is unchanged.
+	QueueVersion uint64 `json:"queueVersion,omitempty"`
 
 	// Sleep timer (0/false when not armed).
 	SleepActive      bool  `json:"sleepActive,omitempty"`
@@ -340,10 +346,11 @@ func (request *queueSetRequest) UnmarshalJSON(data []byte) error {
 // Server serves the control API.
 type Server struct {
 	status      func() State
-	account     func() Account // identity snapshot (auth + /whoami)
+	statusSince func(queueVersion uint64) State // optional; see SetStatusSince
+	account     func() Account                  // identity snapshot (auth + /whoami)
 	cmds        Commands
-	eq          *EQ // optional equalizer bridge (nil → /eq is 404)
-	client      *deezer.Client
+	eq          *EQ                           // optional equalizer bridge (nil → /eq is 404)
+	client      atomic.Pointer[deezer.Client] // swapped by SetClient on a same-account re-login
 	token       string
 	sameAccount bool
 	addr        string
@@ -390,8 +397,8 @@ var remoteHTML []byte
 // (called from the HTTP goroutine, so they must be race-free reads); client
 // supplies the browse endpoints (search/playlists).
 func New(cfg Config, status func() State, account func() Account, cmds Commands, client *deezer.Client) *Server {
-	return &Server{
-		status: status, account: account, cmds: cmds, client: client,
+	s := &Server{
+		status: status, account: account, cmds: cmds,
 		token: cfg.Token, sameAccount: cfg.SameAccountOnly,
 		addr:             cfg.Addr,
 		webRemote:        cfg.WebRemote,
@@ -402,13 +409,24 @@ func New(cfg Config, status func() State, account func() Account, cmds Commands,
 		eventSubscribers: make(map[*eventSubscriber]struct{}),
 		eventNotify:      make(chan struct{}, 1),
 	}
+	s.client.Store(client)
+	return s
 }
+
+// SetClient swaps the client behind the browse endpoints (a re-login of the
+// same account makes a new one; the server and its sessions stay).
+func (s *Server) SetClient(c *deezer.Client) { s.client.Store(c) }
 
 // SetVersion records the app version reported by /whoami.
 func (s *Server) SetVersion(v string) { s.version = v }
 
 // SetClientInfo records the client/platform id + device label for /whoami.
 func (s *Server) SetClientInfo(client, device string) { s.clientID, s.device = client, device }
+
+// SetStatusSince wires a snapshot provider for /events that is passed the
+// queue version the stream last carried, so the host can leave out a queue
+// that has not changed instead of copying it (call before Start).
+func (s *Server) SetStatusSince(fn func(queueVersion uint64) State) { s.statusSince = fn }
 
 // SetEQ wires the equalizer bridge (call before Start).
 func (s *Server) SetEQ(eq *EQ) { s.eq = eq }
@@ -473,7 +491,9 @@ func (s *Server) DisablePairing() {
 	s.pairMu.Unlock()
 }
 
-func (s *Server) webRemoteEnabled() bool {
+// WebRemoteEnabled reports whether the phone web remote is served (pairing may
+// have ended: a paired phone keeps its session).
+func (s *Server) WebRemoteEnabled() bool {
 	s.pairMu.Lock()
 	defer s.pairMu.Unlock()
 	return s.webRemote
@@ -531,12 +551,10 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.ln = ln
-	mux := http.NewServeMux()
-	s.routes(mux)
 	// Conservative timeouts + a small header cap: this can be LAN-exposed, so
 	// bound every phase of a request to resist slowloris / resource exhaustion.
 	s.srv = &http.Server{
-		Handler:           s.checkHost(mux),
+		Handler:           s.handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -548,12 +566,23 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Close stops the server.
+// Close stops the server and frees its port (also when Serve has not taken
+// the listener over yet).
 func (s *Server) Close() {
 	if s.srv != nil {
 		_ = s.srv.Close()
 	}
+	if s.ln != nil {
+		_ = s.ln.Close()
+	}
 	s.stopEventLoop()
+}
+
+// handler is everything the server answers, behind the Host check.
+func (s *Server) handler() http.Handler {
+	mux := http.NewServeMux()
+	s.routes(mux)
+	return s.checkHost(mux)
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
@@ -727,12 +756,25 @@ func (s *Server) runEventLoop(stop <-chan struct{}, done chan<- struct{}) {
 	}
 }
 
-func (s *Server) stateEventPayload() (string, error) {
-	b, err := json.Marshal(s.status())
-	if err != nil {
-		return "", err
+// stateEventPayload is the state event for a stream that last carried the
+// queue at version sent: the queue is left out while a versioned queue is
+// unchanged, so a long queue is not resent with every position update. It
+// returns the queue version the event leaves the stream at.
+func (s *Server) stateEventPayload(sent uint64) (string, uint64, error) {
+	var st State
+	if s.statusSince != nil {
+		st = s.statusSince(sent)
+	} else {
+		st = s.status()
 	}
-	return string(b), nil
+	if st.QueueVersion != 0 && st.QueueVersion == sent {
+		st.Queue = nil
+	}
+	b, err := json.Marshal(st)
+	if err != nil {
+		return "", 0, err
+	}
+	return string(b), st.QueueVersion, nil
 }
 
 func (s *Server) signalEventSubscribers() {
@@ -900,7 +942,7 @@ func (s *Server) handleRemote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	if !s.webRemoteEnabled() {
+	if !s.WebRemoteEnabled() {
 		http.NotFound(w, r)
 		return
 	}
@@ -913,6 +955,20 @@ func (s *Server) handleRemote(w http.ResponseWriter, r *http.Request) {
 // issues a per-device session token (and id). The code is single-use and
 // time-limited (5min TTL). Failed attempts are rate-limited with lockout.
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
+	// Only the bundled SPA may try codes: another page open on the phone could
+	// otherwise burn the attempts and lock pairing out. A cross-site page cannot
+	// send a JSON body without a CORS preflight (never answered), and a browser
+	// names its page in Origin.
+	if ct, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); !strings.EqualFold(strings.TrimSpace(ct), "application/json") {
+		writeJSONError(w, http.StatusUnsupportedMediaType, "content type must be application/json")
+		return
+	}
+	if o := r.Header.Get("Origin"); o != "" {
+		if u, err := url.Parse(o); err != nil || !strings.EqualFold(u.Host, r.Host) {
+			writeJSONError(w, http.StatusForbidden, "cross-origin pairing refused")
+			return
+		}
+	}
 	// Read the code from the JSON body only. The pairing code is a credential that
 	// mints a 12h session token, so it must never travel in the query string (which
 	// leaks into proxy/access logs, browser history and Referer) — matching this
@@ -1249,7 +1305,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	subscriber := s.subscribeEvents()
 	defer s.unsubscribeEvents(subscriber)
 
-	initial, err := s.stateEventPayload()
+	initial, queueSent, err := s.stateEventPayload(0)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1312,7 +1368,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				continue
 			default:
 			}
-			payload, err := s.stateEventPayload()
+			payload, version, err := s.stateEventPayload(queueSent)
 			if err != nil {
 				continue
 			}
@@ -1322,7 +1378,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if err := writeSSEChunk(controller, w, "event: state\ndata: "+payload+"\n\n"); err != nil {
 				return
 			}
-			lastSent = payload
+			lastSent, queueSent = payload, version
 		case <-keepalive.C:
 			if err := writeSSEChunk(controller, w, ": keepalive\n\n"); err != nil {
 				return
@@ -1446,11 +1502,12 @@ func (s *Server) handleVolume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePlaylists(w http.ResponseWriter, r *http.Request) {
-	if s.client == nil {
+	client := s.client.Load()
+	if client == nil {
 		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
 		return
 	}
-	ps, err := s.client.Playlists()
+	ps, err := client.Playlists()
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -1459,7 +1516,8 @@ func (s *Server) handlePlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	if s.client == nil {
+	client := s.client.Load()
+	if client == nil {
 		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
 		return
 	}
@@ -1468,7 +1526,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"q required"}`, http.StatusBadRequest)
 		return
 	}
-	res, err := s.client.Search(q)
+	res, err := client.Search(q)
 	if err != nil {
 		writeErr(w, err)
 		return

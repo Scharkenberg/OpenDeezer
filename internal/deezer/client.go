@@ -45,6 +45,12 @@ var ErrNoNetwork = errors.New("no internet connection")
 // failure instead of a silent clip downgrade.
 var ErrNoFullMedia = errors.New("no full-length media available for this account")
 
+// ErrNotFound wraps a REST lookup of an id or code Deezer does not know.
+var ErrNotFound = errors.New("not found")
+
+// restNoData is the REST error code for an unknown id ("no data").
+const restNoData = 800
+
 // classifyNet wraps err with ErrNoNetwork when it is a transport/reachability
 // failure (so errors.Is(err, ErrNoNetwork) holds), and returns err unchanged
 // otherwise. Every c.http.Do call site pipes its transport error through this so
@@ -55,7 +61,13 @@ func classifyNet(err error) error {
 	if err == nil {
 		return nil
 	}
-	if isNetworkErr(err) {
+	network := isNetworkErr(err)
+	// A *url.Error prints its URL, and gw URLs carry the api_token.
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = fmt.Errorf("%s: %w", ue.Op, ue.Err)
+	}
+	if network {
 		return fmt.Errorf("%w: %v", ErrNoNetwork, err)
 	}
 	return err
@@ -163,8 +175,12 @@ type Client struct {
 	userID       string
 	userName     string
 	offerName    string // e.g. "Deezer Premium", "Deezer Free"
+	picture      string // profile picture URL, "" when the user has none
 	canHiFi      bool   // account entitled to lossless
 	canHQ        bool   // account entitled to MP3_320
+
+	loginMu        sync.Mutex
+	licenseRelogin atomic.Int64 // unix seconds of the last re-login for a licence-token rejection
 
 	// Free-tier ads / listen logging (see ads.go). adMu guards the cadence state.
 	adMu        sync.Mutex
@@ -172,6 +188,14 @@ type Client struct {
 	adCad       AdCadence   // audio-ad schedule (Enabled=false on paid accounts)
 	adPlays     int         // tracks reported this session (drives the cadence)
 	adsDisabled atomic.Bool // user opted out of play-reporting/ads (free, at own risk)
+
+	// TrackInfo cache (see trackinfo.go): results per track id, at most
+	// trackInfoCacheSize, oldest evicted first, and the fetches in flight.
+	// infoMu guards all three.
+	infoMu     sync.Mutex
+	infoCache  map[string]infoEntry
+	infoOrder  []string
+	infoFlight map[string]*infoCall
 }
 
 // Account summarizes the logged-in user's plan and entitlements.
@@ -179,6 +203,7 @@ type Account struct {
 	UserID   string `json:"userId"`
 	Name     string `json:"name"`
 	Offer    string `json:"offer"`
+	Picture  string `json:"picture"` // profile picture URL, "" when none
 	CanHQ    bool   `json:"canHq"`   // entitled to MP3 320
 	CanHiFi  bool   `json:"canHifi"` // entitled to lossless FLAC
 	Premium  bool   `json:"premium"` // a paid plan that can stream on-demand
@@ -224,7 +249,8 @@ func New(arl string) *Client {
 	return &Client{
 		arl: strings.TrimSpace(arl),
 		http: &http.Client{
-			Timeout: 30 * time.Second,
+			Transport: Transport(),
+			Timeout:   30 * time.Second,
 			// We don't install a cookie jar (we set the Cookie header ourselves), so
 			// the only reason to override CheckRedirect is to keep a sane hop cap: a
 			// bare `return nil` would disable Go's default 10-redirect limit and let a
@@ -262,19 +288,24 @@ func (c *Client) licTok() string {
 	return c.licenseToken
 }
 
-func (c *Client) cookie() string {
+// session returns the API token and the cookie of one login, read together so a
+// concurrent re-login cannot pair a new token with an old sid.
+func (c *Client) session() (apiToken, cookie string) {
 	c.mu.RLock()
-	sid := c.sid
+	apiToken, sid := c.apiToken, c.sid
 	c.mu.RUnlock()
-	ck := "arl=" + c.arl // arl is immutable after New
+	cookie = "arl=" + c.arl // arl is immutable after New
 	if sid != "" {
-		ck += "; sid=" + sid
+		cookie += "; sid=" + sid
 	}
-	return ck
+	return apiToken, cookie
 }
 
 // Login authenticates and fetches api_token + license_token + sid + user id.
+// Concurrent calls run one at a time.
 func (c *Client) Login() error {
+	c.loginMu.Lock()
+	defer c.loginMu.Unlock()
 	u := gwURL + "?method=deezer.getUserData&input=3&api_version=1.0&api_token="
 	req, err := http.NewRequest(http.MethodPost, u, strings.NewReader("{}"))
 	if err != nil {
@@ -289,6 +320,10 @@ func (c *Client) Login() error {
 		return classifyNet(err)
 	}
 	defer resp.Body.Close()
+	// A 5xx with an empty result is an outage, not an expired ARL.
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("deezer gw deezer.getUserData: %s", resp.Status)
+	}
 
 	// Pull sid from Set-Cookie.
 	var sid string
@@ -309,6 +344,7 @@ func (c *Client) Login() error {
 				UserID    json.Number `json:"USER_ID"`
 				BlogName  string      `json:"BLOG_NAME"`
 				Firstname string      `json:"FIRSTNAME"`
+				Picture   string      `json:"USER_PICTURE"`
 				Options   struct {
 					LicenseToken   string `json:"license_token"`
 					WebHQ          bool   `json:"web_hq"`
@@ -372,6 +408,7 @@ func (c *Client) Login() error {
 	c.canHQ = canHQ
 	c.canHiFi = canHiFi
 	c.offerName = offerName
+	c.picture = gwImage("user", parsed.Results.User.Picture)
 	c.mu.Unlock()
 	return nil
 }
@@ -384,6 +421,7 @@ func (c *Client) Account() Account {
 		UserID:  c.userID,
 		Name:    c.userName,
 		Offer:   c.offerName,
+		Picture: c.picture,
 		CanHQ:   c.canHQ,
 		CanHiFi: c.canHiFi,
 		// Premium = entitled to on-demand HQ/lossless streaming. Deezer Free has
@@ -394,17 +432,17 @@ func (c *Client) Account() Account {
 }
 
 // gwRaw performs one gw-light call and returns the raw response body.
-func (c *Client) gwRaw(method, jsonBody string) ([]byte, error) {
-	apiToken := c.apiTok()
+func (c *Client) gwRaw(ctx context.Context, method, jsonBody string) ([]byte, error) {
+	apiToken, cookie := c.session()
 	if apiToken == "" {
 		return nil, fmt.Errorf("not logged in")
 	}
 	u := gwURL + "?method=" + method + "&input=3&api_version=1.0&api_token=" + url.QueryEscape(apiToken)
-	req, err := http.NewRequest(http.MethodPost, u, strings.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Cookie", c.cookie())
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := c.http.Do(req)
@@ -412,6 +450,9 @@ func (c *Client) gwRaw(method, jsonBody string) ([]byte, error) {
 		return nil, classifyNet(err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("deezer gw %s: %s", method, resp.Status)
+	}
 	return io.ReadAll(resp.Body)
 }
 
@@ -442,7 +483,12 @@ func jsonEsc(s string) string {
 // gw calls a gw method, transparently re-logging in once if the API token has
 // expired (Deezer rotates it), and returns an error on a non-empty envelope.
 func (c *Client) gw(method, jsonBody string) ([]byte, error) {
-	body, err := c.gwRaw(method, jsonBody)
+	return c.gwCtx(context.Background(), method, jsonBody)
+}
+
+// gwCtx is gw bounded by ctx.
+func (c *Client) gwCtx(ctx context.Context, method, jsonBody string) ([]byte, error) {
+	body, err := c.gwRaw(ctx, method, jsonBody)
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +498,7 @@ func (c *Client) gw(method, jsonBody string) ([]byte, error) {
 		if err := c.Login(); err != nil {
 			return nil, fmt.Errorf("re-login: %w", err)
 		}
-		body, err = c.gwRaw(method, jsonBody)
+		body, err = c.gwRaw(ctx, method, jsonBody)
 		if err != nil {
 			return nil, err
 		}
@@ -475,7 +521,12 @@ func (c *Client) getRestURL() string {
 // an HTTP-200 body with an "error" envelope ({"error":{"type":...,"code":...}}),
 // so that is surfaced as a Go error rather than decoding to empty results.
 func (c *Client) restGet(path string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, c.getRestURL()+path, nil)
+	return c.restGetCtx(context.Background(), path)
+}
+
+// restGetCtx is restGet bounded by ctx.
+func (c *Client) restGetCtx(ctx context.Context, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.getRestURL()+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -505,17 +556,28 @@ func (c *Client) restGet(path string) ([]byte, error) {
 		if msg == "" {
 			msg = env.Error.Type
 		}
+		if env.Error.Code == restNoData {
+			return nil, fmt.Errorf("deezer rest %s: %s: %w", path, msg, ErrNotFound)
+		}
 		return nil, fmt.Errorf("deezer rest %s: %s (code %d)", path, msg, env.Error.Code)
 	}
 	return b, nil
 }
 
-// gwCover builds a 250x250 cover URL from an md5 image hash.
-func gwCover(md5 string) string {
+// gwImage builds a 250x250 CDN image URL from a gw md5 hash. The CDN files images
+// by kind ("cover", "playlist", "user", "artist") and answers a wrong kind with a
+// blank placeholder (HTTP 200), so the kind must match the hash's.
+func gwImage(kind, md5 string) string {
+	return gwImageSize(kind, md5, 250)
+}
+
+// gwImageSize is gwImage for a square edge of px pixels; 1000 is the largest
+// size the CDN serves (the REST *_xl URLs).
+func gwImageSize(kind, md5 string, px int) string {
 	if md5 == "" {
 		return ""
 	}
-	return "https://e-cdns-images.dzcdn.net/images/cover/" + md5 + "/250x250-000000-80-0-0.jpg"
+	return fmt.Sprintf("https://e-cdns-images.dzcdn.net/images/%s/%s/%dx%d-000000-80-0-0.jpg", kind, md5, px, px)
 }
 
 // ---- REST DTOs ----
@@ -594,7 +656,7 @@ func (g gwTrackDTO) toTrack() Track {
 		DurationMS: durSec * 1000,
 		Artists:    []Artist{{ID: g.ArtID.String(), Name: g.ArtName}},
 		AlbumName:  g.AlbTitle,
-		ArtworkURL: gwCover(g.AlbPicture),
+		ArtworkURL: gwImage("cover", g.AlbPicture),
 		Explicit:   exp != 0,
 	}
 }
@@ -778,18 +840,28 @@ const albumPageSize = 100
 // silently truncated. Any page error fails the whole listing (SaveAlbum
 // depends on a complete tracklist). Bounded by maxTracks like gwTrackAll.
 func (c *Client) AlbumTracks(id string) ([]Track, error) {
-	var out []Track
+	ts, _, err := c.AlbumTracksTotal(id)
+	return ts, err
+}
+
+// AlbumTracksTotal is AlbumTracks with the album's declared track count (the
+// first page's "total"; 0 when the reply has none).
+func (c *Client) AlbumTracksTotal(id string) (out []Track, total int, err error) {
 	for index := 0; index < maxTracks; index += albumPageSize {
 		b, err := c.restGet(fmt.Sprintf("/album/%s/tracks?limit=%d&index=%d", id, albumPageSize, index))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		var r struct {
-			Data []restTrackDTO `json:"data"`
-			Next string         `json:"next"`
+			Data  []restTrackDTO `json:"data"`
+			Next  string         `json:"next"`
+			Total int            `json:"total"`
 		}
 		if err := json.Unmarshal(b, &r); err != nil {
-			return nil, err
+			return nil, 0, err
+		}
+		if index == 0 {
+			total = r.Total
 		}
 		for _, t := range r.Data {
 			out = append(out, t.toTrack())
@@ -800,7 +872,7 @@ func (c *Client) AlbumTracks(id string) ([]Track, error) {
 			break
 		}
 	}
-	return out, nil
+	return out, total, nil
 }
 
 // pageSize is the per-request page for paginated gw lists.
@@ -810,33 +882,35 @@ const pageSize = 200
 const maxTracks = 5000
 
 // gwTrackPage fetches one page of gw tracks for a method whose body is
-// "<extra>,\"nb\":<n>,\"start\":<s>".
-func (c *Client) gwTrackPage(method, extra string, start, nb int) ([]Track, error) {
+// "<extra>,\"nb\":<n>,\"start\":<s>", with the list's declared length
+// (results.total; 0 when the reply has none).
+func (c *Client) gwTrackPage(method, extra string, start, nb int) ([]Track, int, error) {
 	body := fmt.Sprintf(`{%s,"nb":%d,"start":%d}`, extra, nb, start)
 	b, err := c.gw(method, body)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var r struct {
 		Results struct {
-			Data []gwTrackDTO `json:"data"`
+			Data  []gwTrackDTO `json:"data"`
+			Total int          `json:"total"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(b, &r); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	out := make([]Track, 0, len(r.Results.Data))
 	for _, t := range r.Results.Data {
 		out = append(out, t.toTrack())
 	}
-	return out, nil
+	return out, r.Results.Total, nil
 }
 
 // gwTrackAll pages through a gw track list until it's exhausted.
 func (c *Client) gwTrackAll(method, extra string) ([]Track, error) {
 	var all []Track
 	for start := 0; start < maxTracks; start += pageSize {
-		page, err := c.gwTrackPage(method, extra, start, pageSize)
+		page, _, err := c.gwTrackPage(method, extra, start, pageSize)
 		if err != nil {
 			if len(all) > 0 {
 				return all, nil // keep what we have on a mid-fetch error
@@ -853,19 +927,26 @@ func (c *Client) gwTrackAll(method, extra string) ([]Track, error) {
 
 // PlaylistTracks lists a playlist's tracks (gw, works for private playlists).
 // A mid-fetch page error is tolerated (partial list, nil error) — acceptable
-// for browse/UI. Batch downloads must use playlistTracksStrict instead.
+// for browse/UI. Batch downloads must use PlaylistTracksStrict instead.
 func (c *Client) PlaylistTracks(id string) ([]Track, error) {
 	return c.gwTrackAll("playlist.getSongs", fmt.Sprintf(`"playlist_id":%s`, jsonEsc(id)))
 }
 
-// playlistTracksStrict is PlaylistTracks without gwTrackAll's mid-fetch
-// tolerance: any page error fails the whole listing. SavePlaylist uses it so
-// a truncated playlist is never downloaded and reported as success.
-func (c *Client) playlistTracksStrict(id string) ([]Track, error) {
+// PlaylistTracksStrict is PlaylistTracks without gwTrackAll's mid-fetch
+// tolerance: any page error fails the whole listing. SavePlaylist and offline
+// pins use it, so a truncated playlist is never downloaded and reported as
+// success, nor kept in step by unpinning its tail. total is the playlist's
+// declared length (0 when the reply has none).
+func (c *Client) PlaylistTracksStrict(id string) (ts []Track, total int, err error) {
 	extra := fmt.Sprintf(`"playlist_id":%s`, jsonEsc(id))
-	return collectTrackPagesStrict(func(start, nb int) ([]Track, error) {
-		return c.gwTrackPage("playlist.getSongs", extra, start, nb)
+	ts, err = collectTrackPagesStrict(func(start, nb int) ([]Track, error) {
+		page, n, err := c.gwTrackPage("playlist.getSongs", extra, start, nb)
+		if start == 0 {
+			total = n
+		}
+		return page, err
 	})
+	return ts, total, err
 }
 
 // collectTrackPagesStrict pages through a track list via fetch(start, nb),
@@ -933,6 +1014,7 @@ func (c *Client) Playlists() ([]Playlist, error) {
 							Title           string      `json:"TITLE"`
 							NbSong          json.Number `json:"NB_SONG"`
 							PlaylistPicture string      `json:"PLAYLIST_PICTURE"`
+							PictureType     string      `json:"PICTURE_TYPE"`
 						} `json:"data"`
 					} `json:"playlists"`
 				} `json:"TAB"`
@@ -948,7 +1030,7 @@ func (c *Client) Playlists() ([]Playlist, error) {
 				ID:         p.PlaylistID.String(),
 				Name:       p.Title,
 				TrackCount: int(n),
-				ArtworkURL: gwCover(p.PlaylistPicture),
+				ArtworkURL: playlistImage(p.PictureType, p.PlaylistPicture),
 			})
 		}
 		if len(page) < plPage {
@@ -958,35 +1040,77 @@ func (c *Client) Playlists() ([]Playlist, error) {
 	return out, nil
 }
 
-// trackToken fetches the per-track token needed for media URL resolution, plus
-// the track's ReplayGain (dB) so playback can be loudness-normalized. GAIN is
-// already present in the song.getData payload, so this costs no extra request.
-func (c *Client) trackToken(trackID string) (token string, gainDB float64, err error) {
-	b, err := c.gw("song.getData", fmt.Sprintf(`{"sng_id":%s}`, jsonEsc(trackID)))
+// PlaylistInfo returns one playlist's title, picture and track count (gw
+// playlist.getData, private playlists too).
+func (c *Client) PlaylistInfo(id string) (Playlist, error) {
+	b, err := c.gw("playlist.getData", fmt.Sprintf(`{"playlist_id":%s}`, jsonEsc(id)))
 	if err != nil {
-		return "", 0, err
+		return Playlist{}, err
 	}
 	var r struct {
 		Results struct {
+			Title           string      `json:"TITLE"`
+			NbSong          json.Number `json:"NB_SONG"`
+			PlaylistPicture string      `json:"PLAYLIST_PICTURE"`
+			PictureType     string      `json:"PICTURE_TYPE"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		return Playlist{}, err
+	}
+	n, _ := r.Results.NbSong.Int64()
+	return Playlist{ID: id, Name: r.Results.Title, TrackCount: int(n), ArtworkURL: playlistImage(r.Results.PictureType, r.Results.PlaylistPicture)}, nil
+}
+
+// playlistImage is a playlist's picture URL: PICTURE_TYPE "playlist" for
+// editorial and dynamic pictures, else "cover" (also the four-hash mosaics of
+// user playlists).
+func playlistImage(pictureType, md5 string) string {
+	if pictureType == "playlist" {
+		return gwImage("playlist", md5)
+	}
+	return gwImage("cover", md5)
+}
+
+// songData fetches song.getData once: the track's metadata, the per-track
+// token needed for media URL resolution, and the track's ReplayGain (dB) so
+// playback can be loudness-normalized.
+func (c *Client) songData(trackID string) (t Track, token string, gainDB float64, err error) {
+	b, err := c.gw("song.getData", fmt.Sprintf(`{"sng_id":%s}`, jsonEsc(trackID)))
+	if err != nil {
+		return Track{}, "", 0, err
+	}
+	var r struct {
+		Results struct {
+			gwTrackDTO
 			TrackToken string      `json:"TRACK_TOKEN"`
 			Gain       json.Number `json:"GAIN"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(b, &r); err != nil {
-		return "", 0, err
+		return Track{}, "", 0, err
 	}
 	g, _ := strconv.ParseFloat(r.Results.Gain.String(), 64)
-	return r.Results.TrackToken, g, nil
+	return r.Results.toTrack(), r.Results.TrackToken, g, nil
 }
 
 // StreamPlan is the resolved CDN URL + track id for decryption.
 type StreamPlan struct {
-	CDNURL    string
-	TrackID   string
-	Format    string
-	GainDB    float64 // track ReplayGain in dB (0 if unknown)
-	Encrypted bool    // false for plain CDN streams (e.g. podcast episodes)
-	Preview   bool    // true when this is Deezer's public 30-second preview
+	CDNURL  string
+	TrackID string
+	Format  string
+	// AskedFormat is the format the resolve asked for first (the best the
+	// quality setting and the account allowed); Format is what Deezer served,
+	// lower when the track exists in no better one. "" for a plan not
+	// resolved by PrepareStream.
+	AskedFormat string  `json:"-"`
+	GainDB      float64 // track ReplayGain in dB (0 if unknown)
+	Encrypted   bool    // false for plain CDN streams (e.g. podcast episodes)
+	Preview     bool    // true when this is Deezer's public 30-second preview
+
+	// Track is the track's metadata from the song.getData call that resolved
+	// the plan; zero for a cache-sourced plan and for podcast episodes.
+	Track Track `json:"-"`
 
 	// Refresh re-resolves this plan's CDN URL when the current one expires
 	// mid-stream (the CDN answers 403/410 because the signed media URL's token
@@ -998,6 +1122,25 @@ type StreamPlan struct {
 	Refresh func() (*StreamPlan, error) `json:"-"`
 }
 
+// wantedFormat is the first format resolveMediaURL asks for: the best the
+// quality setting and the account allow.
+func (c *Client) wantedFormat() string { return c.WantedFormat(c.Quality()) }
+
+// WantedFormat is the first format a stream at quality q is asked for: the
+// best that quality and the account allow.
+func (c *Client) WantedFormat(q int) string {
+	c.mu.RLock()
+	canHQ, canHiFi := c.canHQ, c.canHiFi
+	c.mu.RUnlock()
+	switch {
+	case q == QualityLossless && canHiFi:
+		return "FLAC"
+	case q >= QualityHigh && canHQ:
+		return "MP3_320"
+	}
+	return "MP3_128"
+}
+
 // resolveMediaURL turns a track token into an encrypted CDN URL. Transport,
 // 5xx and rate-limit problems are retried a couple of times with short backoff
 // before returning the error (no silent preview downgrade). Entitlement
@@ -1005,7 +1148,7 @@ type StreamPlan struct {
 // case) are surfaced as ErrNoFullMedia so PrepareStream can choose the 30 s
 // preview fallback only for those. Re-login is attempted only for non-transient
 // rejections (license token rotation etc).
-func (c *Client) resolveMediaURL(trackToken string) (urlStr, format string, err error) {
+func (c *Client) resolveMediaURL(trackToken string, q int) (urlStr, format string, err error) {
 	licenseToken := c.licTok()
 	if licenseToken == "" || trackToken == "" {
 		return "", "", fmt.Errorf("missing license or track token")
@@ -1027,10 +1170,10 @@ func (c *Client) resolveMediaURL(trackToken string) (urlStr, format string, err 
 	canHQ, canHiFi := c.canHQ, c.canHiFi
 	c.mu.RUnlock()
 	var order []string
-	if atomic.LoadInt32(&c.quality) == QualityLossless && canHiFi {
+	if q == QualityLossless && canHiFi {
 		order = append(order, fflac)
 	}
-	if atomic.LoadInt32(&c.quality) >= QualityHigh && canHQ {
+	if q >= QualityHigh && canHQ {
 		order = append(order, f320)
 	}
 	// Always-entitled full-track fallbacks (what a free account is served).
@@ -1059,16 +1202,26 @@ func (c *Client) resolveMediaURL(trackToken string) (urlStr, format string, err 
 				}
 				return "", "", lastErr
 			}
-			// non-transient rejection: try one re-login (license token rotate case)
-			if err := c.Login(); err != nil {
-				return "", "", fmt.Errorf("get_url: %s (re-login: %w)", apiErr, err)
+			// A refused track (rights, geo) is final. A licence-token rejection
+			// re-logs in, at most once a minute; inside that minute it retries
+			// with a token another call's re-login brought, else fails without
+			// falling back to the preview.
+			if !strings.Contains(strings.ToLower(apiErr), "license") {
+				return "", "", fmt.Errorf("%s: %w", apiErr, ErrNoFullMedia)
+			}
+			if c.claimLicenseRelogin() {
+				if err := c.Login(); err != nil {
+					return "", "", fmt.Errorf("get_url: %s (re-login: %w)", apiErr, err)
+				}
+			} else if c.licTok() == licenseToken {
+				return "", "", fmt.Errorf("get_url: %s", apiErr)
 			}
 			urlStr, format, apiErr, err = c.getMediaURL(c.licTok(), trackToken, formats)
 			if err != nil {
 				return "", "", err
 			}
 			if urlStr == "" && apiErr != "" {
-				// after re-login still rejected: surface as entitlement
+				// Still rejected with a fresh token: surface as entitlement.
 				return "", "", fmt.Errorf("%s: %w", apiErr, ErrNoFullMedia)
 			}
 		}
@@ -1087,6 +1240,13 @@ func (c *Client) resolveMediaURL(trackToken string) (urlStr, format string, err 
 		return "", "", lastErr
 	}
 	return "", "", ErrNoFullMedia
+}
+
+// claimLicenseRelogin reports whether this call may re-log in for a licence
+// token rejection: the first call in a minute claims it.
+func (c *Client) claimLicenseRelogin() bool {
+	now, last := time.Now().Unix(), c.licenseRelogin.Load()
+	return now-last >= 60 && c.licenseRelogin.CompareAndSwap(last, now)
 }
 
 // getMediaURL performs one media get_url call. apiErr carries Deezer's own
@@ -1166,20 +1326,30 @@ func (c *Client) trackPreview(trackID string) (string, error) {
 // resolveMediaURL are retried inside the resolver and, if still failing,
 // returned as-is — a premium user never gets a 30 s clip during a CDN hiccup.
 func (c *Client) PrepareStream(trackID string) (*StreamPlan, error) {
+	return c.PrepareStreamAt(trackID, c.Quality())
+}
+
+// PrepareStreamAt is PrepareStream at quality q (0..2) instead of the
+// client's setting.
+func (c *Client) PrepareStreamAt(trackID string, q int) (*StreamPlan, error) {
 	if !c.LoggedIn() {
 		return nil, fmt.Errorf("not logged in")
 	}
-	tok, gain, err := c.trackToken(trackID)
-	if err == nil && tok != "" {
-		u, format, mErr := c.resolveMediaURL(tok)
+	t, tok, gain, err := c.songData(trackID)
+	if err != nil {
+		return nil, err
+	}
+	if tok != "" {
+		asked := c.WantedFormat(q)
+		u, format, mErr := c.resolveMediaURL(tok, q)
 		if mErr == nil {
 			// Refresh re-resolves a fresh signed URL for the same track when the
-			// CDN token expires mid-download; PrepareStream already retries the
+			// CDN token expires mid-download; PrepareStreamAt already retries the
 			// media call (re-login on rejection), so re-invoking it is the
 			// natural re-resolution path.
 			return &StreamPlan{
-				CDNURL: u, TrackID: trackID, Format: format, GainDB: gain, Encrypted: true,
-				Refresh: func() (*StreamPlan, error) { return c.PrepareStream(trackID) },
+				CDNURL: u, TrackID: trackID, Format: format, AskedFormat: asked, GainDB: gain, Encrypted: true, Track: t,
+				Refresh: func() (*StreamPlan, error) { return c.PrepareStreamAt(trackID, q) },
 			}, nil
 		}
 		if !errors.Is(mErr, ErrNoFullMedia) {
@@ -1192,7 +1362,7 @@ func (c *Client) PrepareStream(trackID string) (*StreamPlan, error) {
 	// Fallback: the public 30-second preview (unencrypted). Encrypted == false
 	// so the player and downloader stream it straight through, no Blowfish.
 	if prev, pErr := c.trackPreview(trackID); pErr == nil && prev != "" {
-		return &StreamPlan{CDNURL: prev, TrackID: trackID, Format: "MP3_128", GainDB: gain, Encrypted: false, Preview: true}, nil
+		return &StreamPlan{CDNURL: prev, TrackID: trackID, Format: "MP3_128", GainDB: gain, Encrypted: false, Preview: true, Track: t}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -1206,10 +1376,12 @@ func (c *Client) PrepareStream(trackID string) (*StreamPlan, error) {
 // necessary fields (format, Encrypted, GainDB, Preview) with zero network
 // calls — no token or get_url round-trip.
 //
-// If cache is non-nil and a meta entry exists for any format under the track
-// ID, the returned plan has CDNURL=="" (body bytes must be served from the
-// cache by the caller) and Refresh==nil. Otherwise it falls back to
-// PrepareStream (which requires login and performs the network work).
+// If cache is non-nil and holds the track in the format a stream would be
+// asked for or a better one (logged out: in any format, the best one), the
+// returned plan has CDNURL=="" (body bytes must be served from the cache by
+// the caller) and a Refresh that resolves it over the network should the
+// entry be gone by then. Otherwise it falls back to PrepareStream (which
+// requires login and performs the network work).
 //
 // The audio layer (when wired) should prefer this helper when a cache is
 // attached:
@@ -1222,15 +1394,24 @@ func (c *Client) PrepareStream(trackID string) (*StreamPlan, error) {
 // Player.Play today) but can be carried in the meta for future use.
 func (c *Client) PrepareStreamCached(trackID string, cache *mediacache.Cache) (*StreamPlan, error) {
 	if cache != nil {
-		if m, ok := cache.GetMetaForTrack(trackID); ok {
+		// Online a cached copy plays only at the format a stream would be
+		// asked for, or better, or when it was fetched asking for that format
+		// or a better one (Deezer had nothing better to serve); offline the
+		// best copy present plays.
+		want := mediacache.FormatRank(c.wantedFormat())
+		if m, ok := cache.GetMetaForTrack(trackID); ok && (!c.LoggedIn() ||
+			mediacache.FormatRank(m.Format) >= want || mediacache.FormatRank(m.AskedFormat) >= want) {
 			return &StreamPlan{
-				CDNURL:    "", // signals cache-sourced; audio path uses mc.Get to obtain body
-				TrackID:   trackID,
-				Format:    m.Format,
-				GainDB:    m.GainDB,
-				Encrypted: m.Encrypted,
-				Preview:   m.Preview,
-				// Refresh remains nil for cached plans.
+				CDNURL:      "", // signals cache-sourced; audio path uses mc.Get to obtain body
+				TrackID:     trackID,
+				Format:      m.Format,
+				AskedFormat: m.AskedFormat,
+				GainDB:      m.GainDB,
+				Encrypted:   m.Encrypted,
+				Preview:     m.Preview,
+				// The entry can go before the track opens (evicted, expired,
+				// cleared): the player then streams it like a resolved plan.
+				Refresh: func() (*StreamPlan, error) { return c.PrepareStream(trackID) },
 			}, nil
 		}
 	}

@@ -107,9 +107,10 @@ enum Core {
 
     // MARK: playback
 
+    /// False only on a failure: 2 (a newer play took over first) is not one.
     @discardableResult
     static func play(_ id: String, durationMs: Int64) -> Bool {
-        withC(id) { DZPlay($0, Int64(durationMs)) } == 1
+        withC(id) { DZPlay($0, Int64(durationMs)) } != 0
     }
     static func togglePause() { DZTogglePause() }
     static func stop() { DZStop() }
@@ -365,15 +366,23 @@ enum Core {
         withC(js) { DZQueueInsertNext($0) }
     }
 
-    // MARK: offline download (cache a track's ciphertext for zero-network play)
+    // MARK: offline (pinned tracks play with zero network)
 
-    // DZDownloadForOffline pre-fetches the encrypted ciphertext into the on-disk
-    // media cache and persists the stream meta, so a later DZPlay serves it with
-    // zero network. Blocking + premium-only like DZDownloadTrack — call it off the
-    // main thread. Returns {"status":"downloaded"|"cached","key":"..."} on success
-    // or {"error":"..."}.
-    static func downloadForOffline(_ id: String) -> String {
-        takeString(withC(id) { DZDownloadForOffline($0) })
+    private struct ErrorReply: Decodable { let error: String? }
+    private struct OfflineIDsReply: Decodable { let ids: [String]? }
+
+    // DZPinOffline("track", id) records the pin and fetches the track into the
+    // engine's offline store in the background. It may resolve over the network
+    // first, so call it off the main thread. "" once the pin is taken, else the
+    // reason; nil when the reply does not parse.
+    static func pinOffline(_ id: String) -> String? {
+        let js = takeString(withC2("track", id) { DZPinOffline($0, $1) })
+        return decode(ErrorReply.self, Data(js.utf8)).map { $0.error ?? "" }
+    }
+
+    // Every track of this account available offline (DZOfflineIDsJSON).
+    static func offlineIDs() -> [String] {
+        decode(OfflineIDsReply.self, takeJSON(DZOfflineIDsJSON()))?.ids ?? []
     }
 
     // MARK: podcasts (v0.4)
@@ -384,10 +393,11 @@ enum Core {
     static func podcastEpisodes(_ id: String) -> [Episode] {
         decode(EpisodesResponse.self, takeJSON(withC(id) { DZPodcastEpisodesJSON($0) }))?.episodes ?? []
     }
-    /// Plays a podcast episode via the plain (unencrypted) stream path.
+    /// Plays a podcast episode via the plain (unencrypted) stream path. False
+    /// only on a failure, as play.
     @discardableResult
     static func playEpisode(_ id: String, durationMs: Int64) -> Bool {
-        withC(id) { DZPlayEpisode($0, Int64(durationMs)) } == 1
+        withC(id) { DZPlayEpisode($0, Int64(durationMs)) } != 0
     }
 
     // MARK: audio output device (v0.4)

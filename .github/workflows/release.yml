@@ -268,7 +268,7 @@ jobs:
         with:
           files: OpenDeezer-linux-${{ matrix.arch }}.tar.gz
 
-  # ---- Windows GUI (C# WinUI 3 / .NET 8) — needs .NET SDK + MinGW (Go DLL) ----
+  # ---- Windows GUI (C# WinUI 3 / .NET 11): needs the .NET SDK + MinGW (Go DLL) ----
   windows-gui:
     needs: detect
     if: needs.detect.outputs.windows == 'true'
@@ -286,7 +286,7 @@ jobs:
           go-version: "1.25.12"
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "11.0.x"
       - name: Build (Go c-shared DLL + dotnet publish)
         shell: pwsh
         run: cd gui/windows; ./build.ps1

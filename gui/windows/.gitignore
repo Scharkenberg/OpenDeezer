@@ -7,5 +7,6 @@
 *.user
 # NuGet restore
 /packages/
-# generated engine artifact (P/Invoke loads it by name; no import lib needed)
+# generated engine artifacts (P/Invoke loads it by name; no import lib needed)
 /lib/libdeezercore.dll
+/lib/libdeezercore.h

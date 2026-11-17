@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
 )
@@ -54,6 +55,9 @@ const (
 )
 
 var errNoIPC = errors.New("discord: no IPC socket")
+
+// dial opens the IPC connection; tests replace it.
+var dial = dialIPC
 
 // noop is used when no app id is configured or on unsupported platforms.
 type noop struct{}
@@ -92,6 +96,7 @@ type richPresence struct {
 	// or, for conn writes, additionally guarded by wmu.
 	wmu         sync.Mutex // serialises writes to conn (worker + PONG from drain)
 	conn        net.Conn
+	dead        chan struct{} // closed by drain when conn fails (Discord quit or restarted)
 	nonce       int
 	lastKey     string
 	lastStart   int64     // unix secs of the last sent "start" timestamp (0 when not playing)
@@ -146,6 +151,13 @@ func (r *richPresence) push(s State) {
 	// that affects the rendered presence except the timestamps; a bare position
 	// change (seek, repeat-one restart) is caught separately by positionJumped.
 	key := throttleKey(s)
+	if r.conn != nil {
+		select {
+		case <-r.dead:
+			r.drop() // clears lastKey, so the state is sent on the new connection
+		default:
+		}
+	}
 	if key == r.lastKey && !r.positionJumped(s) {
 		return
 	}
@@ -197,7 +209,7 @@ func (r *richPresence) positionJumped(s State) bool {
 // connect dials the IPC socket, handshakes, and starts the drain goroutine.
 // Runs on the worker goroutine (never on the caller's).
 func (r *richPresence) connect() error {
-	conn, err := dialIPC()
+	conn, err := dial()
 	if err != nil {
 		// Common case: Discord isn't running. Log once at debug to avoid spam.
 		if !r.warnedNoIPC {
@@ -222,18 +234,20 @@ func (r *richPresence) connect() error {
 	}
 	_ = conn.SetReadDeadline(time.Time{}) // clear for the drain loop
 	r.conn = conn
+	r.dead = make(chan struct{})
 	r.lastKey = ""
 	r.lastStart = 0
 	r.warnedNoIPC = false
-	go r.drain(conn) // read+discard responses (and PING->PONG) so the RX buffer never fills
+	go r.drain(conn, r.dead) // read+discard responses (and PING->PONG) so the RX buffer never fills
 	odlog.Info("discord: rich presence connected (app %s)", r.appID)
 	return nil
 }
 
 // drain reads and discards every frame Discord sends (SET_ACTIVITY replies,
 // PINGs) so the socket receive buffer never fills; it answers PING with PONG and
-// exits when conn errors (dropped/closed).
-func (r *richPresence) drain(conn net.Conn) {
+// exits when conn errors (dropped/closed), closing dead.
+func (r *richPresence) drain(conn net.Conn, dead chan struct{}) {
+	defer close(dead)
 	for {
 		op, buf, err := readFrame(conn)
 		if err != nil {
@@ -308,7 +322,7 @@ func (r *richPresence) activityFrame(s State) []byte {
 		"details": pad2(trim(s.Title, 128)),
 		"assets": map[string]any{
 			"large_image": "opendeezer",
-			"large_text":  firstNonEmpty(s.Album, "OpenDeezer"),
+			"large_text":  pad2(trim(firstNonEmpty(s.Album, "OpenDeezer"), 128)),
 		},
 	}
 	if s.Artist != "" {
@@ -378,17 +392,18 @@ func readFrame(r io.Reader) (int32, []byte, error) {
 
 // ---- helpers ----
 
+// trim cuts s to at most n characters.
 func trim(s string, n int) string {
-	if len(s) <= n {
-		return s
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
 	}
-	return s[:n]
+	return s
 }
 
 // pad2 ensures a Discord string field is at least 2 chars (Discord rejects a
 // 1-char details/state, which would silently drop the whole SET_ACTIVITY).
 func pad2(s string) string {
-	if len(s) == 1 {
+	if utf8.RuneCountInString(s) == 1 {
 		return s + " "
 	}
 	return s

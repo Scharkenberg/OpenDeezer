@@ -19,7 +19,7 @@ func TestStripeConsumedOffset(t *testing.T) {
 	// Feed a non-chunk-aligned amount and confirm Consumed == bytes fed.
 	total := int64(0)
 	var out []byte
-	for _, n := range []int{500, chunkSize, 2000, chunkSize*2 + 7} {
+	for _, n := range []int{500, StripeChunk, 2000, StripeChunk*2 + 7} {
 		out = d.Feed(make([]byte, n), out[:0])
 		total += int64(n)
 		if got := d.Consumed(); got != total {

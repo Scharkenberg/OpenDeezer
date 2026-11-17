@@ -43,7 +43,7 @@ func stopCountingServer(t *testing.T, stops *int32, hit chan<- struct{}) *httpte
 	}))
 }
 
-// TestRemoteEscDetachesWithoutStoppingPeer pins B18: leaving the remote screen
+// TestRemoteEscDetachesWithoutStoppingPeer: leaving the remote screen
 // with esc must detach non-destructively — it must NOT send Stop to the peer
 // (disconnect != stop its music) and must not make a blocking HTTP call on the
 // update loop (esc returns nil, no cmd, and never hits the peer).
@@ -113,7 +113,8 @@ func TestRemoteStopKeyStopsPeerAndDetaches(t *testing.T) {
 // peer, the r/z keys must forward to the peer and leave the LOCAL queue's
 // repeat/shuffle untouched (the peer's reported state drives the display).
 func TestRepeatShuffleKeysDoNotMutateLocalWhenRemote(t *testing.T) {
-	m := interactionModel(screenList) // not the remote screen: global keys own r/z
+	m := interactionModel(screenLyrics) // the peer's lyrics: global keys own r/z
+	m.prevScreen = screenRemoteCtl
 	m.q.Set(testTracks(3), 0)
 	m.remote = control.NewClient("http://127.0.0.1:0", "", "acct") // cmd never executed
 
@@ -137,10 +138,9 @@ func TestRepeatShuffleKeysDoNotMutateLocalWhenRemote(t *testing.T) {
 	}
 }
 
-// TestPlaybackKeysRouteToPeerWhenRemote pins item 4: on the remote lyrics/
-// now-playing screens the transport keys must target the peer, not the local
-// player. The model has a nil player, so any LOCAL playback path would panic —
-// returning a peer cmd instead proves the key routed to the peer.
+// TestPlaybackKeysRouteToPeerWhenRemote pins item 4: on the lyrics screen
+// opened from the remote screen the transport keys must target the peer, not
+// the local player: the key's cmd must report a peer status.
 func TestPlaybackKeysRouteToPeerWhenRemote(t *testing.T) {
 	keys := []tea.KeyMsg{
 		{Type: tea.KeyRunes, Runes: []rune{' '}}, // play/pause
@@ -153,13 +153,79 @@ func TestPlaybackKeysRouteToPeerWhenRemote(t *testing.T) {
 		{Type: tea.KeyRunes, Runes: []rune{'-'}}, // volume down
 	}
 	for _, k := range keys {
-		// Fresh model per key: nil player means a local playback path panics.
 		m := interactionModel(screenLyrics)
+		m.prevScreen = screenRemoteCtl
 		m.remote = control.NewClient("http://127.0.0.1:0", "", "acct")
 		m.remoteState = control.State{Volume: 0.5, PositionMS: 30000}
 		_, cmd := m.handleKey(k)
 		if cmd == nil {
 			t.Fatalf("key %q while driving a peer returned no cmd (routed locally?)", k.String())
 		}
+		if _, ok := cmd().(remoteStateMsg); !ok {
+			t.Fatalf("key %q was routed locally", k.String())
+		}
+	}
+}
+
+// Leaving the remote screens detaches; transport keys act locally again.
+func TestRemoteDetachesOnLocalNavigation(t *testing.T) {
+	m := interactionModel(screenLyrics)
+	m.prevScreen = screenRemoteCtl
+	m.remote = control.NewClient("http://127.0.0.1:0", "", "acct")
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if m.screen != screenSearch || m.remote != nil {
+		t.Fatalf("screen %v, remote attached %v", m.screen, m.remote != nil)
+	}
+}
+
+// On a local list, transport keys never reach an attached peer.
+func TestTransportKeysLocalOffRemoteScreens(t *testing.T) {
+	var hits atomic.Int32
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"paused"}`))
+	}))
+	defer peer.Close()
+	m := interactionModel(screenList)
+	m.remote = control.NewClient(peer.URL, "", "acct")
+	for _, k := range []rune{' ', 'n', 'p'} {
+		if _, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}}); cmd != nil {
+			_ = cmd()
+		}
+	}
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("local transport keys sent %d requests to the peer", n)
+	}
+}
+
+// Repeated seek/volume presses add up; replies for a detached peer and
+// overlapping polls are dropped.
+func TestRemoteStateFollowsKeysAndClient(t *testing.T) {
+	m := interactionModel(screenRemoteCtl)
+	m.remote = control.NewClient("http://127.0.0.1:0", "", "acct")
+	m.remoteState = control.State{PositionMS: 30000, Volume: 0.5}
+	for range 3 {
+		_, _ = m.handleRemoteKey(tea.KeyMsg{Type: tea.KeyRight})
+	}
+	_, _ = m.handleRemoteKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
+	_, _ = m.handleRemoteKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
+	if m.remoteState.PositionMS != 60000 || m.remoteState.Volume < 0.69 || m.remoteState.Volume > 0.71 {
+		t.Fatalf("position %d, volume %.2f", m.remoteState.PositionMS, m.remoteState.Volume)
+	}
+
+	m.status = "kept"
+	other := control.NewClient("http://127.0.0.1:0", "", "acct")
+	_, _ = m.Update(remoteStateMsg{client: other, err: errFake})
+	if m.status != "kept" {
+		t.Fatalf("a reply from another client set the status to %q", m.status)
+	}
+
+	if m.remotePoll() == nil || m.remotePoll() != nil {
+		t.Fatal("a second poll started while one was in flight")
+	}
+	_, _ = m.Update(remoteStateMsg{client: m.remote, poll: true})
+	if m.remotePoll() == nil {
+		t.Fatal("no poll after the previous one returned")
 	}
 }

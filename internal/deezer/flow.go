@@ -29,16 +29,16 @@ func (c *Client) Flow() ([]Track, error) {
 			Data []gwTrackDTO `json:"data"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(b, &obj); err == nil && len(obj.Results.Data) > 0 {
+	if err := json.Unmarshal(b, &obj); err == nil {
 		return gwTracksToTracks(obj.Results.Data), nil
 	}
 	var arr struct {
 		Results []gwTrackDTO `json:"results"`
 	}
-	if err := json.Unmarshal(b, &arr); err == nil && len(arr.Results) > 0 {
-		return gwTracksToTracks(arr.Results), nil
+	if err := json.Unmarshal(b, &arr); err != nil {
+		return nil, fmt.Errorf("parse radio.getUserRadio: %w", err)
 	}
-	return nil, nil
+	return gwTracksToTracks(arr.Results), nil
 }
 
 // FlowMore is a semantic alias for Flow. It exists so calling code can

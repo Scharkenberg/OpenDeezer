@@ -204,6 +204,11 @@ func readEvents(ctx context.Context, body io.ReadCloser, events chan Event) {
 	// bounded response reader rather than Scanner's small default token limit.
 	scanner.Buffer(make([]byte, 64<<10), maxControlResponseBytes)
 
+	// The server leaves the queue out of a state event while its version is
+	// unchanged; carry the last one forward so every state is complete.
+	var queue []Track
+	var queueVersion uint64
+
 	event := ""
 	var data strings.Builder
 	hasData := false
@@ -226,6 +231,10 @@ func readEvents(ctx context.Context, body io.ReadCloser, events chan Event) {
 			if err := json.Unmarshal([]byte(data.String()), &state); err != nil {
 				return true
 			}
+			if state.Queue == nil && state.QueueVersion != 0 && state.QueueVersion == queueVersion {
+				state.Queue = queue
+			}
+			queue, queueVersion = state.Queue, state.QueueVersion
 			parsed = Event{Type: EventTypeState, State: &state}
 		case EventTypeFinished:
 			var finished FinishedEvent
@@ -346,7 +355,7 @@ func (c *Client) SetShuffle(on bool) (State, error) {
 	}
 	return c.state(http.MethodPost, "/shuffle?on="+v)
 }
-func (c *Client) Seek(ms int64) (State, error) {
+func (c *Client) SeekMS(ms int64) (State, error) {
 	return c.state(http.MethodPost, "/seek?ms="+strconv.FormatInt(ms, 10))
 }
 func (c *Client) SetVolume(v float64) (State, error) {

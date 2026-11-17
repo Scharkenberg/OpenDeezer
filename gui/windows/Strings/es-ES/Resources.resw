@@ -61,6 +61,12 @@
   <data name="Nav_Home" xml:space="preserve">
     <value>Inicio</value>
   </data>
+  <data name="Nav_Back" xml:space="preserve">
+    <value>Atrás</value>
+  </data>
+  <data name="Nav_Pane" xml:space="preserve">
+    <value>Navegación</value>
+  </data>
   <data name="Nav_LikedSongs" xml:space="preserve">
     <value>Canciones favoritas</value>
   </data>
@@ -79,23 +85,11 @@
   <data name="Nav_Search" xml:space="preserve">
     <value>Buscar</value>
   </data>
-  <data name="Nav_Account" xml:space="preserve">
-    <value>Iniciar sesión / Cambiar de cuenta…</value>
-  </data>
   <data name="Nav_Settings" xml:space="preserve">
     <value>Ajustes</value>
   </data>
-  <data name="Nav_PhoneRemote" xml:space="preserve">
-    <value>Control por teléfono</value>
-  </data>
-  <data name="Nav_About" xml:space="preserve">
-    <value>Acerca de</value>
-  </data>
   <data name="Nav_Artist" xml:space="preserve">
     <value>Artista</value>
-  </data>
-  <data name="Nav_Lyrics" xml:space="preserve">
-    <value>Letra</value>
   </data>
   <data name="Btn_Download" xml:space="preserve">
     <value>Descargar</value>
@@ -103,32 +97,20 @@
   <data name="Btn_NewPlaylist" xml:space="preserve">
     <value>Nueva playlist</value>
   </data>
-  <data name="Btn_Add" xml:space="preserve">
-    <value>Añadir</value>
-  </data>
   <data name="Btn_Cancel" xml:space="preserve">
     <value>Cancelar</value>
   </data>
   <data name="Btn_OK" xml:space="preserve">
     <value>Aceptar</value>
   </data>
-  <data name="Btn_Save" xml:space="preserve">
-    <value>Guardar</value>
-  </data>
-  <data name="Btn_Close" xml:space="preserve">
-    <value>Cerrar</value>
-  </data>
-  <data name="Btn_Quit" xml:space="preserve">
-    <value>Salir</value>
-  </data>
   <data name="Btn_Delete" xml:space="preserve">
     <value>Eliminar</value>
   </data>
   <data name="Btn_LogInWithDeezer" xml:space="preserve">
-    <value>Iniciar sesión con Deezer</value>
+    <value>Continuar con Deezer</value>
   </data>
   <data name="Btn_EnterArlManually" xml:space="preserve">
-    <value>Introducir ARL manualmente</value>
+    <value>Usar un token ARL</value>
   </data>
   <data name="Section_TopTracks" xml:space="preserve">
     <value>Top de canciones</value>
@@ -154,15 +136,6 @@
   <data name="Search_TracksHeader" xml:space="preserve">
     <value>Canciones</value>
   </data>
-  <data name="Search_AlbumsPlaylistsHeader" xml:space="preserve">
-    <value>Álbumes y playlists</value>
-  </data>
-  <data name="Podcast_SearchPlaceholder" xml:space="preserve">
-    <value>Buscar podcasts…</value>
-  </data>
-  <data name="Podcast_ShowsHeader" xml:space="preserve">
-    <value>Programas</value>
-  </data>
   <data name="Greeting_Morning" xml:space="preserve">
     <value>Buenos días</value>
   </data>
@@ -172,20 +145,11 @@
   <data name="Greeting_Evening" xml:space="preserve">
     <value>Buenas noches</value>
   </data>
-  <data name="Tooltip_Like" xml:space="preserve">
-    <value>Me gusta / quitar</value>
-  </data>
-  <data name="Tooltip_AddToPlaylist" xml:space="preserve">
-    <value>Añadir a playlist</value>
-  </data>
   <data name="Tooltip_Shuffle" xml:space="preserve">
     <value>Aleatorio</value>
   </data>
   <data name="Tooltip_Previous" xml:space="preserve">
     <value>Anterior</value>
-  </data>
-  <data name="Tooltip_PlayPause" xml:space="preserve">
-    <value>Reproducir / pausa</value>
   </data>
   <data name="Tooltip_Next" xml:space="preserve">
     <value>Siguiente</value>
@@ -201,9 +165,6 @@
   </data>
   <data name="Tooltip_Lyrics" xml:space="preserve">
     <value>Letra</value>
-  </data>
-  <data name="Tooltip_Artist" xml:space="preserve">
-    <value>Artista</value>
   </data>
   <data name="Tooltip_Connect" xml:space="preserve">
     <value>Conectar a un dispositivo</value>
@@ -226,26 +187,8 @@
   <data name="Status_LoggingIn" xml:space="preserve">
     <value>Iniciando sesión…</value>
   </data>
-  <data name="Status_LoginFailed" xml:space="preserve">
-    <value>Error al iniciar sesión</value>
-  </data>
-  <data name="Status_CheckingAccount" xml:space="preserve">
-    <value>Comprobando la cuenta…</value>
-  </data>
-  <data name="Status_NotPlaying" xml:space="preserve">
-    <value>Nada en reproducción</value>
-  </data>
-  <data name="Status_NotSignedIn" xml:space="preserve">
-    <value>Sin iniciar sesión</value>
-  </data>
-  <data name="Status_Loading" xml:space="preserve">
-    <value>Cargando…</value>
-  </data>
   <data name="Connect_Title" xml:space="preserve">
     <value>Conectar a un dispositivo</value>
-  </data>
-  <data name="Connect_SignIn" xml:space="preserve">
-    <value>Inicia sesión para usar Connect.</value>
   </data>
   <data name="Connect_Searching" xml:space="preserve">
     <value>Buscando dispositivos…</value>
@@ -265,9 +208,6 @@
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>Reproduciendo en {0}</value>
   </data>
-  <data name="Connect_PlayHere" xml:space="preserve">
-    <value>Reproducir aquí</value>
-  </data>
   <data name="ConnectType_Terminal" xml:space="preserve">
     <value>Terminal</value>
   </data>
@@ -277,50 +217,14 @@
   <data name="Lyrics_PlayPrompt" xml:space="preserve">
     <value>Reproduce una canción para ver su letra.</value>
   </data>
-  <data name="Lyrics_Loading" xml:space="preserve">
-    <value>Cargando la letra…</value>
-  </data>
   <data name="Lyrics_None" xml:space="preserve">
     <value>No hay letra disponible.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Inicia sesión en Deezer</value>
-  </data>
-  <data name="Dialog_SignInBody" xml:space="preserve">
-    <value>Elige cómo quieres iniciar sesión.</value>
-  </data>
-  <data name="Dialog_WebLoginTitle" xml:space="preserve">
-    <value>Iniciar sesión con Deezer</value>
-  </data>
-  <data name="Dialog_LogInWithArlTitle" xml:space="preserve">
-    <value>Iniciar sesión con ARL</value>
+    <value>Inicia sesión en OpenDeezer</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>Pega tu ARL de Deezer</value>
-  </data>
-  <data name="Dialog_LoginFailedTitle" xml:space="preserve">
-    <value>Error al iniciar sesión</value>
-  </data>
-  <data name="Dialog_LoginFailedBody" xml:space="preserve">
-    <value>Ese ARL no es válido o ha caducado. Vuelve a iniciar sesión.</value>
-  </data>
-  <data name="Dialog_NoArtistTitle" xml:space="preserve">
-    <value>Sin artista</value>
-  </data>
-  <data name="Dialog_NoArtistBody" xml:space="preserve">
-    <value>Reproduce una canción para ver su artista.</value>
-  </data>
-  <data name="Dialog_NoTrackTitle" xml:space="preserve">
-    <value>Sin canción</value>
-  </data>
-  <data name="Dialog_NoTrackBody" xml:space="preserve">
-    <value>Reproduce una canción para añadirla a una playlist.</value>
-  </data>
-  <data name="Dialog_AddToPlaylistTitle" xml:space="preserve">
-    <value>Añadir a playlist</value>
-  </data>
-  <data name="Dialog_NewPlaylistItem" xml:space="preserve">
-    <value>＋  Nueva playlist…</value>
   </data>
   <data name="Dialog_NewPlaylistTitle" xml:space="preserve">
     <value>Nueva playlist</value>
@@ -341,34 +245,31 @@
     <value>No se pudo crear la playlist</value>
   </data>
   <data name="Dialog_CreateFailBody" xml:space="preserve">
-    <value>No se ha podido crear la playlist.</value>
+    <value>Deezer no creó la playlist. Inténtalo de nuevo.</value>
   </data>
   <data name="Dialog_AddFailTitle" xml:space="preserve">
     <value>No se pudo añadir a la playlist</value>
   </data>
   <data name="Dialog_AddFailBody" xml:space="preserve">
-    <value>No se ha podido añadir la canción.</value>
+    <value>Deezer no añadió la canción. Inténtalo de nuevo.</value>
   </data>
   <data name="Dialog_RenameFailTitle" xml:space="preserve">
     <value>No se pudo cambiar el nombre</value>
   </data>
   <data name="Dialog_RenameFailBody" xml:space="preserve">
-    <value>No se ha podido cambiar el nombre de la playlist.</value>
+    <value>Deezer no cambió el nombre de la playlist. Inténtalo de nuevo.</value>
   </data>
   <data name="Dialog_DeleteFailTitle" xml:space="preserve">
     <value>No se pudo eliminar</value>
   </data>
   <data name="Dialog_DeleteFailBody" xml:space="preserve">
-    <value>No se ha podido eliminar la playlist.</value>
+    <value>Deezer no eliminó la playlist. Inténtalo de nuevo.</value>
   </data>
   <data name="Dialog_ConnectFailTitle" xml:space="preserve">
     <value>No se pudo conectar</value>
   </data>
   <data name="Dialog_ConnectFailBody" xml:space="preserve">
-    <value>No se pudo contactar con ese dispositivo.</value>
-  </data>
-  <data name="Account_FreeQualityHint" xml:space="preserve">
-    <value>Cuenta gratuita · calidad estándar (128 kbps)</value>
+    <value>El dispositivo no respondió. Comprueba que esté en la misma red.</value>
   </data>
   <data name="NoInternet_Title" xml:space="preserve">
     <value>Sin conexión a Internet</value>
@@ -379,14 +280,8 @@
   <data name="Action_Retry" xml:space="preserve">
     <value>Reintentar</value>
   </data>
-  <data name="Update_TitleFormat" xml:space="preserve">
-    <value>OpenDeezer {0} disponible</value>
-  </data>
-  <data name="Update_BodyDefault" xml:space="preserve">
-    <value>Hay una versión más reciente disponible para descargar.</value>
-  </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>Abrir OpenDeezer</value>
+    <value>Mostrar OpenDeezer</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>Salir</value>
@@ -398,16 +293,16 @@
     <value>Calidad de audio</value>
   </data>
   <data name="Quality_Normal" xml:space="preserve">
-    <value>Normal — MP3 128 kbps</value>
+    <value>Estándar (MP3, 128 kbps)</value>
   </data>
   <data name="Quality_High" xml:space="preserve">
-    <value>Alta — MP3 320 kbps</value>
+    <value>Alta (MP3, 320 kbps)</value>
   </data>
   <data name="Quality_HiFi" xml:space="preserve">
-    <value>HiFi — FLAC sin pérdidas</value>
+    <value>HiFi (FLAC)</value>
   </data>
   <data name="Settings_QualityWarnFormat" xml:space="preserve">
-    <value>Puede que tu plan ({0}) no admita esta calidad; la reproducción se ajustará automáticamente.</value>
+    <value>Tu plan ({0}) puede no incluir esta calidad. Se usará la mejor disponible.</value>
   </data>
   <data name="Settings_OutputDevice" xml:space="preserve">
     <value>Dispositivo de salida</value>
@@ -416,7 +311,7 @@
     <value>Predeterminado del sistema</value>
   </data>
   <data name="Settings_DeviceDefaultFormat" xml:space="preserve">
-    <value>{0}  (predeterminado)</value>
+    <value>{0} (predeterminado)</value>
   </data>
   <data name="Settings_NoOutputDevices" xml:space="preserve">
     <value>Sin dispositivos de salida</value>
@@ -431,16 +326,13 @@
     <value>Breve pausa entre canciones</value>
   </data>
   <data name="Settings_Crossfade" xml:space="preserve">
-    <value>Crossfade</value>
+    <value>Fundido cruzado</value>
   </data>
   <data name="Common_Off" xml:space="preserve">
     <value>Desactivado</value>
   </data>
   <data name="Settings_Equalizer" xml:space="preserve">
     <value>Ecualizador</value>
-  </data>
-  <data name="Settings_EqualizerBtn" xml:space="preserve">
-    <value>Ecualizador…</value>
   </data>
   <data name="Settings_EqualizerDesc" xml:space="preserve">
     <value>Ecualizador de 10 bandas, preamplificador y audio mono.</value>
@@ -475,23 +367,11 @@
   <data name="Settings_RemoteDesc" xml:space="preserve">
     <value>Controla la reproducción desde otro dispositivo de tu red.</value>
   </data>
-  <data name="Settings_RemoteOn" xml:space="preserve">
-    <value>Control remoto activado</value>
-  </data>
-  <data name="Settings_RemoteOff" xml:space="preserve">
-    <value>Control remoto desactivado</value>
-  </data>
   <data name="Settings_RemoteLanOn" xml:space="preserve">
     <value>Accesible en la red local</value>
   </data>
-  <data name="Settings_RemoteLanOff" xml:space="preserve">
-    <value>Solo este equipo</value>
-  </data>
   <data name="Settings_AccessToken" xml:space="preserve">
     <value>Token de acceso (opcional)</value>
-  </data>
-  <data name="Settings_Updates" xml:space="preserve">
-    <value>Actualizaciones</value>
   </data>
   <data name="Settings_UpdateCheckDesc" xml:space="preserve">
     <value>Busca una versión más reciente en GitHub.</value>
@@ -503,13 +383,13 @@
     <value>Comprobando…</value>
   </data>
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
-    <value>v{0} disponible (tienes la v{1}).</value>
+    <value>La versión {0} está disponible. Tienes la {1}.</value>
   </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>No se pudo buscar actualizaciones. Inténtalo más tarde.</value>
   </data>
   <data name="Settings_UpToDateFormat" xml:space="preserve">
-    <value>Estás al día (v{0}).</value>
+    <value>Tienes la versión más reciente ({0}).</value>
   </data>
   <data name="Settings_Language" xml:space="preserve">
     <value>Idioma</value>
@@ -532,41 +412,17 @@
   <data name="EQ_MonoAudio" xml:space="preserve">
     <value>Audio mono</value>
   </data>
-  <data name="EQ_EnableOn" xml:space="preserve">
-    <value>Ecualizador activado</value>
-  </data>
-  <data name="EQ_EnableOff" xml:space="preserve">
-    <value>Ecualizador desactivado</value>
-  </data>
-  <data name="EQ_MonoOn" xml:space="preserve">
-    <value>Ambos canales reproducen el mismo audio</value>
-  </data>
-  <data name="EQ_MonoOff" xml:space="preserve">
-    <value>Estéreo</value>
-  </data>
   <data name="PhoneRemote_Instructions" xml:space="preserve">
     <value>Escanea con tu teléfono (misma Wi-Fi) e introduce el código.</value>
-  </data>
-  <data name="PhoneRemote_On" xml:space="preserve">
-    <value>Control por teléfono activo</value>
-  </data>
-  <data name="PhoneRemote_Off" xml:space="preserve">
-    <value>Control por teléfono desactivado</value>
   </data>
   <data name="About_Title" xml:space="preserve">
     <value>Acerca de OpenDeezer</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
-    <value>Una reimplementación de código abierto de Deezer.</value>
-  </data>
-  <data name="About_Description" xml:space="preserve">
-    <value>Cliente nativo de Windows (WinUI 3 · C# · Fluent). El motor —inicio de sesión, exploración, descifrado Blowfish, decodificación MP3, reproducción WASAPI— es el núcleo Go libdeezercore.dll, enlazado en el proceso.</value>
-  </data>
-  <data name="About_SignedInFormat" xml:space="preserve">
-    <value>Sesión iniciada: {0} · {1}</value>
+    <value>Cliente de código abierto no oficial para Deezer.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Por Cycl0o0. Con licencia AGPL-3.0.</value>
+    <value>Por Cycl0o0; aplicación para Windows de Scharkenberg. Con licencia AGPL-3.0.</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} canción</value>
@@ -620,7 +476,7 @@
     <value>Error de descarga</value>
   </data>
   <data name="Dialog_DownloadFailBody" xml:space="preserve">
-    <value>No se pudo descargar la pista.</value>
+    <value>La descarga no terminó. Inténtalo de nuevo.</value>
   </data>
   <data name="Preview_Badge" xml:space="preserve">
     <value>Vista previa</value>
@@ -629,108 +485,463 @@
     <value>Desactivar anuncios</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Deezer Free se financia con anuncios. Informar de tus reproducciones —como hace la app oficial— acredita a los artistas y genera los anuncios. Desactivar esto elimina los anuncios pero deja de informar de tus reproducciones, lo que priva a los artistas de sus reproducciones e infringe las condiciones de uso de Deezer. Úsalo bajo tu propia responsabilidad.</value>
+    <value>Quita los anuncios y deja de informar a Deezer de tus reproducciones. Esas reproducciones no se acreditan a los artistas e infringe las condiciones de uso de Deezer.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
-    <value>Recent</value>
+    <value>Recientes</value>
   </data>
   <data name="Menu_StartRadio" xml:space="preserve">
-    <value>Start radio</value>
+    <value>Iniciar radio</value>
   </data>
   <data name="Radio_SongHeader" xml:space="preserve">
-    <value>Song Radio</value>
+    <value>Radio de la canción</value>
   </data>
   <data name="Radio_ArtistHeader" xml:space="preserve">
-    <value>Artist Radio</value>
+    <value>Radio del artista</value>
   </data>
   <data name="Dialog_RadioFailTitle" xml:space="preserve">
-    <value>Couldn't start radio</value>
+    <value>No se pudo iniciar la radio</value>
   </data>
   <data name="Dialog_RadioFailBody" xml:space="preserve">
-    <value>No radio could be started from this.</value>
+    <value>Deezer no tiene radio para esto. Prueba con otra canción u otro artista.</value>
   </data>
   <data name="Section_RecentlyPlayed" xml:space="preserve">
-    <value>Recently played</value>
+    <value>Escuchado recientemente</value>
   </data>
   <data name="Section_TopArtists" xml:space="preserve">
-    <value>Top Artists</value>
-  </data>
-  <data name="Recent_ListenTimeFormat" xml:space="preserve">
-    <value>Listening time (last 30 days): {0}h {1}m</value>
-  </data>
-  <data name="Recent_Empty" xml:space="preserve">
-    <value>Nothing here yet. Play something to build your history.</value>
+    <value>Artistas más escuchados</value>
   </data>
   <data name="Plays_One" xml:space="preserve">
-    <value>{0} play</value>
+    <value>{0} reproducción</value>
   </data>
   <data name="Plays_Other" xml:space="preserve">
-    <value>{0} plays</value>
-  </data>
-  <data name="Btn_DownloadAlbum" xml:space="preserve">
-    <value>Download album</value>
-  </data>
-  <data name="Btn_DownloadPlaylist" xml:space="preserve">
-    <value>Download playlist</value>
-  </data>
-  <data name="Status_Downloading" xml:space="preserve">
-    <value>Downloading…</value>
+    <value>{0} reproducciones</value>
   </data>
   <data name="Dialog_DownloadBatchDoneFormat" xml:space="preserve">
-    <value>Saved {0}, failed {1}. Folder: {2}</value>
+    <value>{0} guardadas, {1} con error. Guardado en {2}</value>
   </data>
   <data name="Settings_StreamCache" xml:space="preserve">
-    <value>Stream cache</value>
-  </data>
-  <data name="Settings_StreamCacheDesc" xml:space="preserve">
-    <value>On-disk cache for streamed audio (MB, 0 = off). Applies next launch.</value>
+    <value>Caché de streaming</value>
   </data>
   <data name="Tooltip_Queue" xml:space="preserve">
-    <value>Up next</value>
+    <value>Cola</value>
   </data>
   <data name="Queue_Title" xml:space="preserve">
-    <value>Up next</value>
-  </data>
-  <data name="Queue_Empty" xml:space="preserve">
-    <value>The queue is empty.</value>
+    <value>Cola</value>
   </data>
   <data name="Queue_Clear" xml:space="preserve">
-    <value>Clear</value>
-  </data>
-  <data name="Queue_MoveUp" xml:space="preserve">
-    <value>Move up</value>
-  </data>
-  <data name="Queue_MoveDown" xml:space="preserve">
-    <value>Move down</value>
+    <value>Borrar</value>
   </data>
   <data name="Queue_Remove" xml:space="preserve">
-    <value>Remove from queue</value>
+    <value>Quitar de la cola</value>
   </data>
   <data name="Menu_PlayNext" xml:space="preserve">
-    <value>Play next</value>
+    <value>Reproducir a continuación</value>
   </data>
   <data name="Menu_AddToQueue" xml:space="preserve">
-    <value>Add to queue</value>
+    <value>Añadir a la cola</value>
   </data>
-  <data name="Menu_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_Play" xml:space="preserve">
+    <value>Reproducir</value>
   </data>
-  <data name="Tooltip_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_ShufflePlay" xml:space="preserve">
+    <value>Aleatorio</value>
   </data>
-  <data name="Tooltip_Downloaded" xml:space="preserve">
-    <value>Available offline</value>
+  <data name="Connect_ConnectingFormat" xml:space="preserve">
+    <value>Conectando con {0}…</value>
   </data>
-  <data name="Offline_DoneTitle" xml:space="preserve">
-    <value>Downloaded for offline</value>
+  <data name="Page_Error" xml:space="preserve">
+    <value>No se ha podido cargar esta página.</value>
   </data>
-  <data name="Offline_DoneBody" xml:space="preserve">
-    <value>This track is now available offline.</value>
+  <data name="Search_NoResultsFormat" xml:space="preserve">
+    <value>No hay resultados para «{0}».</value>
+  </data>
+  <data name="Login_Expired" xml:space="preserve">
+    <value>Tu sesión ha caducado. Vuelve a iniciar sesión.</value>
+  </data>
+  <data name="Login_ErrorTitle" xml:space="preserve">
+    <value>No se ha podido iniciar sesión</value>
+  </data>
+  <data name="Login_ErrorBody" xml:space="preserve">
+    <value>Deezer no aceptó el inicio de sesión. Inténtalo de nuevo.</value>
+  </data>
+  <data name="Login_ArlInvalid" xml:space="preserve">
+    <value>Ese no es un token ARL válido.</value>
+  </data>
+  <data name="Login_WebView2Missing" xml:space="preserve">
+    <value>El inicio de sesión web necesita Microsoft Edge WebView2 Runtime. Instálalo o usa un token ARL.</value>
+  </data>
+  <data name="Error_EngineMissing" xml:space="preserve">
+    <value>No se pudo cargar libdeezercore.dll. Reinstala OpenDeezer.</value>
+  </data>
+  <data name="Error_NoAudio" xml:space="preserve">
+    <value>No se encontró ninguna salida de audio. Conecta altavoces o auriculares e inténtalo de nuevo.</value>
+  </data>
+  <data name="Account_Title" xml:space="preserve">
+    <value>Cuenta</value>
+  </data>
+  <data name="Account_Switch" xml:space="preserve">
+    <value>Cambiar de cuenta</value>
+  </data>
+  <data name="Account_SignOut" xml:space="preserve">
+    <value>Cerrar sesión</value>
+  </data>
+  <data name="Account_SignOutConfirm" xml:space="preserve">
+    <value>¿Cerrar sesión en este PC? La reproducción se detendrá.</value>
+  </data>
+  <data name="Account_UnknownTier" xml:space="preserve">
+    <value>No se pudo cargar tu plan. Las descargas y las opciones de calidad pueden no ser correctas hasta que cargue.</value>
+  </data>
+  <data name="Playback_FailTitle" xml:space="preserve">
+    <value>Error de reproducción</value>
+  </data>
+  <data name="Playback_FailBody" xml:space="preserve">
+    <value>No se ha podido reproducir esta pista.</value>
+  </data>
+  <data name="Playback_Skipping" xml:space="preserve">
+    <value>Pasando a la siguiente pista.</value>
+  </data>
+  <data name="Playback_StoppedBody" xml:space="preserve">
+    <value>Varias canciones seguidas no se pudieron reproducir. La reproducción se detuvo.</value>
+  </data>
+  <data name="Like_FailTitle" xml:space="preserve">
+    <value>No se ha podido actualizar tu biblioteca</value>
+  </data>
+  <data name="Like_FailBody" xml:space="preserve">
+    <value>Deezer no aceptó el cambio. Inténtalo más tarde.</value>
+  </data>
+  <data name="Menu_Unlike" xml:space="preserve">
+    <value>Quitar me gusta</value>
+  </data>
+  <data name="Tooltip_More" xml:space="preserve">
+    <value>Más</value>
+  </data>
+  <data name="Tooltip_Volume" xml:space="preserve">
+    <value>Volumen</value>
+  </data>
+  <data name="Tooltip_Seek" xml:space="preserve">
+    <value>Posición</value>
+  </data>
+  <data name="Settings_GroupPlayback" xml:space="preserve">
+    <value>Reproducción</value>
+  </data>
+  <data name="Settings_GroupApp" xml:space="preserve">
+    <value>Aplicación</value>
+  </data>
+  <data name="Btn_RestartNow" xml:space="preserve">
+    <value>Reiniciar ahora</value>
+  </data>
+  <data name="Btn_Generate" xml:space="preserve">
+    <value>Generar</value>
+  </data>
+  <data name="Settings_RemoteLanCaption" xml:space="preserve">
+    <value>Sin token, cualquier dispositivo con tu cuenta de Deezer puede controlar la reproducción.</value>
+  </data>
+  <data name="Tray_HintTitle" xml:space="preserve">
+    <value>OpenDeezer sigue en ejecución</value>
+  </data>
+  <data name="Tray_HintBody" xml:space="preserve">
+    <value>La música sigue sonando. Abre o cierra OpenDeezer desde el icono de la bandeja.</value>
+  </data>
+  <data name="Sleep_RemainingFormat" xml:space="preserve">
+    <value>Se pausará en {0}</value>
+  </data>
+  <data name="Sleep_EndOfTrackActive" xml:space="preserve">
+    <value>Se pausará al terminar esta pista</value>
+  </data>
+  <data name="Sleep_Inactive" xml:space="preserve">
+    <value>El temporizador está desactivado.</value>
+  </data>
+  <data name="Error_Unhandled" xml:space="preserve">
+    <value>Algo ha fallado</value>
+  </data>
+  <data name="Search_ShowAllFormat" xml:space="preserve">
+    <value>Ver todo ({0})</value>
+  </data>
+  <data name="Duration_HoursMinutesFormat" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="Tooltip_NowPlaying" xml:space="preserve">
+    <value>Reproduciendo</value>
+  </data>
+  <data name="Menu_GoToArtist" xml:space="preserve">
+    <value>Ir al artista</value>
+  </data>
+  <data name="Menu_RemoveFromPlaylist" xml:space="preserve">
+    <value>Quitar de esta playlist</value>
+  </data>
+  <data name="Playlist_RemoveFailBody" xml:space="preserve">
+    <value>Deezer no quitó la canción. Inténtalo de nuevo.</value>
+  </data>
+  <data name="Login_Busy" xml:space="preserve">
+    <value>Ya hay un inicio de sesión en curso.</value>
+  </data>
+  <data name="Account_FreePlan" xml:space="preserve">
+    <value>Gratis · 128 kbps</value>
+  </data>
+  <data name="Btn_SignIn" xml:space="preserve">
+    <value>Iniciar sesión</value>
+  </data>
+  <data name="EQ_Reset" xml:space="preserve">
+    <value>Restablecer</value>
+  </data>
+  <data name="Kind_Album" xml:space="preserve">
+    <value>Álbum</value>
+  </data>
+  <data name="Kind_Playlist" xml:space="preserve">
+    <value>Lista</value>
+  </data>
+  <data name="Kind_Podcast" xml:space="preserve">
+    <value>Pódcast</value>
+  </data>
+  <data name="Nav_GroupDiscover" xml:space="preserve">
+    <value>Descubrir</value>
+  </data>
+  <data name="Nav_GroupLibrary" xml:space="preserve">
+    <value>Biblioteca</value>
+  </data>
+  <data name="Recent_ListenTimeLabel" xml:space="preserve">
+    <value>Tiempo de escucha, últimos 30 días</value>
+  </data>
+  <data name="Search_FilterAll" xml:space="preserve">
+    <value>Todo</value>
+  </data>
+  <data name="Search_TitleFormat" xml:space="preserve">
+    <value>Resultados de «{0}»</value>
+  </data>
+  <data name="Settings_GroupAbout" xml:space="preserve">
+    <value>Acerca de</value>
+  </data>
+  <data name="Settings_PhoneRemote" xml:space="preserve">
+    <value>Control desde el móvil</value>
+  </data>
+  <data name="Tooltip_Mute" xml:space="preserve">
+    <value>Silenciar</value>
+  </data>
+  <data name="Tooltip_Unmute" xml:space="preserve">
+    <value>Activar sonido</value>
+  </data>
+  <data name="Tooltip_Play" xml:space="preserve">
+    <value>Reproducir</value>
+  </data>
+  <data name="Tooltip_Pause" xml:space="preserve">
+    <value>Pausar</value>
+  </data>
+  <data name="Tooltip_ShuffleOn" xml:space="preserve">
+    <value>Aleatorio activado</value>
+  </data>
+  <data name="Tooltip_ShuffleOff" xml:space="preserve">
+    <value>Aleatorio desactivado</value>
+  </data>
+  <data name="Action_ShowAll" xml:space="preserve">
+    <value>Mostrar todo</value>
+  </data>
+  <data name="Column_Title" xml:space="preserve">
+    <value>Título</value>
+  </data>
+  <data name="Column_Album" xml:space="preserve">
+    <value>Álbum</value>
+  </data>
+  <data name="Column_Duration" xml:space="preserve">
+    <value>Duración</value>
+  </data>
+  <data name="Section_Popular" xml:space="preserve">
+    <value>Populares</value>
+  </data>
+  <data name="Menu_NewPlaylist" xml:space="preserve">
+    <value>Nueva playlist…</value>
+  </data>
+  <data name="Menu_NoArtistPage" xml:space="preserve">
+    <value>Esta canción no tiene página de artista</value>
+  </data>
+  <data name="Empty_Liked" xml:space="preserve">
+    <value>Aún no hay canciones favoritas</value>
+  </data>
+  <data name="Empty_Playlist" xml:space="preserve">
+    <value>Esta playlist está vacía</value>
+  </data>
+  <data name="Empty_Playlists" xml:space="preserve">
+    <value>Aún no hay playlists</value>
+  </data>
+  <data name="Empty_Recent" xml:space="preserve">
+    <value>Aún no has reproducido nada</value>
+  </data>
+  <data name="Empty_Queue" xml:space="preserve">
+    <value>No hay nada en la cola</value>
+  </data>
+  <data name="Empty_Tracks" xml:space="preserve">
+    <value>No hay canciones aquí</value>
+  </data>
+  <data name="Empty_Home" xml:space="preserve">
+    <value>Aún no hay nada que mostrar</value>
+  </data>
+  <data name="Empty_Charts" xml:space="preserve">
+    <value>Las listas no están disponibles ahora</value>
+  </data>
+  <data name="Empty_Artist" xml:space="preserve">
+    <value>No se encontró nada de este artista</value>
+  </data>
+  <data name="Lyrics_PaidOnly" xml:space="preserve">
+    <value>La letra está disponible con Deezer Premium, Duo, Family y Student.</value>
+  </data>
+  <data name="Queue_LeftFormat" xml:space="preserve">
+    <value>quedan {0}</value>
+    <comment>Queue header: time left from the playing track to the end, e.g. 47 min left.</comment>
+  </data>
+  <data name="Nav_Track" xml:space="preserve">
+    <value>Canción</value>
+  </data>
+  <data name="Section_Details" xml:space="preserve">
+    <value>Detalles</value>
+  </data>
+  <data name="Section_Credits" xml:space="preserve">
+    <value>Créditos</value>
+  </data>
+  <data name="Track_Artists" xml:space="preserve">
+    <value>Artistas</value>
+  </data>
+  <data name="Track_Album" xml:space="preserve">
+    <value>Álbum</value>
+  </data>
+  <data name="Track_Released" xml:space="preserve">
+    <value>Publicado</value>
+  </data>
+  <data name="Track_Number" xml:space="preserve">
+    <value>Pista</value>
+  </data>
+  <data name="Track_NumberFormat" xml:space="preserve">
+    <value>{0} de {1}</value>
+  </data>
+  <data name="Track_Disc" xml:space="preserve">
+    <value>Disco</value>
+  </data>
+  <data name="Track_Length" xml:space="preserve">
+    <value>Duración</value>
+  </data>
+  <data name="Track_Genre" xml:space="preserve">
+    <value>Género</value>
+  </data>
+  <data name="Track_Label" xml:space="preserve">
+    <value>Sello</value>
+  </data>
+  <data name="Track_Bpm" xml:space="preserve">
+    <value>BPM</value>
+  </data>
+  <data name="Track_Isrc" xml:space="preserve">
+    <value>ISRC</value>
+  </data>
+  <data name="Track_Copyright" xml:space="preserve">
+    <value>Copyright</value>
+  </data>
+  <data name="Menu_TrackDetails" xml:space="preserve">
+    <value>Detalles de la canción</value>
+  </data>
+  <data name="Bar_NothingPlaying" xml:space="preserve">
+    <value>No se reproduce nada</value>
+  </data>
+  <data name="Settings_GroupStorage" xml:space="preserve">
+    <value>Almacenamiento</value>
+  </data>
+  <data name="Settings_CacheFolder" xml:space="preserve">
+    <value>Carpeta de la caché</value>
+  </data>
+  <data name="Settings_ClearCache" xml:space="preserve">
+    <value>Vaciar caché</value>
+  </data>
+  <data name="Settings_ClearCacheConfirm" xml:space="preserve">
+    <value>¿Quitar las canciones guardadas en la caché de reproducción? La música sin conexión se conserva salvo que también la quites.</value>
+  </data>
+  <data name="Btn_Clear" xml:space="preserve">
+    <value>Vaciar</value>
+  </data>
+  <data name="Settings_ClearCacheOffline" xml:space="preserve">
+    <value>Quitar también la música sin conexión</value>
+  </data>
+  <data name="Settings_CacheUsedFormat" xml:space="preserve">
+    <value>{0} usados</value>
+  </data>
+  <data name="Settings_CacheUsedOfflineFormat" xml:space="preserve">
+    <value>{0} usados, {1} sin conexión</value>
+  </data>
+  <data name="Size_MbFormat" xml:space="preserve">
+    <value>{0} MB</value>
+  </data>
+  <data name="Size_GbFormat" xml:space="preserve">
+    <value>{0} GB</value>
+  </data>
+  <data name="Settings_CacheAge" xml:space="preserve">
+    <value>Conservar canciones no escuchadas</value>
+  </data>
+  <data name="Settings_CacheAgeDesc" xml:space="preserve">
+    <value>Se quitan las canciones de la caché que no se escuchan desde hace este tiempo. La música sin conexión se conserva.</value>
+  </data>
+  <data name="Settings_CacheAge_0" xml:space="preserve">
+    <value>Siempre</value>
+  </data>
+  <data name="Settings_CacheAge_7" xml:space="preserve">
+    <value>1 semana</value>
+  </data>
+  <data name="Settings_CacheAge_30" xml:space="preserve">
+    <value>1 mes</value>
+  </data>
+  <data name="Settings_CacheAge_90" xml:space="preserve">
+    <value>3 meses</value>
+  </data>
+  <data name="Settings_CacheAge_180" xml:space="preserve">
+    <value>6 meses</value>
+  </data>
+  <data name="Settings_CacheAge_365" xml:space="preserve">
+    <value>1 año</value>
+  </data>
+  <data name="Days_One" xml:space="preserve">
+    <value>{0} día</value>
+  </data>
+  <data name="Days_Other" xml:space="preserve">
+    <value>{0} días</value>
+  </data>
+  <data name="Error_FolderRefused" xml:space="preserve">
+    <value>No se puede usar esta carpeta. Elige otra.</value>
+  </data>
+  <data name="Error_StorageFailed" xml:space="preserve">
+    <value>No ha funcionado. Inténtalo de nuevo.</value>
+  </data>
+  <data name="Settings_CacheFolderConfirm" xml:space="preserve">
+    <value>Se quitan las canciones guardadas en la caché de la carpeta anterior.</value>
+  </data>
+  <data name="Btn_Change" xml:space="preserve">
+    <value>Cambiar</value>
+  </data>
+  <data name="Nav_Offline" xml:space="preserve">
+    <value>Sin conexión</value>
+  </data>
+  <data name="Offline_Available" xml:space="preserve">
+    <value>Disponible sin conexión</value>
+  </data>
+  <data name="Offline_ProgressFormat" xml:space="preserve">
+    <value>{0} de {1}</value>
+  </data>
+  <data name="Offline_Songs" xml:space="preserve">
+    <value>Canciones</value>
+  </data>
+  <data name="Offline_Mode" xml:space="preserve">
+    <value>Modo sin conexión</value>
+  </data>
+  <data name="Offline_YoureOffline" xml:space="preserve">
+    <value>Estás sin conexión</value>
+  </data>
+  <data name="Offline_YoureOfflineBody" xml:space="preserve">
+    <value>Se reproduce la música guardada en este PC. Vuelve a intentar iniciar sesión cuando tengas conexión.</value>
+  </data>
+  <data name="Offline_Empty" xml:space="preserve">
+    <value>Aquí aparecen los álbumes, listas y canciones que hagas disponibles sin conexión.</value>
+  </data>
+  <data name="Offline_Remove" xml:space="preserve">
+    <value>Quitar de sin conexión</value>
+  </data>
+  <data name="Offline_FetchStopped" xml:space="preserve">
+    <value>Descarga sin conexión detenida</value>
   </data>
   <data name="Offline_FailTitle" xml:space="preserve">
-    <value>Download failed</value>
-  </data>
-  <data name="Offline_FailBody" xml:space="preserve">
-    <value>This track couldn't be downloaded for offline.</value>
+    <value>No se pudo cambiar la música sin conexión</value>
   </data>
 </root>

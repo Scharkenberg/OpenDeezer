@@ -25,6 +25,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.screen == screenNoInternet { // full-screen view, no footer/list geometry
 		return m, nil
 	}
+	m.plConfirm = false // a pending delete is cancelled by any mouse action
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
 		return m.handleWheel(true)
@@ -61,28 +62,28 @@ func (m *Model) handleWheel(up bool) (tea.Model, tea.Cmd) {
 		} else {
 			m.lyricsOffset++ // clamped by lyricsView
 		}
-	case screenMenu, screenList, screenDevices, screenRemote, screenPlaylistPick:
-		if up {
-			m.list.CursorUp()
-		} else {
-			m.list.CursorDown()
+	default:
+		if m.onListScreen() {
+			if up {
+				m.list.CursorUp()
+			} else {
+				m.list.CursorDown()
+			}
 		}
 	}
 	return m, nil
 }
 
-// handleClick dispatches a left click: progress-bar seek first (its row is
-// fixed at the bottom of the footer), then row selection on list-like screens.
+// handleClick dispatches a left click: progress-bar seek first, then row
+// selection on list-like screens.
 func (m *Model) handleClick(x, y int) (tea.Model, tea.Cmd) {
-	// The footer always ends with the shortcut legend, with the progress bar
-	// directly above it — so the bar is the terminal's second-to-last row.
-	if y == m.height-2 {
+	if y == m.barY {
 		return m, m.clickSeek(x)
 	}
-	switch m.screen {
-	case screenMenu, screenList, screenDevices, screenRemote, screenPlaylistPick:
+	if m.onListScreen() {
 		return m.clickList(y)
-	case screenQueue:
+	}
+	if m.screen == screenQueue {
 		return m.clickQueue(y)
 	}
 	return m, nil
@@ -90,9 +91,6 @@ func (m *Model) handleClick(x, y int) (tea.Model, tea.Cmd) {
 
 // clickSeek maps an x position on the progress bar to a proportional seek.
 func (m *Model) clickSeek(x int) tea.Cmd {
-	if m.player == nil {
-		return nil
-	}
 	dur := m.player.DurationMS()
 	if dur <= 0 {
 		return nil
@@ -103,8 +101,7 @@ func (m *Model) clickSeek(x int) tea.Cmd {
 	if barWidth <= 0 || x < 0 || x >= barWidth {
 		return nil // click on the times text or off the bar — ignore
 	}
-	m.player.SeekMS(dur * int64(x) / int64(barWidth))
-	return nil
+	return m.seekCmd(dur * int64(x) / int64(barWidth))
 }
 
 // clickList selects the list row under the cursor; a click on the selected row

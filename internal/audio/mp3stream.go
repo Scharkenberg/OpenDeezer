@@ -19,7 +19,7 @@ func (ro readerOnly) Read(p []byte) (int, error) { return ro.r.Read(p) }
 // mp3Stream adapts go-mp3 to the pcmStream (Read + SeekStart) contract with a
 // progressive-then-seekable strategy:
 //
-//   - Construction builds the decoder over a non-seeking view of the streamBuffer
+//   - Construction builds the decoder over a non-seeking view of a stream reader
 //     so the first sample is available almost immediately (no full-file scan).
 //   - The first Seek "upgrades": it blocks for the complete download (the frame
 //     index can't be built from a partial stream), rebuilds a seekable decoder,
@@ -30,18 +30,20 @@ func (ro readerOnly) Read(p []byte) (int, error) { return ro.r.Read(p) }
 // which is exactly the old always-full-download behaviour but only when the user
 // actually seeks.
 type mp3Stream struct {
-	sb       *streamBuffer
+	sb       *streamFile
+	r        io.ReadSeeker // sb's reader the decoder reads
 	dec      *mp3.Decoder
 	rate     int
 	upgraded bool // dec was rebuilt seekable (post full-download); Seek works
 }
 
-func newMP3Stream(sb *streamBuffer) (*mp3Stream, error) {
-	d, err := mp3.NewDecoder(readerOnly{sb})
+func newMP3Stream(sb *streamFile) (*mp3Stream, error) {
+	r := sb.reader()
+	d, err := mp3.NewDecoder(readerOnly{r})
 	if err != nil {
 		return nil, err
 	}
-	return &mp3Stream{sb: sb, dec: d, rate: d.SampleRate()}, nil
+	return &mp3Stream{sb: sb, r: r, dec: d, rate: d.SampleRate()}, nil
 }
 
 // SampleRate reports the decoded stream's native sample rate (from the first
@@ -50,15 +52,17 @@ func (m *mp3Stream) SampleRate() int { return m.rate }
 
 func (m *mp3Stream) Read(p []byte) (int, error) { return m.dec.Read(p) }
 
+// Seek panics (go-mp3: index out of range) past the last frame; decode()
+// recovers that as a seek error.
 func (m *mp3Stream) Seek(off int64, whence int) (int64, error) {
 	if !m.upgraded {
 		// Building go-mp3's frame index needs the whole stream; block until the
 		// download completes (graceful degradation to the pre-progressive path).
 		m.sb.waitDone()
-		if _, err := m.sb.Seek(0, io.SeekStart); err != nil {
+		if _, err := m.r.Seek(0, io.SeekStart); err != nil {
 			return 0, err
 		}
-		nd, err := mp3.NewDecoder(m.sb) // seekable: scans + indexes frames
+		nd, err := mp3.NewDecoder(m.r) // seekable: scans + indexes frames
 		if err != nil {
 			return 0, err
 		}

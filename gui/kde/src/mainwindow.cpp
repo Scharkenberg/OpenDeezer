@@ -219,14 +219,18 @@ extern "C" char *DZFavoriteIDsJSON(void); // ["<trackId>", ...]
 //   DZQueueMove(from,to): relocate the entry at `from` to index `to`.
 //   DZQueueInsertNext(js): insert one track (js = a single track JSON object in
 //     the shared shape) immediately after the current cursor ("Play next").
-//   DZDownloadForOffline(trackID): save a track for offline playback — blocking +
-//     premium-only, like DZDownloadTrack. Returns {"key":"<id>","path":"...",
-//     "error":""}; the "key" identifies the stored track (feeds the offline mirror).
+//   DZPinOffline(kind,id): keep a track ("track"), album or playlist for offline
+//     playback. Records the pin and fetches in the background; returns
+//     {"error":""} once the pin is taken, else the reason. May resolve over the
+//     network first, so call it on a worker.
+//   DZOfflineIDsJSON: {"ids":["<trackId>",...],"error":""}, every track of this
+//     account available offline (seeds the offline mirror at login).
 extern "C" char *DZQueueJSON(void);
 extern "C" void  DZQueueRemove(int i);
 extern "C" void  DZQueueMove(int from, int to);
 extern "C" void  DZQueueInsertNext(char *js);
-extern "C" char *DZDownloadForOffline(char *trackID);
+extern "C" char *DZPinOffline(char *kind, char *id);
+extern "C" char *DZOfflineIDsJSON(void);
 
 namespace {
 
@@ -1885,11 +1889,17 @@ void MainWindow::seedFavorites() {
         return;
     QtConcurrent::run([this] {
         const QByteArray j = takeJson(DZFavoriteIDsJSON());
-        QMetaObject::invokeMethod(this, [this, j] {
+        const QByteArray off = takeJson(DZOfflineIDsJSON());
+        QMetaObject::invokeMethod(this, [this, j, off] {
             m_likedIds.clear();
             for (const QJsonValue &v : QJsonDocument::fromJson(j).array())
                 m_likedIds.insert(v.toString());
             refreshLikeButton();
+            // Offline tracks are per account: replaced by this account's.
+            m_offlineIds.clear();
+            for (const QJsonValue &v : QJsonDocument::fromJson(off).object().value("ids").toArray())
+                m_offlineIds.insert(v.toString());
+            refreshOfflineIndicators();
         }, Qt::QueuedConnection);
     });
 }
@@ -2299,9 +2309,10 @@ void MainWindow::download(const QString &id) {
 
 // Save the current / a chosen track for OFFLINE playback (premium-only). Unlike
 // download() (which exports a file to the shared folder), this stores the track
-// in the engine's offline cache. Runs on a worker like every blocking DZ* call;
-// on success the returned {"key"} id (plus the requested id, belt-and-braces)
-// joins m_offlineIds so the "downloaded" indicator lights up everywhere.
+// in the engine's offline store: DZPinOffline records the pin and fetches the
+// track in the background. Runs on a worker like every blocking DZ* call; once
+// the pin is taken the id joins m_offlineIds so the "downloaded" indicator
+// lights up everywhere.
 void MainWindow::downloadForOffline(const Track &t) {
     if (!m_loggedIn || t.id.isEmpty())
         return;
@@ -2317,16 +2328,12 @@ void MainWindow::downloadForOffline(const Track &t) {
     const QByteArray idb = t.id.toUtf8();
     const QString origId = t.id;
     QtConcurrent::run([this, idb, origId] {
-        // takeJson frees the malloc'd result. The fetch + decrypt + store runs
-        // entirely engine-side.
-        const QByteArray status = takeJson(DZDownloadForOffline(cstr(idb)));
-        const QJsonObject o = QJsonDocument::fromJson(status).object();
-        const QString key = o.value("key").toString();
-        const QString err = o.value("error").toString();
-        QMetaObject::invokeMethod(this, [this, key, err, origId] {
+        // takeJson frees the malloc'd result. The fetch runs engine-side.
+        const QByteArray kind("track");
+        const QByteArray status = takeJson(DZPinOffline(cstr(kind), cstr(idb)));
+        const QString err = QJsonDocument::fromJson(status).object().value("error").toString();
+        QMetaObject::invokeMethod(this, [this, err, origId] {
             if (err.isEmpty()) {
-                if (!key.isEmpty())
-                    m_offlineIds.insert(key);
                 m_offlineIds.insert(origId);
                 refreshOfflineIndicators();
                 statusBar()->showMessage(tr("Available offline"), 5000);

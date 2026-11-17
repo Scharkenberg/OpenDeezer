@@ -1,41 +1,46 @@
-// Win32 + WinRT interop the WindowsAppSDK projection does not expose directly:
-//   * the tray icon (Shell_NotifyIcon) + a message-only window for its callbacks,
-//   * SystemMediaTransportControls.GetForWindow(hwnd) -- the SMTC overlay is
-//     acquired through the classic-COM ISystemMediaTransportControlsInterop on
-//     the runtimeclass activation factory (there is no projected GetForWindow
-//     on a desktop HWND, unlike CoreWindow).
+// Win32 calls the Windows App SDK projection lacks: the tray icon and its hidden window,
+// DPI, and the single-instance wait.
 
 using System;
 using System.Runtime.InteropServices;
-using Windows.Media;
-using WinRT;
 
 namespace OpenDeezer;
 
 internal static class NativeMethods
 {
-    // ---- window messages / constants ----------------------------------------
     internal const uint WM_TRAYCALLBACK = 0x8000 + 1; // WM_APP + 1 (matches the C++ kTrayCallback)
     internal const uint WM_COMMAND = 0x0111;
+    internal const int WM_LBUTTONUP = 0x0202;
     internal const int WM_LBUTTONDBLCLK = 0x0203;
     internal const int WM_RBUTTONUP = 0x0205;
     internal const int WM_CONTEXTMENU = 0x007B;
 
     internal const uint NIM_ADD = 0x00000000;
+    internal const uint NIM_MODIFY = 0x00000001;
     internal const uint NIM_DELETE = 0x00000002;
+    internal const uint NIF_INFO = 0x00000010;
+    internal const uint NIIF_INFO = 0x00000001;
     internal const uint NIF_MESSAGE = 0x00000001;
     internal const uint NIF_ICON = 0x00000002;
     internal const uint NIF_TIP = 0x00000004;
 
     internal const uint MF_STRING = 0x00000000;
     internal const uint MF_SEPARATOR = 0x00000800;
+    internal const uint MF_GRAYED = 0x00000001;
     internal const uint TPM_RIGHTBUTTON = 0x0002;
 
     internal const int MENU_RESTORE = 1001;
     internal const int MENU_QUIT = 1002;
+    internal const int MENU_PLAYPAUSE = 1003;
+    internal const int MENU_NEXT = 1004;
+    internal const int MENU_PREV = 1005;
+
+    internal const uint IMAGE_ICON = 1;
+    internal const uint LR_LOADFROMFILE = 0x00000010;
+    internal const int SM_CXSMICON = 49;
+    internal const int SM_CYSMICON = 50;
     internal const uint TRAY_UID = 1;
 
-    internal static readonly IntPtr HWND_MESSAGE = new(-3);
     internal static readonly IntPtr IDI_APPLICATION = new(32512);
 
     internal delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -80,6 +85,13 @@ internal static class NativeMethods
     [StructLayout(LayoutKind.Sequential)]
     internal struct POINT { public int X; public int Y; }
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RECT { public int Left, Top, Right, Bottom; }
+
+    internal const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    [DllImport("dwmapi.dll")] internal static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
+    [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr hWnd, ref POINT pt);
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr GetModuleHandleW(string? lpModuleName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern ushort RegisterClassExW(ref WNDCLASSEXW wc);
@@ -95,62 +107,15 @@ internal static class NativeMethods
     [DllImport("user32.dll")] internal static extern bool DestroyMenu(IntPtr hMenu);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr LoadIconW(IntPtr hInstance, IntPtr lpIconName);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern uint RegisterWindowMessageW(string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr LoadImageW(IntPtr hInst, string name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] internal static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] internal static extern bool AllowSetForegroundWindow(uint processId);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr CreateEventW(IntPtr attrs, bool manualReset, bool initialState, string? name);
+    [DllImport("kernel32.dll")] internal static extern bool SetEvent(IntPtr h);
+    [DllImport("ole32.dll")] internal static extern int CoWaitForMultipleObjects(uint flags, uint timeout, uint count, IntPtr[] handles, out uint index);
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] internal static extern bool Shell_NotifyIconW(uint msg, ref NOTIFYICONDATAW data);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr ExtractIconW(IntPtr hInst, string exeFileName, uint iconIndex);
-}
-
-// SystemMediaTransportControls for a desktop HWND. The interop interface lives on
-// the runtimeclass activation factory; we grab it via RoGetActivationFactory, call
-// GetForWindow, then project the returned ABI pointer back to the WinRT type.
-internal static class Smtc
-{
-    [DllImport("combase.dll", CharSet = CharSet.Unicode)]
-    private static extern int WindowsCreateString(string src, int length, out IntPtr hstring);
-    [DllImport("combase.dll")] private static extern int WindowsDeleteString(IntPtr hstring);
-    [DllImport("combase.dll")] private static extern int RoGetActivationFactory(IntPtr activatableClassId, [In] ref Guid iid, out IntPtr factory);
-
-    // Declared IUnknown-based: .NET 5+ removed built-in WinRT interop, so casting
-    // an RCW to an InterfaceIsIInspectable interface throws PlatformNotSupported.
-    // The three IInspectable vtable slots that precede GetForWindow in the native
-    // interface are padded with placeholders (never called from here).
-    [ComImport, Guid("ddb0472d-c911-4a1f-86d9-dc3d71a95f5a"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface ISystemMediaTransportControlsInterop
-    {
-        void GetIids();             // IInspectable slot 3 (placeholder)
-        void GetRuntimeClassName(); // IInspectable slot 4 (placeholder)
-        void GetTrustLevel();       // IInspectable slot 5 (placeholder)
-        [PreserveSig] int GetForWindow(IntPtr appWindow, [In] ref Guid riid, out IntPtr mediaTransportControl);
-    }
-
-    // IID of ISystemMediaTransportControls (the runtimeclass default interface).
-    private static readonly Guid IID_ISystemMediaTransportControls = new("99FA3FF4-1742-42A6-902E-087D41F965EC");
-
-    internal static SystemMediaTransportControls? GetForWindow(IntPtr hwnd)
-    {
-        const string cls = "Windows.Media.SystemMediaTransportControls";
-        IntPtr hClass = IntPtr.Zero;
-        try
-        {
-            if (WindowsCreateString(cls, cls.Length, out hClass) < 0) return null;
-            Guid interopIID = typeof(ISystemMediaTransportControlsInterop).GUID;
-            if (RoGetActivationFactory(hClass, ref interopIID, out IntPtr factoryPtr) < 0 || factoryPtr == IntPtr.Zero)
-                return null;
-            // NOTE: factoryPtr / smtcPtr refs are intentionally not released here.
-            // Both are process-lifetime singletons; skipping the releases avoids any
-            // risk of an over-release while keeping the leak to a single ref each.
-            var interop = (ISystemMediaTransportControlsInterop)Marshal.GetObjectForIUnknown(factoryPtr);
-            Guid smtcIID = IID_ISystemMediaTransportControls;
-            if (interop.GetForWindow(hwnd, ref smtcIID, out IntPtr smtcPtr) < 0 || smtcPtr == IntPtr.Zero)
-                return null;
-            return MarshalInspectable<SystemMediaTransportControls>.FromAbi(smtcPtr);
-        }
-        catch
-        {
-            return null;
-        }
-        finally
-        {
-            if (hClass != IntPtr.Zero) WindowsDeleteString(hClass);
-        }
-    }
 }

@@ -61,6 +61,12 @@
   <data name="Nav_Home" xml:space="preserve">
     <value>Главная</value>
   </data>
+  <data name="Nav_Back" xml:space="preserve">
+    <value>Назад</value>
+  </data>
+  <data name="Nav_Pane" xml:space="preserve">
+    <value>Навигация</value>
+  </data>
   <data name="Nav_LikedSongs" xml:space="preserve">
     <value>Любимые треки</value>
   </data>
@@ -79,23 +85,11 @@
   <data name="Nav_Search" xml:space="preserve">
     <value>Поиск</value>
   </data>
-  <data name="Nav_Account" xml:space="preserve">
-    <value>Войти / Сменить аккаунт…</value>
-  </data>
   <data name="Nav_Settings" xml:space="preserve">
     <value>Настройки</value>
   </data>
-  <data name="Nav_PhoneRemote" xml:space="preserve">
-    <value>Пульт на телефоне</value>
-  </data>
-  <data name="Nav_About" xml:space="preserve">
-    <value>О программе</value>
-  </data>
   <data name="Nav_Artist" xml:space="preserve">
     <value>Исполнитель</value>
-  </data>
-  <data name="Nav_Lyrics" xml:space="preserve">
-    <value>Текст песни</value>
   </data>
   <data name="Btn_Download" xml:space="preserve">
     <value>Скачать</value>
@@ -103,32 +97,20 @@
   <data name="Btn_NewPlaylist" xml:space="preserve">
     <value>Новый плейлист</value>
   </data>
-  <data name="Btn_Add" xml:space="preserve">
-    <value>Добавить</value>
-  </data>
   <data name="Btn_Cancel" xml:space="preserve">
     <value>Отмена</value>
   </data>
   <data name="Btn_OK" xml:space="preserve">
     <value>ОК</value>
   </data>
-  <data name="Btn_Save" xml:space="preserve">
-    <value>Сохранить</value>
-  </data>
-  <data name="Btn_Close" xml:space="preserve">
-    <value>Закрыть</value>
-  </data>
-  <data name="Btn_Quit" xml:space="preserve">
-    <value>Выход</value>
-  </data>
   <data name="Btn_Delete" xml:space="preserve">
     <value>Удалить</value>
   </data>
   <data name="Btn_LogInWithDeezer" xml:space="preserve">
-    <value>Войти через Deezer</value>
+    <value>Продолжить с Deezer</value>
   </data>
   <data name="Btn_EnterArlManually" xml:space="preserve">
-    <value>Ввести ARL вручную</value>
+    <value>Использовать токен ARL</value>
   </data>
   <data name="Section_TopTracks" xml:space="preserve">
     <value>Топ треков</value>
@@ -154,15 +136,6 @@
   <data name="Search_TracksHeader" xml:space="preserve">
     <value>Треки</value>
   </data>
-  <data name="Search_AlbumsPlaylistsHeader" xml:space="preserve">
-    <value>Альбомы и плейлисты</value>
-  </data>
-  <data name="Podcast_SearchPlaceholder" xml:space="preserve">
-    <value>Поиск подкастов…</value>
-  </data>
-  <data name="Podcast_ShowsHeader" xml:space="preserve">
-    <value>Шоу</value>
-  </data>
   <data name="Greeting_Morning" xml:space="preserve">
     <value>Доброе утро</value>
   </data>
@@ -172,20 +145,11 @@
   <data name="Greeting_Evening" xml:space="preserve">
     <value>Добрый вечер</value>
   </data>
-  <data name="Tooltip_Like" xml:space="preserve">
-    <value>Нравится / убрать</value>
-  </data>
-  <data name="Tooltip_AddToPlaylist" xml:space="preserve">
-    <value>Добавить в плейлист</value>
-  </data>
   <data name="Tooltip_Shuffle" xml:space="preserve">
     <value>Перемешать</value>
   </data>
   <data name="Tooltip_Previous" xml:space="preserve">
     <value>Предыдущий</value>
-  </data>
-  <data name="Tooltip_PlayPause" xml:space="preserve">
-    <value>Воспроизвести / пауза</value>
   </data>
   <data name="Tooltip_Next" xml:space="preserve">
     <value>Следующий</value>
@@ -201,9 +165,6 @@
   </data>
   <data name="Tooltip_Lyrics" xml:space="preserve">
     <value>Текст песни</value>
-  </data>
-  <data name="Tooltip_Artist" xml:space="preserve">
-    <value>Исполнитель</value>
   </data>
   <data name="Tooltip_Connect" xml:space="preserve">
     <value>Подключиться к устройству</value>
@@ -226,26 +187,8 @@
   <data name="Status_LoggingIn" xml:space="preserve">
     <value>Вход…</value>
   </data>
-  <data name="Status_LoginFailed" xml:space="preserve">
-    <value>Не удалось войти</value>
-  </data>
-  <data name="Status_CheckingAccount" xml:space="preserve">
-    <value>Проверка аккаунта…</value>
-  </data>
-  <data name="Status_NotPlaying" xml:space="preserve">
-    <value>Ничего не играет</value>
-  </data>
-  <data name="Status_NotSignedIn" xml:space="preserve">
-    <value>Вы не вошли</value>
-  </data>
-  <data name="Status_Loading" xml:space="preserve">
-    <value>Загрузка…</value>
-  </data>
   <data name="Connect_Title" xml:space="preserve">
     <value>Подключиться к устройству</value>
-  </data>
-  <data name="Connect_SignIn" xml:space="preserve">
-    <value>Войдите, чтобы использовать Connect.</value>
   </data>
   <data name="Connect_Searching" xml:space="preserve">
     <value>Поиск устройств…</value>
@@ -265,9 +208,6 @@
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>Воспроизведение на {0}</value>
   </data>
-  <data name="Connect_PlayHere" xml:space="preserve">
-    <value>Слушать здесь</value>
-  </data>
   <data name="ConnectType_Terminal" xml:space="preserve">
     <value>Терминал</value>
   </data>
@@ -277,50 +217,14 @@
   <data name="Lyrics_PlayPrompt" xml:space="preserve">
     <value>Включите трек, чтобы увидеть текст песни.</value>
   </data>
-  <data name="Lyrics_Loading" xml:space="preserve">
-    <value>Загрузка текста песни…</value>
-  </data>
   <data name="Lyrics_None" xml:space="preserve">
     <value>Текст песни недоступен.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Вход в Deezer</value>
-  </data>
-  <data name="Dialog_SignInBody" xml:space="preserve">
-    <value>Выберите способ входа.</value>
-  </data>
-  <data name="Dialog_WebLoginTitle" xml:space="preserve">
-    <value>Войти через Deezer</value>
-  </data>
-  <data name="Dialog_LogInWithArlTitle" xml:space="preserve">
-    <value>Вход по ARL</value>
+    <value>Вход в OpenDeezer</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>Вставьте ваш Deezer ARL</value>
-  </data>
-  <data name="Dialog_LoginFailedTitle" xml:space="preserve">
-    <value>Не удалось войти</value>
-  </data>
-  <data name="Dialog_LoginFailedBody" xml:space="preserve">
-    <value>Этот ARL недействителен или устарел. Попробуйте войти снова.</value>
-  </data>
-  <data name="Dialog_NoArtistTitle" xml:space="preserve">
-    <value>Нет исполнителя</value>
-  </data>
-  <data name="Dialog_NoArtistBody" xml:space="preserve">
-    <value>Включите трек, чтобы увидеть исполнителя.</value>
-  </data>
-  <data name="Dialog_NoTrackTitle" xml:space="preserve">
-    <value>Нет трека</value>
-  </data>
-  <data name="Dialog_NoTrackBody" xml:space="preserve">
-    <value>Включите трек, чтобы добавить его в плейлист.</value>
-  </data>
-  <data name="Dialog_AddToPlaylistTitle" xml:space="preserve">
-    <value>Добавить в плейлист</value>
-  </data>
-  <data name="Dialog_NewPlaylistItem" xml:space="preserve">
-    <value>＋  Новый плейлист…</value>
   </data>
   <data name="Dialog_NewPlaylistTitle" xml:space="preserve">
     <value>Новый плейлист</value>
@@ -341,34 +245,31 @@
     <value>Не удалось создать плейлист</value>
   </data>
   <data name="Dialog_CreateFailBody" xml:space="preserve">
-    <value>Не удалось создать плейлист.</value>
+    <value>Deezer не создал плейлист. Попробуйте ещё раз.</value>
   </data>
   <data name="Dialog_AddFailTitle" xml:space="preserve">
     <value>Не удалось добавить в плейлист</value>
   </data>
   <data name="Dialog_AddFailBody" xml:space="preserve">
-    <value>Не удалось добавить трек.</value>
+    <value>Deezer не добавил трек. Попробуйте ещё раз.</value>
   </data>
   <data name="Dialog_RenameFailTitle" xml:space="preserve">
     <value>Не удалось переименовать</value>
   </data>
   <data name="Dialog_RenameFailBody" xml:space="preserve">
-    <value>Не удалось переименовать плейлист.</value>
+    <value>Deezer не переименовал плейлист. Попробуйте ещё раз.</value>
   </data>
   <data name="Dialog_DeleteFailTitle" xml:space="preserve">
     <value>Не удалось удалить</value>
   </data>
   <data name="Dialog_DeleteFailBody" xml:space="preserve">
-    <value>Не удалось удалить плейлист.</value>
+    <value>Deezer не удалил плейлист. Попробуйте ещё раз.</value>
   </data>
   <data name="Dialog_ConnectFailTitle" xml:space="preserve">
     <value>Не удалось подключиться</value>
   </data>
   <data name="Dialog_ConnectFailBody" xml:space="preserve">
-    <value>Не удалось связаться с этим устройством.</value>
-  </data>
-  <data name="Account_FreeQualityHint" xml:space="preserve">
-    <value>Бесплатный аккаунт · стандартное качество (128 kbps)</value>
+    <value>Устройство не ответило. Проверьте, что оно в той же сети.</value>
   </data>
   <data name="NoInternet_Title" xml:space="preserve">
     <value>Нет подключения к Интернету</value>
@@ -379,14 +280,8 @@
   <data name="Action_Retry" xml:space="preserve">
     <value>Повторить</value>
   </data>
-  <data name="Update_TitleFormat" xml:space="preserve">
-    <value>Доступен OpenDeezer {0}</value>
-  </data>
-  <data name="Update_BodyDefault" xml:space="preserve">
-    <value>Доступна для загрузки новая версия.</value>
-  </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>Открыть OpenDeezer</value>
+    <value>Показать OpenDeezer</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>Выход</value>
@@ -398,16 +293,16 @@
     <value>Качество звука</value>
   </data>
   <data name="Quality_Normal" xml:space="preserve">
-    <value>Обычное — MP3 128 kbps</value>
+    <value>Стандартное (MP3, 128 kbps)</value>
   </data>
   <data name="Quality_High" xml:space="preserve">
-    <value>Высокое — MP3 320 kbps</value>
+    <value>Высокое (MP3, 320 kbps)</value>
   </data>
   <data name="Quality_HiFi" xml:space="preserve">
-    <value>HiFi — FLAC без потерь</value>
+    <value>HiFi (FLAC)</value>
   </data>
   <data name="Settings_QualityWarnFormat" xml:space="preserve">
-    <value>Ваш тариф ({0}) может не поддерживать это качество; воспроизведение автоматически понизит его.</value>
+    <value>Ваш тариф ({0}) может не включать это качество. Будет использовано лучшее доступное.</value>
   </data>
   <data name="Settings_OutputDevice" xml:space="preserve">
     <value>Устройство вывода</value>
@@ -416,7 +311,7 @@
     <value>Как в системе</value>
   </data>
   <data name="Settings_DeviceDefaultFormat" xml:space="preserve">
-    <value>{0}  (по умолчанию)</value>
+    <value>{0} (по умолчанию)</value>
   </data>
   <data name="Settings_NoOutputDevices" xml:space="preserve">
     <value>Нет устройств вывода</value>
@@ -438,9 +333,6 @@
   </data>
   <data name="Settings_Equalizer" xml:space="preserve">
     <value>Эквалайзер</value>
-  </data>
-  <data name="Settings_EqualizerBtn" xml:space="preserve">
-    <value>Эквалайзер…</value>
   </data>
   <data name="Settings_EqualizerDesc" xml:space="preserve">
     <value>10-полосный эквалайзер, предусиление и монозвук.</value>
@@ -475,23 +367,11 @@
   <data name="Settings_RemoteDesc" xml:space="preserve">
     <value>Управляйте воспроизведением с другого устройства в вашей сети.</value>
   </data>
-  <data name="Settings_RemoteOn" xml:space="preserve">
-    <value>Удалённое управление включено</value>
-  </data>
-  <data name="Settings_RemoteOff" xml:space="preserve">
-    <value>Удалённое управление выключено</value>
-  </data>
   <data name="Settings_RemoteLanOn" xml:space="preserve">
     <value>Доступно в локальной сети</value>
   </data>
-  <data name="Settings_RemoteLanOff" xml:space="preserve">
-    <value>Только этот компьютер</value>
-  </data>
   <data name="Settings_AccessToken" xml:space="preserve">
     <value>Токен доступа (необязательно)</value>
-  </data>
-  <data name="Settings_Updates" xml:space="preserve">
-    <value>Обновления</value>
   </data>
   <data name="Settings_UpdateCheckDesc" xml:space="preserve">
     <value>Проверить новую версию на GitHub.</value>
@@ -503,13 +383,13 @@
     <value>Проверка…</value>
   </data>
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
-    <value>Доступна v{0} (у вас v{1}).</value>
+    <value>Доступна версия {0}. У вас {1}.</value>
   </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
-    <value>Не удалось проверить обновления. Повторите позже.</value>
+    <value>Не удалось проверить обновления. Попробуйте позже.</value>
   </data>
   <data name="Settings_UpToDateFormat" xml:space="preserve">
-    <value>У вас последняя версия (v{0}).</value>
+    <value>У вас последняя версия ({0}).</value>
   </data>
   <data name="Settings_Language" xml:space="preserve">
     <value>Язык</value>
@@ -532,41 +412,17 @@
   <data name="EQ_MonoAudio" xml:space="preserve">
     <value>Монозвук</value>
   </data>
-  <data name="EQ_EnableOn" xml:space="preserve">
-    <value>Эквалайзер включён</value>
-  </data>
-  <data name="EQ_EnableOff" xml:space="preserve">
-    <value>Эквалайзер выключен</value>
-  </data>
-  <data name="EQ_MonoOn" xml:space="preserve">
-    <value>Оба канала воспроизводят один звук</value>
-  </data>
-  <data name="EQ_MonoOff" xml:space="preserve">
-    <value>Стерео</value>
-  </data>
   <data name="PhoneRemote_Instructions" xml:space="preserve">
     <value>Отсканируйте телефоном (та же сеть Wi-Fi) и введите код.</value>
-  </data>
-  <data name="PhoneRemote_On" xml:space="preserve">
-    <value>Пульт на телефоне активен</value>
-  </data>
-  <data name="PhoneRemote_Off" xml:space="preserve">
-    <value>Пульт на телефоне выключен</value>
   </data>
   <data name="About_Title" xml:space="preserve">
     <value>О программе OpenDeezer</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
-    <value>Открытая реализация Deezer.</value>
-  </data>
-  <data name="About_Description" xml:space="preserve">
-    <value>Нативный клиент Windows (WinUI 3 · C# · Fluent). Движок — вход, навигация, расшифровка Blowfish, декодирование MP3, воспроизведение WASAPI — это ядро на Go libdeezercore.dll, встроенное в процесс.</value>
-  </data>
-  <data name="About_SignedInFormat" xml:space="preserve">
-    <value>Вход выполнен: {0} · {1}</value>
+    <value>Неофициальный клиент Deezer с открытым исходным кодом.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Автор: Cycl0o0. Лицензия AGPL-3.0.</value>
+    <value>Автор: Cycl0o0; приложение для Windows: Scharkenberg. Лицензия AGPL-3.0.</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} трек</value>
@@ -650,7 +506,7 @@
     <value>Ошибка загрузки</value>
   </data>
   <data name="Dialog_DownloadFailBody" xml:space="preserve">
-    <value>Не удалось скачать трек.</value>
+    <value>Загрузка не завершилась. Попробуйте ещё раз.</value>
   </data>
   <data name="Preview_Badge" xml:space="preserve">
     <value>Фрагмент</value>
@@ -659,108 +515,475 @@
     <value>Отключить рекламу</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Deezer Free существует за счёт рекламы. Передача данных о ваших прослушиваниях — как в официальном приложении — засчитывается артистам и обеспечивает показ рекламы. Отключение убирает рекламу, но прекращает передачу данных о прослушиваниях, из-за чего артисты лишаются засчитанных прослушиваний, а также нарушаются условия использования Deezer. Используйте на свой страх и риск.</value>
+    <value>Убирает рекламу и прекращает передавать Deezer данные о ваших прослушиваниях. Эти прослушивания не засчитываются артистам, и это нарушает условия использования Deezer.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
-    <value>Recent</value>
+    <value>Недавние</value>
   </data>
   <data name="Menu_StartRadio" xml:space="preserve">
-    <value>Start radio</value>
+    <value>Запустить радио</value>
   </data>
   <data name="Radio_SongHeader" xml:space="preserve">
-    <value>Song Radio</value>
+    <value>Радио по треку</value>
   </data>
   <data name="Radio_ArtistHeader" xml:space="preserve">
-    <value>Artist Radio</value>
+    <value>Радио исполнителя</value>
   </data>
   <data name="Dialog_RadioFailTitle" xml:space="preserve">
-    <value>Couldn't start radio</value>
+    <value>Не удалось запустить радио</value>
   </data>
   <data name="Dialog_RadioFailBody" xml:space="preserve">
-    <value>No radio could be started from this.</value>
+    <value>У Deezer нет радио для этого. Попробуйте другой трек или исполнителя.</value>
   </data>
   <data name="Section_RecentlyPlayed" xml:space="preserve">
-    <value>Recently played</value>
+    <value>Недавно прослушанные</value>
   </data>
   <data name="Section_TopArtists" xml:space="preserve">
-    <value>Top Artists</value>
-  </data>
-  <data name="Recent_ListenTimeFormat" xml:space="preserve">
-    <value>Listening time (last 30 days): {0}h {1}m</value>
-  </data>
-  <data name="Recent_Empty" xml:space="preserve">
-    <value>Nothing here yet. Play something to build your history.</value>
+    <value>Топ исполнителей</value>
   </data>
   <data name="Plays_One" xml:space="preserve">
-    <value>{0} play</value>
+    <value>{0} прослушивание</value>
   </data>
   <data name="Plays_Other" xml:space="preserve">
-    <value>{0} plays</value>
-  </data>
-  <data name="Btn_DownloadAlbum" xml:space="preserve">
-    <value>Download album</value>
-  </data>
-  <data name="Btn_DownloadPlaylist" xml:space="preserve">
-    <value>Download playlist</value>
-  </data>
-  <data name="Status_Downloading" xml:space="preserve">
-    <value>Downloading…</value>
+    <value>{0} прослушивания</value>
   </data>
   <data name="Dialog_DownloadBatchDoneFormat" xml:space="preserve">
-    <value>Saved {0}, failed {1}. Folder: {2}</value>
+    <value>Сохранено: {0}, ошибок: {1}. Папка: {2}</value>
   </data>
   <data name="Settings_StreamCache" xml:space="preserve">
-    <value>Stream cache</value>
-  </data>
-  <data name="Settings_StreamCacheDesc" xml:space="preserve">
-    <value>On-disk cache for streamed audio (MB, 0 = off). Applies next launch.</value>
+    <value>Кэш потока</value>
   </data>
   <data name="Tooltip_Queue" xml:space="preserve">
-    <value>Up next</value>
+    <value>Очередь</value>
   </data>
   <data name="Queue_Title" xml:space="preserve">
-    <value>Up next</value>
-  </data>
-  <data name="Queue_Empty" xml:space="preserve">
-    <value>The queue is empty.</value>
+    <value>Очередь</value>
   </data>
   <data name="Queue_Clear" xml:space="preserve">
-    <value>Clear</value>
-  </data>
-  <data name="Queue_MoveUp" xml:space="preserve">
-    <value>Move up</value>
-  </data>
-  <data name="Queue_MoveDown" xml:space="preserve">
-    <value>Move down</value>
+    <value>Очистить</value>
   </data>
   <data name="Queue_Remove" xml:space="preserve">
-    <value>Remove from queue</value>
+    <value>Удалить из очереди</value>
   </data>
   <data name="Menu_PlayNext" xml:space="preserve">
-    <value>Play next</value>
+    <value>Воспроизвести следующим</value>
   </data>
   <data name="Menu_AddToQueue" xml:space="preserve">
-    <value>Add to queue</value>
+    <value>Добавить в очередь</value>
   </data>
-  <data name="Menu_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_Play" xml:space="preserve">
+    <value>Слушать</value>
   </data>
-  <data name="Tooltip_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_ShufflePlay" xml:space="preserve">
+    <value>Перемешать</value>
   </data>
-  <data name="Tooltip_Downloaded" xml:space="preserve">
-    <value>Available offline</value>
+  <data name="Connect_ConnectingFormat" xml:space="preserve">
+    <value>Подключение к {0}…</value>
   </data>
-  <data name="Offline_DoneTitle" xml:space="preserve">
-    <value>Downloaded for offline</value>
+  <data name="Page_Error" xml:space="preserve">
+    <value>Не удалось загрузить эту страницу.</value>
   </data>
-  <data name="Offline_DoneBody" xml:space="preserve">
-    <value>This track is now available offline.</value>
+  <data name="Search_NoResultsFormat" xml:space="preserve">
+    <value>По запросу «{0}» ничего не найдено.</value>
+  </data>
+  <data name="Login_Expired" xml:space="preserve">
+    <value>Сеанс истёк. Войдите снова.</value>
+  </data>
+  <data name="Login_ErrorTitle" xml:space="preserve">
+    <value>Не удалось войти</value>
+  </data>
+  <data name="Login_ErrorBody" xml:space="preserve">
+    <value>Deezer не принял вход. Попробуйте ещё раз.</value>
+  </data>
+  <data name="Login_ArlInvalid" xml:space="preserve">
+    <value>Это недействительный токен ARL.</value>
+  </data>
+  <data name="Login_WebView2Missing" xml:space="preserve">
+    <value>Для входа через веб нужен Microsoft Edge WebView2 Runtime. Установите его или используйте токен ARL.</value>
+  </data>
+  <data name="Error_EngineMissing" xml:space="preserve">
+    <value>Не удалось загрузить libdeezercore.dll. Переустановите OpenDeezer.</value>
+  </data>
+  <data name="Error_NoAudio" xml:space="preserve">
+    <value>Не найден аудиовыход. Подключите колонки или наушники и повторите попытку.</value>
+  </data>
+  <data name="Account_Title" xml:space="preserve">
+    <value>Аккаунт</value>
+  </data>
+  <data name="Account_Switch" xml:space="preserve">
+    <value>Сменить аккаунт</value>
+  </data>
+  <data name="Account_SignOut" xml:space="preserve">
+    <value>Выйти</value>
+  </data>
+  <data name="Account_SignOutConfirm" xml:space="preserve">
+    <value>Выйти на этом компьютере? Воспроизведение остановится.</value>
+  </data>
+  <data name="Account_UnknownTier" xml:space="preserve">
+    <value>Не удалось загрузить ваш тариф. Пока он не загрузится, загрузки и параметры качества могут быть неверны.</value>
+  </data>
+  <data name="Playback_FailTitle" xml:space="preserve">
+    <value>Ошибка воспроизведения</value>
+  </data>
+  <data name="Playback_FailBody" xml:space="preserve">
+    <value>Не удалось воспроизвести этот трек.</value>
+  </data>
+  <data name="Playback_Skipping" xml:space="preserve">
+    <value>Переход к следующему треку.</value>
+  </data>
+  <data name="Playback_StoppedBody" xml:space="preserve">
+    <value>Несколько треков подряд не воспроизвелись. Воспроизведение остановлено.</value>
+  </data>
+  <data name="Like_FailTitle" xml:space="preserve">
+    <value>Не удалось обновить медиатеку</value>
+  </data>
+  <data name="Like_FailBody" xml:space="preserve">
+    <value>Deezer не принял изменение. Попробуйте позже.</value>
+  </data>
+  <data name="Menu_Unlike" xml:space="preserve">
+    <value>Убрать из любимых</value>
+  </data>
+  <data name="Tooltip_More" xml:space="preserve">
+    <value>Ещё</value>
+  </data>
+  <data name="Tooltip_Volume" xml:space="preserve">
+    <value>Громкость</value>
+  </data>
+  <data name="Tooltip_Seek" xml:space="preserve">
+    <value>Позиция</value>
+  </data>
+  <data name="Settings_GroupPlayback" xml:space="preserve">
+    <value>Воспроизведение</value>
+  </data>
+  <data name="Settings_GroupApp" xml:space="preserve">
+    <value>Приложение</value>
+  </data>
+  <data name="Btn_RestartNow" xml:space="preserve">
+    <value>Перезапустить</value>
+  </data>
+  <data name="Btn_Generate" xml:space="preserve">
+    <value>Создать</value>
+  </data>
+  <data name="Settings_RemoteLanCaption" xml:space="preserve">
+    <value>Без токена воспроизведением может управлять любое устройство, где выполнен вход в ваш аккаунт Deezer.</value>
+  </data>
+  <data name="Tray_HintTitle" xml:space="preserve">
+    <value>OpenDeezer всё ещё работает</value>
+  </data>
+  <data name="Tray_HintBody" xml:space="preserve">
+    <value>Музыка продолжает играть. Открыть или закрыть OpenDeezer можно через значок в трее.</value>
+  </data>
+  <data name="Sleep_RemainingFormat" xml:space="preserve">
+    <value>Пауза через {0}</value>
+  </data>
+  <data name="Sleep_EndOfTrackActive" xml:space="preserve">
+    <value>Пауза в конце этого трека</value>
+  </data>
+  <data name="Sleep_Inactive" xml:space="preserve">
+    <value>Таймер сна выключен.</value>
+  </data>
+  <data name="Error_Unhandled" xml:space="preserve">
+    <value>Что-то пошло не так</value>
+  </data>
+  <data name="Search_ShowAllFormat" xml:space="preserve">
+    <value>Показать все ({0})</value>
+  </data>
+  <data name="Duration_HoursMinutesFormat" xml:space="preserve">
+    <value>{0} ч {1} мин</value>
+  </data>
+  <data name="Tooltip_NowPlaying" xml:space="preserve">
+    <value>Сейчас играет</value>
+  </data>
+  <data name="Menu_GoToArtist" xml:space="preserve">
+    <value>Перейти к исполнителю</value>
+  </data>
+  <data name="Menu_RemoveFromPlaylist" xml:space="preserve">
+    <value>Удалить из этого плейлиста</value>
+  </data>
+  <data name="Playlist_RemoveFailBody" xml:space="preserve">
+    <value>Deezer не удалил трек. Попробуйте ещё раз.</value>
+  </data>
+  <data name="Login_Busy" xml:space="preserve">
+    <value>Вход уже выполняется.</value>
+  </data>
+  <data name="Account_FreePlan" xml:space="preserve">
+    <value>Бесплатный · 128 кбит/с</value>
+  </data>
+  <data name="Btn_SignIn" xml:space="preserve">
+    <value>Войти</value>
+  </data>
+  <data name="EQ_Reset" xml:space="preserve">
+    <value>Сбросить</value>
+  </data>
+  <data name="Kind_Album" xml:space="preserve">
+    <value>Альбом</value>
+  </data>
+  <data name="Kind_Playlist" xml:space="preserve">
+    <value>Плейлист</value>
+  </data>
+  <data name="Kind_Podcast" xml:space="preserve">
+    <value>Подкаст</value>
+  </data>
+  <data name="Nav_GroupDiscover" xml:space="preserve">
+    <value>Обзор</value>
+  </data>
+  <data name="Nav_GroupLibrary" xml:space="preserve">
+    <value>Медиатека</value>
+  </data>
+  <data name="Recent_ListenTimeLabel" xml:space="preserve">
+    <value>Время прослушивания за 30 дней</value>
+  </data>
+  <data name="Search_FilterAll" xml:space="preserve">
+    <value>Все</value>
+  </data>
+  <data name="Search_TitleFormat" xml:space="preserve">
+    <value>Результаты по запросу «{0}»</value>
+  </data>
+  <data name="Settings_GroupAbout" xml:space="preserve">
+    <value>О программе</value>
+  </data>
+  <data name="Settings_PhoneRemote" xml:space="preserve">
+    <value>Пульт на телефоне</value>
+  </data>
+  <data name="Tooltip_Mute" xml:space="preserve">
+    <value>Выключить звук</value>
+  </data>
+  <data name="Tooltip_Unmute" xml:space="preserve">
+    <value>Включить звук</value>
+  </data>
+  <data name="Tooltip_Play" xml:space="preserve">
+    <value>Воспроизвести</value>
+  </data>
+  <data name="Tooltip_Pause" xml:space="preserve">
+    <value>Пауза</value>
+  </data>
+  <data name="Tooltip_ShuffleOn" xml:space="preserve">
+    <value>Перемешивание включено</value>
+  </data>
+  <data name="Tooltip_ShuffleOff" xml:space="preserve">
+    <value>Перемешивание выключено</value>
+  </data>
+  <data name="Action_ShowAll" xml:space="preserve">
+    <value>Показать все</value>
+  </data>
+  <data name="Column_Title" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="Column_Album" xml:space="preserve">
+    <value>Альбом</value>
+  </data>
+  <data name="Column_Duration" xml:space="preserve">
+    <value>Длительность</value>
+  </data>
+  <data name="Section_Popular" xml:space="preserve">
+    <value>Популярное</value>
+  </data>
+  <data name="Menu_NewPlaylist" xml:space="preserve">
+    <value>Новый плейлист…</value>
+  </data>
+  <data name="Menu_NoArtistPage" xml:space="preserve">
+    <value>У этого трека нет страницы исполнителя</value>
+  </data>
+  <data name="Empty_Liked" xml:space="preserve">
+    <value>Пока нет любимых треков</value>
+  </data>
+  <data name="Empty_Playlist" xml:space="preserve">
+    <value>Этот плейлист пуст</value>
+  </data>
+  <data name="Empty_Playlists" xml:space="preserve">
+    <value>Пока нет плейлистов</value>
+  </data>
+  <data name="Empty_Recent" xml:space="preserve">
+    <value>Вы ещё ничего не слушали</value>
+  </data>
+  <data name="Empty_Queue" xml:space="preserve">
+    <value>Очередь пуста</value>
+  </data>
+  <data name="Empty_Tracks" xml:space="preserve">
+    <value>Здесь нет треков</value>
+  </data>
+  <data name="Empty_Home" xml:space="preserve">
+    <value>Пока нечего показать</value>
+  </data>
+  <data name="Empty_Charts" xml:space="preserve">
+    <value>Чарты сейчас недоступны</value>
+  </data>
+  <data name="Empty_Artist" xml:space="preserve">
+    <value>Для этого исполнителя ничего не найдено</value>
+  </data>
+  <data name="Plays_Few" xml:space="preserve">
+    <value>{0} прослушивания</value>
+  </data>
+  <data name="Plays_Many" xml:space="preserve">
+    <value>{0} прослушиваний</value>
+  </data>
+  <data name="Lyrics_PaidOnly" xml:space="preserve">
+    <value>Тексты песен доступны в Deezer Premium, Duo, Family и Student.</value>
+  </data>
+  <data name="Queue_LeftFormat" xml:space="preserve">
+    <value>осталось {0}</value>
+    <comment>Queue header: time left from the playing track to the end, e.g. 47 min left.</comment>
+  </data>
+  <data name="Nav_Track" xml:space="preserve">
+    <value>Трек</value>
+  </data>
+  <data name="Section_Details" xml:space="preserve">
+    <value>Подробности</value>
+  </data>
+  <data name="Section_Credits" xml:space="preserve">
+    <value>Участники</value>
+  </data>
+  <data name="Track_Artists" xml:space="preserve">
+    <value>Исполнители</value>
+  </data>
+  <data name="Track_Album" xml:space="preserve">
+    <value>Альбом</value>
+  </data>
+  <data name="Track_Released" xml:space="preserve">
+    <value>Дата выхода</value>
+  </data>
+  <data name="Track_Number" xml:space="preserve">
+    <value>Трек</value>
+  </data>
+  <data name="Track_NumberFormat" xml:space="preserve">
+    <value>{0} из {1}</value>
+  </data>
+  <data name="Track_Disc" xml:space="preserve">
+    <value>Диск</value>
+  </data>
+  <data name="Track_Length" xml:space="preserve">
+    <value>Длительность</value>
+  </data>
+  <data name="Track_Genre" xml:space="preserve">
+    <value>Жанр</value>
+  </data>
+  <data name="Track_Label" xml:space="preserve">
+    <value>Лейбл</value>
+  </data>
+  <data name="Track_Bpm" xml:space="preserve">
+    <value>BPM</value>
+  </data>
+  <data name="Track_Isrc" xml:space="preserve">
+    <value>ISRC</value>
+  </data>
+  <data name="Track_Copyright" xml:space="preserve">
+    <value>Авторские права</value>
+  </data>
+  <data name="Menu_TrackDetails" xml:space="preserve">
+    <value>Сведения о треке</value>
+  </data>
+  <data name="Bar_NothingPlaying" xml:space="preserve">
+    <value>Ничего не воспроизводится</value>
+  </data>
+  <data name="Settings_GroupStorage" xml:space="preserve">
+    <value>Хранилище</value>
+  </data>
+  <data name="Settings_CacheFolder" xml:space="preserve">
+    <value>Папка кэша</value>
+  </data>
+  <data name="Settings_ClearCache" xml:space="preserve">
+    <value>Очистить кэш</value>
+  </data>
+  <data name="Settings_ClearCacheConfirm" xml:space="preserve">
+    <value>Удалить треки из кэша воспроизведения? Офлайн-музыка останется, если не удалить и её.</value>
+  </data>
+  <data name="Btn_Clear" xml:space="preserve">
+    <value>Очистить</value>
+  </data>
+  <data name="Settings_ClearCacheOffline" xml:space="preserve">
+    <value>Удалить и офлайн-музыку</value>
+  </data>
+  <data name="Settings_CacheUsedFormat" xml:space="preserve">
+    <value>Занято {0}</value>
+  </data>
+  <data name="Settings_CacheUsedOfflineFormat" xml:space="preserve">
+    <value>Занято {0}, офлайн {1}</value>
+  </data>
+  <data name="Size_MbFormat" xml:space="preserve">
+    <value>{0} МБ</value>
+  </data>
+  <data name="Size_GbFormat" xml:space="preserve">
+    <value>{0} ГБ</value>
+  </data>
+  <data name="Settings_CacheAge" xml:space="preserve">
+    <value>Хранить непрослушанные треки</value>
+  </data>
+  <data name="Settings_CacheAgeDesc" xml:space="preserve">
+    <value>Треки из кэша, которые не воспроизводились дольше этого срока, удаляются. Офлайн-музыка остаётся.</value>
+  </data>
+  <data name="Settings_CacheAge_0" xml:space="preserve">
+    <value>Всегда</value>
+  </data>
+  <data name="Settings_CacheAge_7" xml:space="preserve">
+    <value>1 неделю</value>
+  </data>
+  <data name="Settings_CacheAge_30" xml:space="preserve">
+    <value>1 месяц</value>
+  </data>
+  <data name="Settings_CacheAge_90" xml:space="preserve">
+    <value>3 месяца</value>
+  </data>
+  <data name="Settings_CacheAge_180" xml:space="preserve">
+    <value>6 месяцев</value>
+  </data>
+  <data name="Settings_CacheAge_365" xml:space="preserve">
+    <value>1 год</value>
+  </data>
+  <data name="Days_One" xml:space="preserve">
+    <value>{0} день</value>
+  </data>
+  <data name="Days_Few" xml:space="preserve">
+    <value>{0} дня</value>
+  </data>
+  <data name="Days_Many" xml:space="preserve">
+    <value>{0} дней</value>
+  </data>
+  <data name="Days_Other" xml:space="preserve">
+    <value>{0} дня</value>
+  </data>
+  <data name="Error_FolderRefused" xml:space="preserve">
+    <value>Эту папку нельзя использовать. Выберите другую.</value>
+  </data>
+  <data name="Error_StorageFailed" xml:space="preserve">
+    <value>Не получилось. Попробуйте ещё раз.</value>
+  </data>
+  <data name="Settings_CacheFolderConfirm" xml:space="preserve">
+    <value>Треки из кэша в прежней папке будут удалены.</value>
+  </data>
+  <data name="Btn_Change" xml:space="preserve">
+    <value>Изменить</value>
+  </data>
+  <data name="Nav_Offline" xml:space="preserve">
+    <value>Офлайн</value>
+  </data>
+  <data name="Offline_Available" xml:space="preserve">
+    <value>Доступно офлайн</value>
+  </data>
+  <data name="Offline_ProgressFormat" xml:space="preserve">
+    <value>{0} из {1}</value>
+  </data>
+  <data name="Offline_Songs" xml:space="preserve">
+    <value>Треки</value>
+  </data>
+  <data name="Offline_Mode" xml:space="preserve">
+    <value>Офлайн-режим</value>
+  </data>
+  <data name="Offline_YoureOffline" xml:space="preserve">
+    <value>Нет подключения</value>
+  </data>
+  <data name="Offline_YoureOfflineBody" xml:space="preserve">
+    <value>Воспроизводится музыка, сохранённая на этом ПК. Повторите вход, когда появится сеть.</value>
+  </data>
+  <data name="Offline_Empty" xml:space="preserve">
+    <value>Здесь появятся альбомы, плейлисты и треки, доступные офлайн.</value>
+  </data>
+  <data name="Offline_Remove" xml:space="preserve">
+    <value>Убрать из офлайна</value>
+  </data>
+  <data name="Offline_FetchStopped" xml:space="preserve">
+    <value>Загрузка для офлайна остановлена</value>
   </data>
   <data name="Offline_FailTitle" xml:space="preserve">
-    <value>Download failed</value>
-  </data>
-  <data name="Offline_FailBody" xml:space="preserve">
-    <value>This track couldn't be downloaded for offline.</value>
+    <value>Не удалось изменить офлайн-музыку</value>
   </data>
 </root>

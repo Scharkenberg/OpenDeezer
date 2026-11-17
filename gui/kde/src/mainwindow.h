@@ -127,8 +127,8 @@ private:
     void showAddToPlaylistPicker(const Track &t, const QVector<Playlist> &ps);
     void removeFromCurrentPlaylist(const Track &t, int row);
     void download(const QString &id);                     // DZDownloadTrack (premium-only)
-    // Save a track for offline playback (premium-only): DZDownloadForOffline on a
-    // worker, toast the result and record its {key} id so the "downloaded"
+    // Save a track for offline playback (premium-only): DZPinOffline on a
+    // worker, toast the result and record the id so the "downloaded"
     // indicator (see displayTitle) lights up. refreshOfflineIndicators repaints
     // the markers across the visible track tables, the queue panel and the
     // now-playing badge.
@@ -383,9 +383,9 @@ private:
     // best-effort local mirror: seeded from the Liked Songs view and updated on
     // every like/unlike so the heart reflects state for known tracks.
     QSet<QString> m_likedIds;
-    // Track ids saved for offline playback, learned from the {key} DZDownloadForOffline
-    // returns. Like m_likedIds this is a best-effort per-session mirror (there is no
-    // bulk "list offline ids" query); it drives the "downloaded" indicator.
+    // Track ids saved for offline playback: seeded from DZOfflineIDsJSON at login
+    // (seedFavorites) and grown by each DZPinOffline; it drives the "downloaded"
+    // indicator.
     QSet<QString> m_offlineIds;
     QString       m_currentPlaylistId;       // set while the shared table shows a playlist
     QString       m_currentPlaylistName;     // its display name (batch-download message)

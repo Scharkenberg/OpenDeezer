@@ -61,6 +61,12 @@
   <data name="Nav_Home" xml:space="preserve">
     <value>होम</value>
   </data>
+  <data name="Nav_Back" xml:space="preserve">
+    <value>वापस</value>
+  </data>
+  <data name="Nav_Pane" xml:space="preserve">
+    <value>नेविगेशन</value>
+  </data>
   <data name="Nav_LikedSongs" xml:space="preserve">
     <value>पसंदीदा गाने</value>
   </data>
@@ -79,23 +85,11 @@
   <data name="Nav_Search" xml:space="preserve">
     <value>खोजें</value>
   </data>
-  <data name="Nav_Account" xml:space="preserve">
-    <value>साइन इन करें / खाता बदलें…</value>
-  </data>
   <data name="Nav_Settings" xml:space="preserve">
     <value>सेटिंग्स</value>
   </data>
-  <data name="Nav_PhoneRemote" xml:space="preserve">
-    <value>फ़ोन रिमोट</value>
-  </data>
-  <data name="Nav_About" xml:space="preserve">
-    <value>परिचय</value>
-  </data>
   <data name="Nav_Artist" xml:space="preserve">
     <value>कलाकार</value>
-  </data>
-  <data name="Nav_Lyrics" xml:space="preserve">
-    <value>बोल</value>
   </data>
   <data name="Btn_Download" xml:space="preserve">
     <value>डाउनलोड करें</value>
@@ -103,32 +97,20 @@
   <data name="Btn_NewPlaylist" xml:space="preserve">
     <value>नई प्लेलिस्ट</value>
   </data>
-  <data name="Btn_Add" xml:space="preserve">
-    <value>जोड़ें</value>
-  </data>
   <data name="Btn_Cancel" xml:space="preserve">
     <value>रद्द करें</value>
   </data>
   <data name="Btn_OK" xml:space="preserve">
     <value>ठीक है</value>
   </data>
-  <data name="Btn_Save" xml:space="preserve">
-    <value>सहेजें</value>
-  </data>
-  <data name="Btn_Close" xml:space="preserve">
-    <value>बंद करें</value>
-  </data>
-  <data name="Btn_Quit" xml:space="preserve">
-    <value>बाहर निकलें</value>
-  </data>
   <data name="Btn_Delete" xml:space="preserve">
     <value>मिटाएँ</value>
   </data>
   <data name="Btn_LogInWithDeezer" xml:space="preserve">
-    <value>Deezer से साइन इन करें</value>
+    <value>Deezer के साथ जारी रखें</value>
   </data>
   <data name="Btn_EnterArlManually" xml:space="preserve">
-    <value>ARL मैन्युअल रूप से दर्ज करें</value>
+    <value>ARL टोकन का उपयोग करें</value>
   </data>
   <data name="Section_TopTracks" xml:space="preserve">
     <value>टॉप ट्रैक</value>
@@ -154,15 +136,6 @@
   <data name="Search_TracksHeader" xml:space="preserve">
     <value>ट्रैक</value>
   </data>
-  <data name="Search_AlbumsPlaylistsHeader" xml:space="preserve">
-    <value>एल्बम और प्लेलिस्ट</value>
-  </data>
-  <data name="Podcast_SearchPlaceholder" xml:space="preserve">
-    <value>पॉडकास्ट खोजें…</value>
-  </data>
-  <data name="Podcast_ShowsHeader" xml:space="preserve">
-    <value>शो</value>
-  </data>
   <data name="Greeting_Morning" xml:space="preserve">
     <value>सुप्रभात</value>
   </data>
@@ -172,20 +145,11 @@
   <data name="Greeting_Evening" xml:space="preserve">
     <value>शुभ संध्या</value>
   </data>
-  <data name="Tooltip_Like" xml:space="preserve">
-    <value>पसंद करें / नापसंद करें</value>
-  </data>
-  <data name="Tooltip_AddToPlaylist" xml:space="preserve">
-    <value>प्लेलिस्ट में जोड़ें</value>
-  </data>
   <data name="Tooltip_Shuffle" xml:space="preserve">
     <value>शफ़ल</value>
   </data>
   <data name="Tooltip_Previous" xml:space="preserve">
     <value>पिछला</value>
-  </data>
-  <data name="Tooltip_PlayPause" xml:space="preserve">
-    <value>चलाएँ / पॉज़ करें</value>
   </data>
   <data name="Tooltip_Next" xml:space="preserve">
     <value>अगला</value>
@@ -201,9 +165,6 @@
   </data>
   <data name="Tooltip_Lyrics" xml:space="preserve">
     <value>बोल</value>
-  </data>
-  <data name="Tooltip_Artist" xml:space="preserve">
-    <value>कलाकार</value>
   </data>
   <data name="Tooltip_Connect" xml:space="preserve">
     <value>डिवाइस से कनेक्ट करें</value>
@@ -226,26 +187,8 @@
   <data name="Status_LoggingIn" xml:space="preserve">
     <value>साइन इन हो रहा है…</value>
   </data>
-  <data name="Status_LoginFailed" xml:space="preserve">
-    <value>साइन इन विफल</value>
-  </data>
-  <data name="Status_CheckingAccount" xml:space="preserve">
-    <value>खाता जाँचा जा रहा है…</value>
-  </data>
-  <data name="Status_NotPlaying" xml:space="preserve">
-    <value>कुछ नहीं चल रहा</value>
-  </data>
-  <data name="Status_NotSignedIn" xml:space="preserve">
-    <value>साइन इन नहीं है</value>
-  </data>
-  <data name="Status_Loading" xml:space="preserve">
-    <value>लोड हो रहा है…</value>
-  </data>
   <data name="Connect_Title" xml:space="preserve">
     <value>डिवाइस से कनेक्ट करें</value>
-  </data>
-  <data name="Connect_SignIn" xml:space="preserve">
-    <value>कनेक्ट का उपयोग करने के लिए साइन इन करें।</value>
   </data>
   <data name="Connect_Searching" xml:space="preserve">
     <value>डिवाइस खोजे जा रहे हैं…</value>
@@ -265,9 +208,6 @@
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>{0} पर चल रहा है</value>
   </data>
-  <data name="Connect_PlayHere" xml:space="preserve">
-    <value>यहाँ चलाएँ</value>
-  </data>
   <data name="ConnectType_Terminal" xml:space="preserve">
     <value>टर्मिनल</value>
   </data>
@@ -277,50 +217,14 @@
   <data name="Lyrics_PlayPrompt" xml:space="preserve">
     <value>बोल देखने के लिए कोई ट्रैक चलाएँ।</value>
   </data>
-  <data name="Lyrics_Loading" xml:space="preserve">
-    <value>बोल लोड हो रहे हैं…</value>
-  </data>
   <data name="Lyrics_None" xml:space="preserve">
     <value>कोई बोल उपलब्ध नहीं।</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Deezer में साइन इन करें</value>
-  </data>
-  <data name="Dialog_SignInBody" xml:space="preserve">
-    <value>चुनें कि आप कैसे साइन इन करना चाहते हैं।</value>
-  </data>
-  <data name="Dialog_WebLoginTitle" xml:space="preserve">
-    <value>Deezer से साइन इन करें</value>
-  </data>
-  <data name="Dialog_LogInWithArlTitle" xml:space="preserve">
-    <value>ARL से साइन इन करें</value>
+    <value>OpenDeezer में साइन इन करें</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>अपना Deezer ARL पेस्ट करें</value>
-  </data>
-  <data name="Dialog_LoginFailedTitle" xml:space="preserve">
-    <value>साइन इन विफल</value>
-  </data>
-  <data name="Dialog_LoginFailedBody" xml:space="preserve">
-    <value>वह ARL अमान्य या समाप्त हो चुका है। दोबारा साइन इन करें।</value>
-  </data>
-  <data name="Dialog_NoArtistTitle" xml:space="preserve">
-    <value>कोई कलाकार नहीं</value>
-  </data>
-  <data name="Dialog_NoArtistBody" xml:space="preserve">
-    <value>कलाकार देखने के लिए कोई ट्रैक चलाएँ।</value>
-  </data>
-  <data name="Dialog_NoTrackTitle" xml:space="preserve">
-    <value>कोई ट्रैक नहीं</value>
-  </data>
-  <data name="Dialog_NoTrackBody" xml:space="preserve">
-    <value>किसी ट्रैक को प्लेलिस्ट में जोड़ने के लिए उसे चलाएँ।</value>
-  </data>
-  <data name="Dialog_AddToPlaylistTitle" xml:space="preserve">
-    <value>प्लेलिस्ट में जोड़ें</value>
-  </data>
-  <data name="Dialog_NewPlaylistItem" xml:space="preserve">
-    <value>＋  नई प्लेलिस्ट…</value>
   </data>
   <data name="Dialog_NewPlaylistTitle" xml:space="preserve">
     <value>नई प्लेलिस्ट</value>
@@ -341,34 +245,31 @@
     <value>प्लेलिस्ट नहीं बन सकी</value>
   </data>
   <data name="Dialog_CreateFailBody" xml:space="preserve">
-    <value>प्लेलिस्ट नहीं बनाई जा सकी।</value>
+    <value>Deezer ने प्लेलिस्ट नहीं बनाई। फिर से कोशिश करें।</value>
   </data>
   <data name="Dialog_AddFailTitle" xml:space="preserve">
     <value>प्लेलिस्ट में नहीं जोड़ा जा सका</value>
   </data>
   <data name="Dialog_AddFailBody" xml:space="preserve">
-    <value>ट्रैक नहीं जोड़ा जा सका।</value>
+    <value>Deezer ने ट्रैक नहीं जोड़ा। फिर से कोशिश करें।</value>
   </data>
   <data name="Dialog_RenameFailTitle" xml:space="preserve">
     <value>नाम नहीं बदला जा सका</value>
   </data>
   <data name="Dialog_RenameFailBody" xml:space="preserve">
-    <value>प्लेलिस्ट का नाम नहीं बदला जा सका।</value>
+    <value>Deezer ने प्लेलिस्ट का नाम नहीं बदला। फिर से कोशिश करें।</value>
   </data>
   <data name="Dialog_DeleteFailTitle" xml:space="preserve">
     <value>मिटाया नहीं जा सका</value>
   </data>
   <data name="Dialog_DeleteFailBody" xml:space="preserve">
-    <value>प्लेलिस्ट नहीं मिटाई जा सकी।</value>
+    <value>Deezer ने प्लेलिस्ट नहीं हटाई। फिर से कोशिश करें।</value>
   </data>
   <data name="Dialog_ConnectFailTitle" xml:space="preserve">
     <value>कनेक्ट नहीं हो सका</value>
   </data>
   <data name="Dialog_ConnectFailBody" xml:space="preserve">
-    <value>उस डिवाइस तक नहीं पहुँचा जा सका।</value>
-  </data>
-  <data name="Account_FreeQualityHint" xml:space="preserve">
-    <value>निःशुल्क खाता · मानक गुणवत्ता (128 kbps)</value>
+    <value>डिवाइस ने जवाब नहीं दिया। जाँचें कि वह उसी नेटवर्क पर है।</value>
   </data>
   <data name="NoInternet_Title" xml:space="preserve">
     <value>इंटरनेट कनेक्शन नहीं है</value>
@@ -379,14 +280,8 @@
   <data name="Action_Retry" xml:space="preserve">
     <value>पुनः प्रयास करें</value>
   </data>
-  <data name="Update_TitleFormat" xml:space="preserve">
-    <value>OpenDeezer {0} उपलब्ध है</value>
-  </data>
-  <data name="Update_BodyDefault" xml:space="preserve">
-    <value>डाउनलोड के लिए एक नया संस्करण उपलब्ध है।</value>
-  </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>OpenDeezer खोलें</value>
+    <value>OpenDeezer दिखाएँ</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>बाहर निकलें</value>
@@ -398,16 +293,16 @@
     <value>ऑडियो गुणवत्ता</value>
   </data>
   <data name="Quality_Normal" xml:space="preserve">
-    <value>सामान्य — MP3 128 kbps</value>
+    <value>मानक (MP3, 128 kbps)</value>
   </data>
   <data name="Quality_High" xml:space="preserve">
-    <value>उच्च — MP3 320 kbps</value>
+    <value>उच्च (MP3, 320 kbps)</value>
   </data>
   <data name="Quality_HiFi" xml:space="preserve">
-    <value>HiFi — FLAC लॉसलेस</value>
+    <value>HiFi (FLAC)</value>
   </data>
   <data name="Settings_QualityWarnFormat" xml:space="preserve">
-    <value>आपका प्लान ({0}) शायद इस गुणवत्ता का समर्थन न करे; प्लेबैक अपने आप कम गुणवत्ता पर चला जाएगा।</value>
+    <value>आपके प्लान ({0}) में यह गुणवत्ता शामिल नहीं हो सकती। प्लेबैक उपलब्ध सर्वोत्तम गुणवत्ता का उपयोग करता है।</value>
   </data>
   <data name="Settings_OutputDevice" xml:space="preserve">
     <value>आउटपुट डिवाइस</value>
@@ -416,7 +311,7 @@
     <value>सिस्टम डिफ़ॉल्ट</value>
   </data>
   <data name="Settings_DeviceDefaultFormat" xml:space="preserve">
-    <value>{0}  (डिफ़ॉल्ट)</value>
+    <value>{0} (डिफ़ॉल्ट)</value>
   </data>
   <data name="Settings_NoOutputDevices" xml:space="preserve">
     <value>कोई आउटपुट डिवाइस नहीं</value>
@@ -438,9 +333,6 @@
   </data>
   <data name="Settings_Equalizer" xml:space="preserve">
     <value>इक्वलाइज़र</value>
-  </data>
-  <data name="Settings_EqualizerBtn" xml:space="preserve">
-    <value>इक्वलाइज़र…</value>
   </data>
   <data name="Settings_EqualizerDesc" xml:space="preserve">
     <value>10-बैंड इक्वलाइज़र, प्रीएम्प और मोनो ऑडियो।</value>
@@ -475,23 +367,11 @@
   <data name="Settings_RemoteDesc" xml:space="preserve">
     <value>अपने नेटवर्क के किसी अन्य डिवाइस से प्लेबैक नियंत्रित करें।</value>
   </data>
-  <data name="Settings_RemoteOn" xml:space="preserve">
-    <value>रिमोट कंट्रोल चालू</value>
-  </data>
-  <data name="Settings_RemoteOff" xml:space="preserve">
-    <value>रिमोट कंट्रोल बंद</value>
-  </data>
   <data name="Settings_RemoteLanOn" xml:space="preserve">
     <value>लोकल नेटवर्क पर पहुँच योग्य</value>
   </data>
-  <data name="Settings_RemoteLanOff" xml:space="preserve">
-    <value>केवल यह कंप्यूटर</value>
-  </data>
   <data name="Settings_AccessToken" xml:space="preserve">
     <value>एक्सेस टोकन (वैकल्पिक)</value>
-  </data>
-  <data name="Settings_Updates" xml:space="preserve">
-    <value>अपडेट</value>
   </data>
   <data name="Settings_UpdateCheckDesc" xml:space="preserve">
     <value>नए रिलीज़ के लिए GitHub जाँचें।</value>
@@ -503,13 +383,13 @@
     <value>जाँच हो रही है…</value>
   </data>
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
-    <value>v{0} उपलब्ध है (आपके पास v{1} है)।</value>
+    <value>संस्करण {0} उपलब्ध है। आपके पास {1} है।</value>
   </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
-    <value>अपडेट जाँच नहीं सका। बाद में पुनः प्रयास करें।</value>
+    <value>अपडेट की जाँच नहीं हो सकी। बाद में फिर से कोशिश करें।</value>
   </data>
   <data name="Settings_UpToDateFormat" xml:space="preserve">
-    <value>आप अद्यतित हैं (v{0})।</value>
+    <value>आप अप टू डेट हैं ({0})।</value>
   </data>
   <data name="Settings_Language" xml:space="preserve">
     <value>भाषा</value>
@@ -532,41 +412,17 @@
   <data name="EQ_MonoAudio" xml:space="preserve">
     <value>मोनो ऑडियो</value>
   </data>
-  <data name="EQ_EnableOn" xml:space="preserve">
-    <value>इक्वलाइज़र चालू</value>
-  </data>
-  <data name="EQ_EnableOff" xml:space="preserve">
-    <value>इक्वलाइज़र बंद</value>
-  </data>
-  <data name="EQ_MonoOn" xml:space="preserve">
-    <value>दोनों चैनल एक ही ऑडियो चलाते हैं</value>
-  </data>
-  <data name="EQ_MonoOff" xml:space="preserve">
-    <value>स्टीरियो</value>
-  </data>
   <data name="PhoneRemote_Instructions" xml:space="preserve">
     <value>अपने फ़ोन से स्कैन करें (वही Wi-Fi), फिर कोड दर्ज करें।</value>
-  </data>
-  <data name="PhoneRemote_On" xml:space="preserve">
-    <value>फ़ोन रिमोट सक्रिय</value>
-  </data>
-  <data name="PhoneRemote_Off" xml:space="preserve">
-    <value>फ़ोन रिमोट बंद</value>
   </data>
   <data name="About_Title" xml:space="preserve">
     <value>OpenDeezer के बारे में</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
-    <value>Deezer का एक ओपन सोर्स पुनर्कार्यान्वयन।</value>
-  </data>
-  <data name="About_Description" xml:space="preserve">
-    <value>नेटिव Windows क्लाइंट (WinUI 3 · C# · Fluent)। इंजन — लॉगिन, ब्राउज़, Blowfish डिक्रिप्ट, MP3 डिकोड, WASAPI प्लेबैक — इन-प्रोसेस लिंक किया गया Go कोर libdeezercore.dll है।</value>
-  </data>
-  <data name="About_SignedInFormat" xml:space="preserve">
-    <value>साइन इन: {0} · {1}</value>
+    <value>Deezer के लिए अनौपचारिक ओपन-सोर्स क्लाइंट।</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Cycl0o0 द्वारा। AGPL-3.0 के तहत लाइसेंस प्राप्त।</value>
+    <value>Cycl0o0 द्वारा; Windows ऐप Scharkenberg द्वारा। AGPL-3.0 के तहत लाइसेंस प्राप्त।</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} ट्रैक</value>
@@ -620,7 +476,7 @@
     <value>डाउनलोड विफल</value>
   </data>
   <data name="Dialog_DownloadFailBody" xml:space="preserve">
-    <value>यह ट्रैक डाउनलोड नहीं हो सका।</value>
+    <value>डाउनलोड पूरा नहीं हुआ। फिर से कोशिश करें।</value>
   </data>
   <data name="Preview_Badge" xml:space="preserve">
     <value>पूर्वावलोकन</value>
@@ -629,108 +485,463 @@
     <value>विज्ञापन बंद करें</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Deezer Free विज्ञापन-समर्थित है। आधिकारिक ऐप की तरह अपने प्ले की रिपोर्ट करने से कलाकारों को श्रेय मिलता है और विज्ञापन चलते हैं। इसे बंद करने से विज्ञापन हट जाते हैं लेकिन आपके प्ले की रिपोर्ट होना भी रुक जाता है, जिससे कलाकार अपनी प्ले-गिनती से वंचित रह जाते हैं और Deezer की उपयोग शर्तों का उल्लंघन होता है। अपने जोखिम पर उपयोग करें।</value>
+    <value>विज्ञापन हटाता है और Deezer को आपके प्ले की रिपोर्ट करना बंद करता है। उन प्ले का श्रेय कलाकारों को नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है।</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
-    <value>Recent</value>
+    <value>हाल ही में</value>
   </data>
   <data name="Menu_StartRadio" xml:space="preserve">
-    <value>Start radio</value>
+    <value>रेडियो शुरू करें</value>
   </data>
   <data name="Radio_SongHeader" xml:space="preserve">
-    <value>Song Radio</value>
+    <value>गाना रेडियो</value>
   </data>
   <data name="Radio_ArtistHeader" xml:space="preserve">
-    <value>Artist Radio</value>
+    <value>कलाकार रेडियो</value>
   </data>
   <data name="Dialog_RadioFailTitle" xml:space="preserve">
-    <value>Couldn't start radio</value>
+    <value>रेडियो शुरू नहीं हो सका</value>
   </data>
   <data name="Dialog_RadioFailBody" xml:space="preserve">
-    <value>No radio could be started from this.</value>
+    <value>Deezer के पास इसके लिए कोई रेडियो नहीं है। कोई दूसरा गाना या कलाकार आज़माएँ।</value>
   </data>
   <data name="Section_RecentlyPlayed" xml:space="preserve">
-    <value>Recently played</value>
+    <value>हाल में चलाए गए</value>
   </data>
   <data name="Section_TopArtists" xml:space="preserve">
-    <value>Top Artists</value>
-  </data>
-  <data name="Recent_ListenTimeFormat" xml:space="preserve">
-    <value>Listening time (last 30 days): {0}h {1}m</value>
-  </data>
-  <data name="Recent_Empty" xml:space="preserve">
-    <value>Nothing here yet. Play something to build your history.</value>
+    <value>टॉप कलाकार</value>
   </data>
   <data name="Plays_One" xml:space="preserve">
-    <value>{0} play</value>
+    <value>{0} बार चलाया गया</value>
   </data>
   <data name="Plays_Other" xml:space="preserve">
-    <value>{0} plays</value>
-  </data>
-  <data name="Btn_DownloadAlbum" xml:space="preserve">
-    <value>Download album</value>
-  </data>
-  <data name="Btn_DownloadPlaylist" xml:space="preserve">
-    <value>Download playlist</value>
-  </data>
-  <data name="Status_Downloading" xml:space="preserve">
-    <value>Downloading…</value>
+    <value>{0} बार चलाया गया</value>
   </data>
   <data name="Dialog_DownloadBatchDoneFormat" xml:space="preserve">
-    <value>Saved {0}, failed {1}. Folder: {2}</value>
+    <value>{0} सहेजे गए, {1} विफल। यहाँ सहेजा गया: {2}</value>
   </data>
   <data name="Settings_StreamCache" xml:space="preserve">
-    <value>Stream cache</value>
-  </data>
-  <data name="Settings_StreamCacheDesc" xml:space="preserve">
-    <value>On-disk cache for streamed audio (MB, 0 = off). Applies next launch.</value>
+    <value>स्ट्रीम कैश</value>
   </data>
   <data name="Tooltip_Queue" xml:space="preserve">
-    <value>Up next</value>
+    <value>कतार</value>
   </data>
   <data name="Queue_Title" xml:space="preserve">
-    <value>Up next</value>
-  </data>
-  <data name="Queue_Empty" xml:space="preserve">
-    <value>The queue is empty.</value>
+    <value>कतार</value>
   </data>
   <data name="Queue_Clear" xml:space="preserve">
-    <value>Clear</value>
-  </data>
-  <data name="Queue_MoveUp" xml:space="preserve">
-    <value>Move up</value>
-  </data>
-  <data name="Queue_MoveDown" xml:space="preserve">
-    <value>Move down</value>
+    <value>साफ़ करें</value>
   </data>
   <data name="Queue_Remove" xml:space="preserve">
-    <value>Remove from queue</value>
+    <value>कतार से हटाएँ</value>
   </data>
   <data name="Menu_PlayNext" xml:space="preserve">
-    <value>Play next</value>
+    <value>अगला चलाएँ</value>
   </data>
   <data name="Menu_AddToQueue" xml:space="preserve">
-    <value>Add to queue</value>
+    <value>कतार में जोड़ें</value>
   </data>
-  <data name="Menu_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_Play" xml:space="preserve">
+    <value>चलाएँ</value>
   </data>
-  <data name="Tooltip_DownloadOffline" xml:space="preserve">
-    <value>Download for offline</value>
+  <data name="Btn_ShufflePlay" xml:space="preserve">
+    <value>शफ़ल करें</value>
   </data>
-  <data name="Tooltip_Downloaded" xml:space="preserve">
-    <value>Available offline</value>
+  <data name="Connect_ConnectingFormat" xml:space="preserve">
+    <value>{0} से कनेक्ट हो रहा है…</value>
   </data>
-  <data name="Offline_DoneTitle" xml:space="preserve">
-    <value>Downloaded for offline</value>
+  <data name="Page_Error" xml:space="preserve">
+    <value>यह पेज लोड नहीं हो सका।</value>
   </data>
-  <data name="Offline_DoneBody" xml:space="preserve">
-    <value>This track is now available offline.</value>
+  <data name="Search_NoResultsFormat" xml:space="preserve">
+    <value>“{0}” के लिए कोई परिणाम नहीं।</value>
+  </data>
+  <data name="Login_Expired" xml:space="preserve">
+    <value>आपका सत्र समाप्त हो गया। फिर से साइन इन करें।</value>
+  </data>
+  <data name="Login_ErrorTitle" xml:space="preserve">
+    <value>साइन इन नहीं हो सका</value>
+  </data>
+  <data name="Login_ErrorBody" xml:space="preserve">
+    <value>Deezer ने साइन इन स्वीकार नहीं किया। फिर से कोशिश करें।</value>
+  </data>
+  <data name="Login_ArlInvalid" xml:space="preserve">
+    <value>यह मान्य ARL टोकन नहीं है।</value>
+  </data>
+  <data name="Login_WebView2Missing" xml:space="preserve">
+    <value>वेब साइन इन के लिए Microsoft Edge WebView2 Runtime चाहिए। इसे इंस्टॉल करें या ARL टोकन का उपयोग करें।</value>
+  </data>
+  <data name="Error_EngineMissing" xml:space="preserve">
+    <value>libdeezercore.dll लोड नहीं हो सका। OpenDeezer को फिर से इंस्टॉल करें।</value>
+  </data>
+  <data name="Error_NoAudio" xml:space="preserve">
+    <value>कोई ऑडियो आउटपुट नहीं मिला। स्पीकर या हेडफ़ोन कनेक्ट करें, फिर दोबारा कोशिश करें।</value>
+  </data>
+  <data name="Account_Title" xml:space="preserve">
+    <value>खाता</value>
+  </data>
+  <data name="Account_Switch" xml:space="preserve">
+    <value>खाता बदलें</value>
+  </data>
+  <data name="Account_SignOut" xml:space="preserve">
+    <value>साइन आउट</value>
+  </data>
+  <data name="Account_SignOutConfirm" xml:space="preserve">
+    <value>इस PC पर साइन आउट करें? प्लेबैक रुक जाएगा।</value>
+  </data>
+  <data name="Account_UnknownTier" xml:space="preserve">
+    <value>आपका प्लान लोड नहीं हो सका। लोड होने तक डाउनलोड और गुणवत्ता विकल्प गलत हो सकते हैं।</value>
+  </data>
+  <data name="Playback_FailTitle" xml:space="preserve">
+    <value>प्लेबैक विफल</value>
+  </data>
+  <data name="Playback_FailBody" xml:space="preserve">
+    <value>यह ट्रैक चलाया नहीं जा सका।</value>
+  </data>
+  <data name="Playback_Skipping" xml:space="preserve">
+    <value>अगले ट्रैक पर जा रहे हैं।</value>
+  </data>
+  <data name="Playback_StoppedBody" xml:space="preserve">
+    <value>लगातार कई ट्रैक नहीं चल सके। प्लेबैक रुक गया।</value>
+  </data>
+  <data name="Like_FailTitle" xml:space="preserve">
+    <value>आपकी लाइब्रेरी अपडेट नहीं हो सकी</value>
+  </data>
+  <data name="Like_FailBody" xml:space="preserve">
+    <value>Deezer ने बदलाव स्वीकार नहीं किया। बाद में फिर से कोशिश करें।</value>
+  </data>
+  <data name="Menu_Unlike" xml:space="preserve">
+    <value>पसंद हटाएँ</value>
+  </data>
+  <data name="Tooltip_More" xml:space="preserve">
+    <value>और</value>
+  </data>
+  <data name="Tooltip_Volume" xml:space="preserve">
+    <value>वॉल्यूम</value>
+  </data>
+  <data name="Tooltip_Seek" xml:space="preserve">
+    <value>स्थिति</value>
+  </data>
+  <data name="Settings_GroupPlayback" xml:space="preserve">
+    <value>प्लेबैक</value>
+  </data>
+  <data name="Settings_GroupApp" xml:space="preserve">
+    <value>ऐप</value>
+  </data>
+  <data name="Btn_RestartNow" xml:space="preserve">
+    <value>अभी रीस्टार्ट करें</value>
+  </data>
+  <data name="Btn_Generate" xml:space="preserve">
+    <value>बनाएँ</value>
+  </data>
+  <data name="Settings_RemoteLanCaption" xml:space="preserve">
+    <value>टोकन के बिना, आपके Deezer खाते से साइन इन किया हुआ कोई भी डिवाइस प्लेबैक नियंत्रित कर सकता है।</value>
+  </data>
+  <data name="Tray_HintTitle" xml:space="preserve">
+    <value>OpenDeezer अभी भी चल रहा है</value>
+  </data>
+  <data name="Tray_HintBody" xml:space="preserve">
+    <value>संगीत चलता रहता है। ट्रे आइकन से OpenDeezer खोलें या बंद करें।</value>
+  </data>
+  <data name="Sleep_RemainingFormat" xml:space="preserve">
+    <value>{0} में रुकेगा</value>
+  </data>
+  <data name="Sleep_EndOfTrackActive" xml:space="preserve">
+    <value>यह ट्रैक खत्म होने पर रुकेगा</value>
+  </data>
+  <data name="Sleep_Inactive" xml:space="preserve">
+    <value>स्लीप टाइमर बंद है।</value>
+  </data>
+  <data name="Error_Unhandled" xml:space="preserve">
+    <value>कुछ गलत हो गया</value>
+  </data>
+  <data name="Search_ShowAllFormat" xml:space="preserve">
+    <value>सभी दिखाएँ ({0})</value>
+  </data>
+  <data name="Duration_HoursMinutesFormat" xml:space="preserve">
+    <value>{0} घं {1} मिनट</value>
+  </data>
+  <data name="Tooltip_NowPlaying" xml:space="preserve">
+    <value>अभी चल रहा है</value>
+  </data>
+  <data name="Menu_GoToArtist" xml:space="preserve">
+    <value>कलाकार पर जाएँ</value>
+  </data>
+  <data name="Menu_RemoveFromPlaylist" xml:space="preserve">
+    <value>इस प्लेलिस्ट से हटाएँ</value>
+  </data>
+  <data name="Playlist_RemoveFailBody" xml:space="preserve">
+    <value>Deezer ने ट्रैक नहीं हटाया। फिर से कोशिश करें।</value>
+  </data>
+  <data name="Login_Busy" xml:space="preserve">
+    <value>साइन इन पहले से जारी है।</value>
+  </data>
+  <data name="Account_FreePlan" xml:space="preserve">
+    <value>फ़्री · 128 kbps</value>
+  </data>
+  <data name="Btn_SignIn" xml:space="preserve">
+    <value>साइन इन करें</value>
+  </data>
+  <data name="EQ_Reset" xml:space="preserve">
+    <value>रीसेट करें</value>
+  </data>
+  <data name="Kind_Album" xml:space="preserve">
+    <value>एल्बम</value>
+  </data>
+  <data name="Kind_Playlist" xml:space="preserve">
+    <value>प्लेलिस्ट</value>
+  </data>
+  <data name="Kind_Podcast" xml:space="preserve">
+    <value>पॉडकास्ट</value>
+  </data>
+  <data name="Nav_GroupDiscover" xml:space="preserve">
+    <value>डिस्कवर</value>
+  </data>
+  <data name="Nav_GroupLibrary" xml:space="preserve">
+    <value>लाइब्रेरी</value>
+  </data>
+  <data name="Recent_ListenTimeLabel" xml:space="preserve">
+    <value>सुनने का समय, पिछले 30 दिन</value>
+  </data>
+  <data name="Search_FilterAll" xml:space="preserve">
+    <value>सभी</value>
+  </data>
+  <data name="Search_TitleFormat" xml:space="preserve">
+    <value>“{0}” के परिणाम</value>
+  </data>
+  <data name="Settings_GroupAbout" xml:space="preserve">
+    <value>परिचय</value>
+  </data>
+  <data name="Settings_PhoneRemote" xml:space="preserve">
+    <value>फ़ोन रिमोट</value>
+  </data>
+  <data name="Tooltip_Mute" xml:space="preserve">
+    <value>म्यूट करें</value>
+  </data>
+  <data name="Tooltip_Unmute" xml:space="preserve">
+    <value>अनम्यूट करें</value>
+  </data>
+  <data name="Tooltip_Play" xml:space="preserve">
+    <value>चलाएँ</value>
+  </data>
+  <data name="Tooltip_Pause" xml:space="preserve">
+    <value>रोकें</value>
+  </data>
+  <data name="Tooltip_ShuffleOn" xml:space="preserve">
+    <value>शफ़ल चालू</value>
+  </data>
+  <data name="Tooltip_ShuffleOff" xml:space="preserve">
+    <value>शफ़ल बंद</value>
+  </data>
+  <data name="Action_ShowAll" xml:space="preserve">
+    <value>सभी दिखाएँ</value>
+  </data>
+  <data name="Column_Title" xml:space="preserve">
+    <value>शीर्षक</value>
+  </data>
+  <data name="Column_Album" xml:space="preserve">
+    <value>एल्बम</value>
+  </data>
+  <data name="Column_Duration" xml:space="preserve">
+    <value>अवधि</value>
+  </data>
+  <data name="Section_Popular" xml:space="preserve">
+    <value>लोकप्रिय</value>
+  </data>
+  <data name="Menu_NewPlaylist" xml:space="preserve">
+    <value>नई प्लेलिस्ट…</value>
+  </data>
+  <data name="Menu_NoArtistPage" xml:space="preserve">
+    <value>इस ट्रैक का कोई कलाकार पेज नहीं है</value>
+  </data>
+  <data name="Empty_Liked" xml:space="preserve">
+    <value>अभी तक कोई पसंदीदा गाना नहीं</value>
+  </data>
+  <data name="Empty_Playlist" xml:space="preserve">
+    <value>यह प्लेलिस्ट खाली है</value>
+  </data>
+  <data name="Empty_Playlists" xml:space="preserve">
+    <value>अभी तक कोई प्लेलिस्ट नहीं</value>
+  </data>
+  <data name="Empty_Recent" xml:space="preserve">
+    <value>अभी तक कुछ नहीं चलाया गया</value>
+  </data>
+  <data name="Empty_Queue" xml:space="preserve">
+    <value>कतार में कुछ नहीं है</value>
+  </data>
+  <data name="Empty_Tracks" xml:space="preserve">
+    <value>यहाँ कोई ट्रैक नहीं है</value>
+  </data>
+  <data name="Empty_Home" xml:space="preserve">
+    <value>अभी दिखाने के लिए कुछ नहीं</value>
+  </data>
+  <data name="Empty_Charts" xml:space="preserve">
+    <value>चार्ट अभी उपलब्ध नहीं हैं</value>
+  </data>
+  <data name="Empty_Artist" xml:space="preserve">
+    <value>इस कलाकार के लिए कुछ नहीं मिला</value>
+  </data>
+  <data name="Lyrics_PaidOnly" xml:space="preserve">
+    <value>गीत के बोल Deezer Premium, Duo, Family और Student के साथ मिलते हैं।</value>
+  </data>
+  <data name="Queue_LeftFormat" xml:space="preserve">
+    <value>{0} शेष</value>
+    <comment>Queue header: time left from the playing track to the end, e.g. 47 min left.</comment>
+  </data>
+  <data name="Nav_Track" xml:space="preserve">
+    <value>ट्रैक</value>
+  </data>
+  <data name="Section_Details" xml:space="preserve">
+    <value>विवरण</value>
+  </data>
+  <data name="Section_Credits" xml:space="preserve">
+    <value>क्रेडिट</value>
+  </data>
+  <data name="Track_Artists" xml:space="preserve">
+    <value>कलाकार</value>
+  </data>
+  <data name="Track_Album" xml:space="preserve">
+    <value>एल्बम</value>
+  </data>
+  <data name="Track_Released" xml:space="preserve">
+    <value>रिलीज़</value>
+  </data>
+  <data name="Track_Number" xml:space="preserve">
+    <value>ट्रैक</value>
+  </data>
+  <data name="Track_NumberFormat" xml:space="preserve">
+    <value>{1} में से {0}</value>
+  </data>
+  <data name="Track_Disc" xml:space="preserve">
+    <value>डिस्क</value>
+  </data>
+  <data name="Track_Length" xml:space="preserve">
+    <value>अवधि</value>
+  </data>
+  <data name="Track_Genre" xml:space="preserve">
+    <value>शैली</value>
+  </data>
+  <data name="Track_Label" xml:space="preserve">
+    <value>लेबल</value>
+  </data>
+  <data name="Track_Bpm" xml:space="preserve">
+    <value>BPM</value>
+  </data>
+  <data name="Track_Isrc" xml:space="preserve">
+    <value>ISRC</value>
+  </data>
+  <data name="Track_Copyright" xml:space="preserve">
+    <value>कॉपीराइट</value>
+  </data>
+  <data name="Menu_TrackDetails" xml:space="preserve">
+    <value>ट्रैक विवरण</value>
+  </data>
+  <data name="Bar_NothingPlaying" xml:space="preserve">
+    <value>कुछ नहीं चल रहा</value>
+  </data>
+  <data name="Settings_GroupStorage" xml:space="preserve">
+    <value>स्टोरेज</value>
+  </data>
+  <data name="Settings_CacheFolder" xml:space="preserve">
+    <value>कैश फ़ोल्डर</value>
+  </data>
+  <data name="Settings_ClearCache" xml:space="preserve">
+    <value>कैश साफ़ करें</value>
+  </data>
+  <data name="Settings_ClearCacheConfirm" xml:space="preserve">
+    <value>स्ट्रीम कैश में रखे गाने हटाएँ? ऑफ़लाइन संगीत तब तक रहेगा जब तक आप उसे भी न हटाएँ।</value>
+  </data>
+  <data name="Btn_Clear" xml:space="preserve">
+    <value>साफ़ करें</value>
+  </data>
+  <data name="Settings_ClearCacheOffline" xml:space="preserve">
+    <value>ऑफ़लाइन संगीत भी हटाएँ</value>
+  </data>
+  <data name="Settings_CacheUsedFormat" xml:space="preserve">
+    <value>{0} उपयोग में</value>
+  </data>
+  <data name="Settings_CacheUsedOfflineFormat" xml:space="preserve">
+    <value>{0} उपयोग में, {1} ऑफ़लाइन</value>
+  </data>
+  <data name="Size_MbFormat" xml:space="preserve">
+    <value>{0} MB</value>
+  </data>
+  <data name="Size_GbFormat" xml:space="preserve">
+    <value>{0} GB</value>
+  </data>
+  <data name="Settings_CacheAge" xml:space="preserve">
+    <value>न चलाए गए गाने रखें</value>
+  </data>
+  <data name="Settings_CacheAgeDesc" xml:space="preserve">
+    <value>इतने समय तक न चलाए गए कैश के गाने हटा दिए जाते हैं। ऑफ़लाइन संगीत बना रहता है।</value>
+  </data>
+  <data name="Settings_CacheAge_0" xml:space="preserve">
+    <value>हमेशा</value>
+  </data>
+  <data name="Settings_CacheAge_7" xml:space="preserve">
+    <value>1 सप्ताह</value>
+  </data>
+  <data name="Settings_CacheAge_30" xml:space="preserve">
+    <value>1 महीना</value>
+  </data>
+  <data name="Settings_CacheAge_90" xml:space="preserve">
+    <value>3 महीने</value>
+  </data>
+  <data name="Settings_CacheAge_180" xml:space="preserve">
+    <value>6 महीने</value>
+  </data>
+  <data name="Settings_CacheAge_365" xml:space="preserve">
+    <value>1 साल</value>
+  </data>
+  <data name="Days_One" xml:space="preserve">
+    <value>{0} दिन</value>
+  </data>
+  <data name="Days_Other" xml:space="preserve">
+    <value>{0} दिन</value>
+  </data>
+  <data name="Error_FolderRefused" xml:space="preserve">
+    <value>इस फ़ोल्डर का उपयोग नहीं किया जा सकता। कोई दूसरा चुनें।</value>
+  </data>
+  <data name="Error_StorageFailed" xml:space="preserve">
+    <value>यह काम नहीं किया। फिर से कोशिश करें।</value>
+  </data>
+  <data name="Settings_CacheFolderConfirm" xml:space="preserve">
+    <value>पुराने फ़ोल्डर में कैश किए गए गाने हटा दिए जाते हैं।</value>
+  </data>
+  <data name="Btn_Change" xml:space="preserve">
+    <value>बदलें</value>
+  </data>
+  <data name="Nav_Offline" xml:space="preserve">
+    <value>ऑफ़लाइन</value>
+  </data>
+  <data name="Offline_Available" xml:space="preserve">
+    <value>ऑफ़लाइन उपलब्ध</value>
+  </data>
+  <data name="Offline_ProgressFormat" xml:space="preserve">
+    <value>{1} में से {0}</value>
+  </data>
+  <data name="Offline_Songs" xml:space="preserve">
+    <value>गाने</value>
+  </data>
+  <data name="Offline_Mode" xml:space="preserve">
+    <value>ऑफ़लाइन मोड</value>
+  </data>
+  <data name="Offline_YoureOffline" xml:space="preserve">
+    <value>आप ऑफ़लाइन हैं</value>
+  </data>
+  <data name="Offline_YoureOfflineBody" xml:space="preserve">
+    <value>इस पीसी पर रखा संगीत चल रहा है। ऑनलाइन होने पर फिर से साइन इन करें।</value>
+  </data>
+  <data name="Offline_Empty" xml:space="preserve">
+    <value>जिन एल्बम, प्लेलिस्ट और गानों को आप ऑफ़लाइन उपलब्ध करेंगे, वे यहाँ दिखेंगे।</value>
+  </data>
+  <data name="Offline_Remove" xml:space="preserve">
+    <value>ऑफ़लाइन से हटाएँ</value>
+  </data>
+  <data name="Offline_FetchStopped" xml:space="preserve">
+    <value>ऑफ़लाइन डाउनलोड रुक गया</value>
   </data>
   <data name="Offline_FailTitle" xml:space="preserve">
-    <value>Download failed</value>
-  </data>
-  <data name="Offline_FailBody" xml:space="preserve">
-    <value>This track couldn't be downloaded for offline.</value>
+    <value>ऑफ़लाइन संगीत नहीं बदला जा सका</value>
   </data>
 </root>

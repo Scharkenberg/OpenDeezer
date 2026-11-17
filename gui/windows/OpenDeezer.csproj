@@ -1,5 +1,5 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-  <!-- C# WinUI 3 (.NET 8), unpackaged + self-contained. The real XAML markup
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- C# WinUI 3 (.NET 11), unpackaged + self-contained. The real XAML markup
        compiler runs over App.xaml, so XamlControlsResources resolves the WinUI
        theme dictionary and the app launches (the old code-only C++/WinRT build
        never merged it, giving 0x80004005 at startup). The Go engine DLL
@@ -11,31 +11,56 @@
     <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>OpenDeezer</RootNamespace>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Built from app.manifest with the version stamped in (StampManifestVersion). -->
+    <ApplicationManifest>$(BaseIntermediateOutputPath)app.versioned.manifest</ApplicationManifest>
     <Platforms>x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- Required by the [LibraryImport] source generator (DeezerCore.cs). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>opendeezer.ico</ApplicationIcon>
+    <!-- Single version source: About reads it from the assembly. -->
+    <Version>3.2.0</Version>
+    <!-- CS8305: "evaluation only" APIs referenced by code the experimental Windows App SDK
+         generates (XamlTypeInfo.g.cs); the SDK version is fixed by design. -->
+    <NoWarn>$(NoWarn);CS8305</NoWarn>
+    <!-- Program.cs owns Main (single-instance redirect before XAML starts). -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.251219" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.3.260402-preview2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.3.260402-preview2" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
   </ItemGroup>
   <ItemGroup>
     <None Update="libdeezercore.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <!-- Loose copy for AppWindow.SetIcon / the tray's small icon (LoadImage). -->
+    <Content Include="opendeezer.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <!-- Localization: MRT Core resources. The .NET SDK's EnableDefaultPriItems globs
        Strings\**\*.resw automatically, so we do NOT list them explicitly (doing so
        trips NETSDK1022 "Duplicate PRIResource items"). MakePri compiles them into
        resources.pri (one resource subtree "Resources", one qualifier per locale
        folder) which ships next to OpenDeezer.exe and is read by Loc.cs at runtime. -->
+  <!-- I3: one version source. app.manifest carries a $VERSION$ placeholder; this
+       writes obj\app.versioned.manifest with <Version> as the 4-part number Win32
+       manifests require ("3.2.0" -> "3.2.0.0"; a "-beta" suffix is dropped). -->
+  <Target Name="StampManifestVersion" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_StampV>$(Version.Split('-')[0])</_StampV>
+      <_StampManifestVersion>$([System.Version]::Parse('$(_StampV)').Major).$([System.Version]::Parse('$(_StampV)').Minor).$([System.Math]::Max(0, $([System.Version]::Parse('$(_StampV)').Build))).$([System.Math]::Max(0, $([System.Version]::Parse('$(_StampV)').Revision)))</_StampManifestVersion>
+      <_StampText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\app.manifest').Replace('$VERSION$', '$(_StampManifestVersion)'))</_StampText>
+    </PropertyGroup>
+    <MakeDir Directories="$(BaseIntermediateOutputPath)" />
+    <WriteLinesToFile File="$(BaseIntermediateOutputPath)app.versioned.manifest" Lines="$([MSBuild]::Escape('$(_StampText)'))" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
 </Project>

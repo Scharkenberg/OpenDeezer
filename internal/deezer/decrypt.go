@@ -8,13 +8,16 @@ import (
 	"golang.org/x/crypto/blowfish"
 )
 
-const chunkSize = 2048
+// StripeChunk is the BF_CBC_STRIPE chunk size: chunk i of an encrypted
+// stream is encrypted when i%3 == 0, so any chunk boundary decrypts on its
+// own.
+const StripeChunk = 2048
 
 // secret is the fixed key-derivation secret.
 var secret = []byte("g4el58wc0zvf9na1")
 
 // stripeIV is the per-chunk CBC IV (reset each chunk).
-var stripeIV = []byte{0, 1, 2, 3, 4, 5, 6, 7}
+var stripeIV = [8]byte{0, 1, 2, 3, 4, 5, 6, 7}
 
 // BlowfishKey derives the per-track Blowfish key:
 // key[i] = md5hex[i] ^ md5hex[i+16] ^ secret[i].
@@ -42,42 +45,64 @@ func NewStripeDecryptor(trackID string) (*StripeDecryptor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StripeDecryptor{cipher: c, buf: make([]byte, 0, chunkSize)}, nil
+	return &StripeDecryptor{cipher: c, buf: make([]byte, 0, StripeChunk)}, nil
 }
 
-// decryptChunk does CBC over a full 2048-byte chunk with the fixed IV.
-func (d *StripeDecryptor) decryptChunk(in []byte) []byte {
-	out := make([]byte, chunkSize)
-	prev := make([]byte, 8)
-	copy(prev, stripeIV)
-	for off := 0; off+8 <= chunkSize; off += 8 {
-		ct := in[off : off+8]
-		pt := out[off : off+8]
-		d.cipher.Decrypt(pt, ct)
+// decryptChunk undoes CBC with the fixed IV over one full 2048-byte chunk, in
+// place.
+func decryptChunk(c *blowfish.Cipher, b []byte) {
+	prev := stripeIV
+	var ct [8]byte
+	for off := 0; off+8 <= StripeChunk; off += 8 {
+		blk := b[off : off+8]
+		copy(ct[:], blk)
+		c.Decrypt(blk, blk)
 		for k := 0; k < 8; k++ {
-			pt[k] ^= prev[k]
+			blk[k] ^= prev[k]
 		}
-		copy(prev, ct)
+		prev = ct
 	}
-	return out
+}
+
+// StripeCipher decrypts BF_CBC_STRIPE ciphertext in place from any chunk
+// boundary, so a stream can be read from any offset.
+type StripeCipher struct{ cipher *blowfish.Cipher }
+
+// NewStripeCipher builds a StripeCipher keyed for trackID.
+func NewStripeCipher(trackID string) *StripeCipher {
+	c, _ := blowfish.NewCipher(BlowfishKey(trackID)) // a 16-byte key never fails
+	return &StripeCipher{cipher: c}
+}
+
+// DecryptAt decrypts b in place. b holds the stream from byte off, a multiple
+// of 2048: chunk i of the stream is encrypted when i%3 == 0 and it is a full
+// chunk, so a trailing partial chunk is left as it is (plaintext).
+func (s *StripeCipher) DecryptAt(b []byte, off int64) {
+	i := off / StripeChunk
+	for p := 0; p+StripeChunk <= len(b); p += StripeChunk {
+		if i%3 == 0 {
+			decryptChunk(s.cipher, b[p:p+StripeChunk])
+		}
+		i++
+	}
 }
 
 // Feed appends decrypted/passthrough output for n input bytes.
 func (d *StripeDecryptor) Feed(data []byte, out []byte) []byte {
 	i := 0
 	for i < len(data) {
-		need := chunkSize - len(d.buf)
+		need := StripeChunk - len(d.buf)
 		take := need
 		if rem := len(data) - i; rem < need {
 			take = rem
 		}
 		d.buf = append(d.buf, data[i:i+take]...)
 		i += take
-		if len(d.buf) == chunkSize {
+		if len(d.buf) == StripeChunk {
+			n := len(out)
+			out = append(out, d.buf...)
 			if d.chunkIndex%3 == 0 {
-				out = append(out, d.decryptChunk(d.buf)...)
-			} else {
-				out = append(out, d.buf...)
+				decryptChunk(d.cipher, out[n:])
 			}
 			d.chunkIndex++
 			d.buf = d.buf[:0]
@@ -93,7 +118,7 @@ func (d *StripeDecryptor) Feed(data []byte, out []byte) []byte {
 // `Range: bytes=<Consumed()>-` and continuing to Feed the same decryptor yields
 // output identical to an uninterrupted download.
 func (d *StripeDecryptor) Consumed() int64 {
-	return int64(d.chunkIndex)*chunkSize + int64(len(d.buf))
+	return int64(d.chunkIndex)*StripeChunk + int64(len(d.buf))
 }
 
 // Finish flushes the trailing partial chunk (always plaintext).

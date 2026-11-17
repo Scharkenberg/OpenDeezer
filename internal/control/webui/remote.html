@@ -737,11 +737,20 @@ function startStateUpdates() {
 
   var source = new EventSource('/events?session=' + encodeURIComponent(token));
   eventSource = source;
+  // The stream leaves the queue out while queueVersion is unchanged; keep the
+  // last one it sent.
+  var queue = [], queueVersion = 0;
 
   source.addEventListener('state', function(e) {
     if (eventSource !== source) return;
     try {
-      applyState(JSON.parse(e.data));
+      var st = JSON.parse(e.data);
+      if (st.queue === undefined && st.queueVersion && st.queueVersion === queueVersion) {
+        st.queue = queue;
+      }
+      queue = st.queue || [];
+      queueVersion = st.queueVersion || 0;
+      applyState(st);
     } catch (_) {
       // Ignore a malformed event; the next server snapshot can recover.
     }

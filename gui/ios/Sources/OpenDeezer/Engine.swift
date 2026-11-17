@@ -151,11 +151,13 @@ enum Engine {
 
     // MARK: - Playback
 
+    /// False only on a failure: the engine answers 1 started, 0 failed, 2 when
+    /// a newer play (another tap, a remote) took over first, which is not one.
     static func play(id: String, durationMs: Int64) async -> Bool {
-        await run { OdmobilePlay(id, durationMs) }
+        await run { OdmobilePlay(id, durationMs) != 0 }
     }
     static func playEpisode(id: String, durationMs: Int64) async -> Bool {
-        await run { OdmobilePlayEpisodeMS(id, durationMs) }
+        await run { OdmobilePlayEpisodeMS(id, durationMs) != 0 }
     }
     /// Resolves and buffers the next queue track so the engine swaps into it
     /// seamlessly at the track boundary (mirrors the desktop GUIs' DZPreload).

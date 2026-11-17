@@ -89,7 +89,7 @@ func TestDownloadResumeEncrypted(t *testing.T) {
 
 	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: trackID, Format: "MP3_320", Encrypted: true}, 10000)
 	s.download() // blocking; appends to s.sb and finishes
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if !bytes.Equal(got, want) {
 		t.Fatalf("resumed decrypt mismatch: got %d bytes, want %d bytes", len(got), len(want))
@@ -110,7 +110,7 @@ func TestDownloadResumePassthrough(t *testing.T) {
 
 	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: "ep1", Format: "MP3", Encrypted: false}, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if !bytes.Equal(got, body) {
 		t.Fatalf("resumed passthrough mismatch: got %d bytes, want %d bytes", len(got), len(body))
@@ -145,7 +145,7 @@ func TestDownloadRefreshOnExpiry(t *testing.T) {
 
 	s := newSource(plan, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if atomic.LoadInt32(&refreshed) == 0 {
 		t.Fatal("Refresh was never called on 403")
@@ -185,7 +185,7 @@ func TestDownloadRefreshRejectsChangedPlan(t *testing.T) {
 
 	s := newSource(plan, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if atomic.LoadInt32(&refreshed) == 0 {
 		t.Fatal("Refresh was never called on 403")
@@ -217,6 +217,57 @@ func tornRawResponse(t *testing.T, w http.ResponseWriter, status, headers string
 	_, _ = bufrw.Write(body)
 	_ = bufrw.Flush()
 	_ = conn.Close()
+}
+
+// A body that stops arriving mid-way (the connection stays open, no bytes
+// come) counts as a dropped connection after the stall time: the download
+// resumes from where it stopped and the track plays whole.
+func TestStalledBodyResumes(t *testing.T) {
+	prev := streamStallTimeout
+	streamStallTimeout = 200 * time.Millisecond
+	defer func() { streamStallTimeout = prev }()
+	for _, fx := range fixtures() {
+		t.Run(fx.format, func(t *testing.T) {
+			half := len(fx.cipher) / 2
+			var ranges atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if rng := r.Header.Get("Range"); rng != "" {
+					ranges.Add(1)
+					start := parseRangeStart(t, rng)
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(fx.cipher)-1, len(fx.cipher)))
+					w.Header().Set("Content-Length", strconv.Itoa(len(fx.cipher)-start))
+					w.WriteHeader(http.StatusPartialContent)
+					_, _ = w.Write(fx.cipher[start:])
+					return
+				}
+				w.Header().Set("Content-Length", strconv.Itoa(len(fx.cipher)))
+				_, _ = w.Write(fx.cipher[:half])
+				w.(http.Flusher).Flush()
+				<-r.Context().Done() // stalls until the client gives up
+			}))
+			defer srv.Close()
+
+			s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: fx.id, Format: fx.format, Encrypted: true}, 10000)
+			done := make(chan struct{})
+			go func() { s.download(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				s.kill()
+				t.Fatal("the download hung on a stalled body")
+			}
+			defer s.kill()
+			if e := s.lastErr(); e != "" {
+				t.Fatalf("download error: %s", e)
+			}
+			if ranges.Load() != 1 {
+				t.Fatalf("%d resume requests, want 1", ranges.Load())
+			}
+			if got, want := pcmOf(t, fx.format, s.sb.reader()), pcmOf(t, fx.format, bytes.NewReader(fx.plain)); !bytes.Equal(got, want) {
+				t.Fatalf("PCM %d bytes, want %d", len(got), len(want))
+			}
+		})
+	}
 }
 
 // TestDownloadResumeRejectsWrongRangeStart verifies that a resume 206 whose
@@ -254,7 +305,7 @@ func TestDownloadResumeRejectsWrongRangeStart(t *testing.T) {
 
 	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: "ep-misrange", Format: "MP3", Encrypted: false}, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if !bytes.Equal(got, body[:dropAt]) {
 		t.Fatalf("mismatched 206 was spliced: got %d bytes, want the clean %d-byte prefix", len(got), dropAt)
@@ -295,7 +346,7 @@ func TestDownloadResumeEntityChanged(t *testing.T) {
 
 	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: "ep-mutated", Format: "MP3", Encrypted: false}, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if v, _ := sawIfRange.Load().(string); v != `"v1"` {
 		t.Fatalf("resume GET should send If-Range with the stored validator, got %q", v)
@@ -382,7 +433,7 @@ func TestDownloadResumeShortEOF(t *testing.T) {
 
 	s := newSource(&deezer.StreamPlan{CDNURL: srv.URL, TrackID: "short1", Format: "MP3", Encrypted: false}, 10000)
 	s.download()
-	got := drainStreamBuffer(s.sb)
+	got := drainStreamFile(s.sb)
 
 	if !bytes.Equal(got, body) {
 		t.Fatalf("short EOF resume mismatch: got %d bytes, want %d bytes", len(got), len(body))

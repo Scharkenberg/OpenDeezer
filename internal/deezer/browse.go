@@ -3,6 +3,7 @@ package deezer
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 // ---- shared REST DTOs ----
@@ -105,40 +106,44 @@ func (c *Client) ArtistTop(id string) ([]Track, error) {
 }
 
 // ArtistProfile fetches an artist's profile plus top tracks, albums and related
-// artists in one call (all public REST). A failure on any sub-list is tolerated
-// so a partial profile still renders.
+// artists (all public REST, the four calls in parallel). A failure on any
+// sub-list is tolerated so a partial profile still renders.
 func (c *Client) ArtistProfile(id string) (*ArtistPage, error) {
-	b, err := c.restGet("/artist/" + id)
-	if err != nil {
-		return nil, err
-	}
-	var info restArtistDTO
-	if err := json.Unmarshal(b, &info); err != nil {
-		return nil, err
-	}
-	page := &ArtistPage{Artist: info.toArtistInfo()}
-
-	page.Top, _ = c.ArtistTop(id)
-
-	if ab, err := c.restGet("/artist/" + id + "/albums?limit=50"); err == nil {
+	page := &ArtistPage{}
+	var infoErr error
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		b, err := c.restGet("/artist/" + id)
+		var info restArtistDTO
+		if err == nil {
+			err = json.Unmarshal(b, &info)
+		}
+		page.Artist, infoErr = info.toArtistInfo(), err
+	})
+	wg.Go(func() { page.Top, _ = c.ArtistTop(id) })
+	wg.Go(func() {
 		var r struct {
 			Data []restAlbumDTO `json:"data"`
 		}
-		if json.Unmarshal(ab, &r) == nil {
+		if ab, err := c.restGet("/artist/" + id + "/albums?limit=50"); err == nil && json.Unmarshal(ab, &r) == nil {
 			for _, a := range r.Data {
 				page.Albums = append(page.Albums, a.toAlbum())
 			}
 		}
-	}
-	if rb, err := c.restGet("/artist/" + id + "/related?limit=20"); err == nil {
+	})
+	wg.Go(func() {
 		var r struct {
 			Data []restArtistDTO `json:"data"`
 		}
-		if json.Unmarshal(rb, &r) == nil {
+		if rb, err := c.restGet("/artist/" + id + "/related?limit=20"); err == nil && json.Unmarshal(rb, &r) == nil {
 			for _, a := range r.Data {
 				page.Related = append(page.Related, a.toArtistInfo())
 			}
 		}
+	})
+	wg.Wait()
+	if infoErr != nil {
+		return nil, infoErr
 	}
 	return page, nil
 }

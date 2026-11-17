@@ -66,6 +66,23 @@ jobs:
         run: |
           CGO_ENABLED=1 go build -buildmode=c-archive -o /tmp/libdeezercore.a ./corelib
 
+  windows-app:
+    name: Windows app · check.ps1 -Race
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "11.0.x"
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.12"
+          cache: true
+      - name: Check
+        # App build and tests, the off-screen harness, go vet and go test -race, as on a
+        # developer machine; exits 1 when any lane fails.
+        shell: pwsh
+        run: gui\windows\check.ps1 -Race
   lint:
     name: golangci-lint
     runs-on: ubuntu-24.04

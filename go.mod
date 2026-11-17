@@ -15,7 +15,7 @@ require (
 	github.com/go-flac/go-flac v1.0.0
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/hajimehoshi/go-mp3 v0.3.4
-	github.com/mewkiz/flac v1.0.13
+	github.com/mewkiz/flac v1.0.14
 	github.com/muesli/termenv v0.16.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/crypto v0.53.0
@@ -53,6 +53,10 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/tools v0.46.0 // indirect
 )
+
+// mewkiz/flac v1.0.14 with its frame decoder reusing sample buffers across
+// frames (the changed spots are commented in third_party/flac).
+replace github.com/mewkiz/flac => ./third_party/flac
 
 tool (
 	golang.org/x/mobile/cmd/gobind

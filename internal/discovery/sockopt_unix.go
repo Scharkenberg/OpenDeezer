@@ -3,6 +3,7 @@
 package discovery
 
 import (
+	"errors"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -33,4 +34,10 @@ func setBroadcast(c syscall.RawConn) error {
 		return err
 	}
 	return serr
+}
+
+// retryableRead reports whether a failed read leaves the socket usable: an
+// oversized datagram or the reset an ICMP port-unreachable reports.
+func retryableRead(err error) bool {
+	return errors.Is(err, unix.EMSGSIZE) || errors.Is(err, unix.ECONNRESET)
 }
