@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,7 +37,8 @@ type fakeDeezer struct {
 	mu        sync.Mutex
 	playlists map[string][]string
 	albums    map[string][]string
-	gone      map[string]bool // tracks Deezer no longer serves
+	gone      map[string]bool   // tracks Deezer no longer serves
+	fallback  map[string]string // refused track -> the version Deezer serves instead
 
 	calls    atomic.Int32 // requests through deezer.Transport
 	conns    atomic.Int32 // connections accepted
@@ -58,7 +60,7 @@ func gwTrack(id string) map[string]any {
 
 func newFakeDeezer(t *testing.T) *fakeDeezer {
 	t.Helper()
-	fd := &fakeDeezer{playlists: map[string][]string{}, albums: map[string][]string{}, gone: map[string]bool{}}
+	fd := &fakeDeezer{playlists: map[string][]string{}, albums: map[string][]string{}, gone: map[string]bool{}, fallback: map[string]string{}}
 	write := func(w http.ResponseWriter, v any) { _ = json.NewEncoder(w).Encode(v) }
 	fd.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
@@ -81,6 +83,14 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			id := strings.TrimPrefix(body.Tokens[0], "tok")
+			fd.mu.Lock()
+			_, refused := fd.fallback[id]
+			fd.mu.Unlock()
+			if refused {
+				write(w, map[string]any{"data": []any{map[string]any{"errors": []any{map[string]any{
+					"code": 2002, "message": "Track token has no sufficient rights on requested media"}}}}})
+				return
+			}
 			write(w, map[string]any{"data": []any{map[string]any{"media": []any{map[string]any{
 				"format": "MP3_128", "sources": []any{map[string]any{"url": fd.srv.URL + "/stream/" + id}}}}}}})
 		case strings.HasPrefix(p, "/album/"):
@@ -110,6 +120,7 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 				_ = json.Unmarshal(body["sng_id"], &id)
 				fd.mu.Lock()
 				gone := fd.gone[id.String()]
+				fb := fd.fallback[id.String()]
 				fd.mu.Unlock()
 				if gone {
 					write(w, map[string]any{"error": map[string]any{"DATA_ERROR": "song not found"}, "results": map[string]any{}})
@@ -117,6 +128,9 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 				}
 				tr := gwTrack(id.String())
 				tr["TRACK_TOKEN"], tr["GAIN"] = "tok"+id.String(), "-2"
+				if fb != "" {
+					tr["FALLBACK"] = map[string]any{"SNG_ID": fb, "TRACK_TOKEN": "tok" + fb}
+				}
 				write(w, map[string]any{"error": map[string]any{}, "results": tr})
 			case "playlist.getSongs":
 				if fd.listErr.Load() {
@@ -272,6 +286,33 @@ func TestPinPlaylistFetchesTracks(t *testing.T) {
 	}
 	if active, jobs := OfflineProgress(); active || len(jobs) != 0 {
 		t.Fatalf("progress %v %+v after the fetch", active, jobs)
+	}
+}
+
+// A track Deezer refuses in this country plays the version song.getData names
+// as its fallback, as Deezer's web player does: the pin stores that stream
+// under the refused track's id with the fallback's id, whose key decrypts it,
+// and the track plays from the pin offline.
+func TestRefusedTrackFetchesFallback(t *testing.T) {
+	fd := offlineEngine(t, "1001")
+	fd.fallback["101"] = "901"
+	pinAndWait(t, "track", "101")
+	if m, ok := caches.Current().GetMeta("101.MP3_128"); !ok || m.KeyID != "901" {
+		t.Fatalf("meta %+v %v; want the fallback's key id", m, ok)
+	}
+	if f, _, ok := caches.Current().Get("101.MP3_128"); !ok {
+		t.Fatal("the fallback's body is not stored")
+	} else {
+		got, _ := io.ReadAll(f)
+		_ = f.Close()
+		if !bytes.Equal(got, bodyOf("901")) {
+			t.Fatalf("stored %q, want the fallback's body", got)
+		}
+	}
+	goOffline(fd)
+	plan, err := preparePlan(netClient(), "101")
+	if err != nil || plan.TrackID != "101" || plan.KeyID != "901" || plan.Preview || plan.Track.Name != "Song 101" {
+		t.Fatalf("plan %+v %v", plan, err)
 	}
 }
 

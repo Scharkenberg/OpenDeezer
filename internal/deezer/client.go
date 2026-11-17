@@ -1072,33 +1072,46 @@ func playlistImage(pictureType, md5 string) string {
 	return gwImage("cover", md5)
 }
 
+// songToken is a track id with the per-track token media URL resolution
+// needs.
+type songToken struct {
+	ID    json.Number `json:"SNG_ID"`
+	Token string      `json:"TRACK_TOKEN"`
+}
+
 // songData fetches song.getData once: the track's metadata, the per-track
-// token needed for media URL resolution, and the track's ReplayGain (dB) so
-// playback can be loudness-normalized.
-func (c *Client) songData(trackID string) (t Track, token string, gainDB float64, err error) {
+// token needed for media URL resolution, the version Deezer serves instead
+// when the track has no rights in the account's country (zero when none),
+// and the track's ReplayGain (dB) so playback can be loudness-normalized.
+func (c *Client) songData(trackID string) (t Track, token string, fallback songToken, gainDB float64, err error) {
 	b, err := c.gw("song.getData", fmt.Sprintf(`{"sng_id":%s}`, jsonEsc(trackID)))
 	if err != nil {
-		return Track{}, "", 0, err
+		return Track{}, "", songToken{}, 0, err
 	}
 	var r struct {
 		Results struct {
 			gwTrackDTO
 			TrackToken string      `json:"TRACK_TOKEN"`
 			Gain       json.Number `json:"GAIN"`
+			Fallback   songToken   `json:"FALLBACK"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(b, &r); err != nil {
-		return Track{}, "", 0, err
+		return Track{}, "", songToken{}, 0, err
 	}
 	g, _ := strconv.ParseFloat(r.Results.Gain.String(), 64)
-	return r.Results.toTrack(), r.Results.TrackToken, g, nil
+	return r.Results.toTrack(), r.Results.TrackToken, r.Results.Fallback, g, nil
 }
 
 // StreamPlan is the resolved CDN URL + track id for decryption.
 type StreamPlan struct {
 	CDNURL  string
 	TrackID string
-	Format  string
+	// KeyID is the id of the track whose stream CDNURL serves when Deezer
+	// refused TrackID and served the version song.getData names as its
+	// fallback; "" when the stream is TrackID's own.
+	KeyID  string
+	Format string
 	// AskedFormat is the format the resolve asked for first (the best the
 	// quality setting and the account allowed); Format is what Deezer served,
 	// lower when the track exists in no better one. "" for a plan not
@@ -1120,6 +1133,14 @@ type StreamPlan struct {
 	// (podcasts, SDK callers that build a StreamPlan directly). Excluded from
 	// JSON since a func can't be serialized.
 	Refresh func() (*StreamPlan, error) `json:"-"`
+}
+
+// CipherID is the id whose key decrypts the plan's stream.
+func (p *StreamPlan) CipherID() string {
+	if p.KeyID != "" {
+		return p.KeyID
+	}
+	return p.TrackID
 }
 
 // wantedFormat is the first format resolveMediaURL asks for: the best the
@@ -1335,20 +1356,28 @@ func (c *Client) PrepareStreamAt(trackID string, q int) (*StreamPlan, error) {
 	if !c.LoggedIn() {
 		return nil, fmt.Errorf("not logged in")
 	}
-	t, tok, gain, err := c.songData(trackID)
+	t, tok, fb, gain, err := c.songData(trackID)
 	if err != nil {
 		return nil, err
 	}
 	if tok != "" {
 		asked := c.WantedFormat(q)
 		u, format, mErr := c.resolveMediaURL(tok, q)
+		keyID := ""
+		// A track refused for rights plays the version Deezer names as its
+		// fallback, as Deezer's web player does.
+		if errors.Is(mErr, ErrNoFullMedia) && fb.Token != "" {
+			if fu, fformat, fErr := c.resolveMediaURL(fb.Token, q); fErr == nil {
+				u, format, keyID, mErr = fu, fformat, fb.ID.String(), nil
+			}
+		}
 		if mErr == nil {
 			// Refresh re-resolves a fresh signed URL for the same track when the
 			// CDN token expires mid-download; PrepareStreamAt already retries the
 			// media call (re-login on rejection), so re-invoking it is the
 			// natural re-resolution path.
 			return &StreamPlan{
-				CDNURL: u, TrackID: trackID, Format: format, AskedFormat: asked, GainDB: gain, Encrypted: true, Track: t,
+				CDNURL: u, TrackID: trackID, KeyID: keyID, Format: format, AskedFormat: asked, GainDB: gain, Encrypted: true, Track: t,
 				Refresh: func() (*StreamPlan, error) { return c.PrepareStreamAt(trackID, q) },
 			}, nil
 		}
@@ -1404,6 +1433,7 @@ func (c *Client) PrepareStreamCached(trackID string, cache *mediacache.Cache) (*
 			return &StreamPlan{
 				CDNURL:      "", // signals cache-sourced; audio path uses mc.Get to obtain body
 				TrackID:     trackID,
+				KeyID:       m.KeyID,
 				Format:      m.Format,
 				AskedFormat: m.AskedFormat,
 				GainDB:      m.GainDB,

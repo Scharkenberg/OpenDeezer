@@ -144,7 +144,7 @@ func newPlayPlan(plan *deezer.StreamPlan) *playPlan {
 // stripeCipher is the decryptor of plan's stream, nil for a plain stream.
 func stripeCipher(plan *deezer.StreamPlan) *deezer.StripeCipher {
 	if plan.Encrypted {
-		return deezer.NewStripeCipher(plan.TrackID)
+		return deezer.NewStripeCipher(plan.CipherID())
 	}
 	return nil
 }
@@ -1383,7 +1383,7 @@ func (s *source) download() {
 			// with the body, so the track plays from the cache next time
 			// whether or not it finishes now.
 			if total := s.sb.Total(); cacheFile && total > 0 {
-				meta := mediacache.StreamMeta{Format: pl.Format, AskedFormat: pl.AskedFormat, Encrypted: true, GainDB: pl.GainDB}
+				meta := mediacache.StreamMeta{Format: pl.Format, AskedFormat: pl.AskedFormat, KeyID: pl.KeyID, Encrypted: true, GainDB: pl.GainDB}
 				if err := s.cache.Adopt(cacheKey, s.sb.f.Name(), total, meta); err != nil {
 					odlog.Debug("stream %s: not cached: %v", pl.TrackID, err)
 				}
@@ -1523,7 +1523,7 @@ func (s *source) refreshURL(count *int) string {
 	*count++
 	np, err := pl.Refresh()
 	if err != nil || np == nil || np.CDNURL == "" ||
-		np.Format != pl.Format || np.Encrypted != pl.Encrypted || np.Preview != pl.Preview {
+		np.Format != pl.Format || np.CipherID() != pl.CipherID() || np.Encrypted != pl.Encrypted || np.Preview != pl.Preview {
 		return ""
 	}
 	return np.CDNURL

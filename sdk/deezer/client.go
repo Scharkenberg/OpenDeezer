@@ -270,14 +270,16 @@ func TrackIDOf(uri string) string { return internaldeezer.TrackIDOf(uri) }
 func BlowfishKey(trackID string) []byte { return internaldeezer.BlowfishKey(trackID) }
 
 // NewStripeDecryptor builds a streaming BF_CBC_STRIPE decryptor keyed for
-// trackID. Feed it arbitrary-sized chunks via StripeDecryptor.Feed; flush the
-// final partial chunk with StripeDecryptor.Finish.
+// trackID (for a [StreamPlan], its CipherID). Feed it arbitrary-sized chunks
+// via StripeDecryptor.Feed; flush the final partial chunk with
+// StripeDecryptor.Finish.
 func NewStripeDecryptor(trackID string) (*StripeDecryptor, error) {
 	return internaldeezer.NewStripeDecryptor(trackID)
 }
 
 // DecryptBytes decrypts a complete in-memory BF_CBC_STRIPE buffer for the
-// given track id. Use [DownloadTrack] for streaming decryption to a writer.
+// given track id (for a [StreamPlan], its CipherID). Use [DownloadTrack] for
+// streaming decryption to a writer.
 func DecryptBytes(trackID string, data []byte) ([]byte, error) {
 	return internaldeezer.DecryptTrack(trackID, data)
 }

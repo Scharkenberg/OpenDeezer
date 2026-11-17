@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -994,6 +995,70 @@ func TestPrepareStream_ReloginOnlyForLicenseToken(t *testing.T) {
 	}
 	if logins != 1 {
 		t.Errorf("licence rejections: %d logins, want 1", logins)
+	}
+}
+
+// A track refused for rights plays the version song.getData names as its
+// fallback, as Deezer's web player does: the plan keeps the asked track's id
+// and metadata and carries the fallback's id, whose key decrypts the stream.
+func TestPrepareStream_RefusedTrackPlaysFallback(t *testing.T) {
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"123","SNG_TITLE":"Song","TRACK_TOKEN":"tok","GAIN":"-3",`+
+		`"FALLBACK":{"SNG_ID":"456","SNG_TITLE":"Song","TRACK_TOKEN":"fbtok"}}}`, "", &logins)
+	base := c.http.Transport
+	c.http.Transport = rtFunc(func(r *http.Request) (*http.Response, error) {
+		if !strings.Contains(r.URL.Path, "get_url") {
+			return base.RoundTrip(r)
+		}
+		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), `"track_tokens":["fbtok"]`) {
+			return jsonResponse([]byte(`{"data":[{"media":[{"format":"MP3_128","sources":[{"url":"https://cdn/fallback.mp3"}]}]}]}`)), nil
+		}
+		return jsonResponse([]byte(`{"data":[{"errors":[{"code":2002,"message":"Track token has no sufficient rights on requested media"}]}]}`)), nil
+	})
+	plan, err := c.PrepareStream("123")
+	if err != nil || plan.Preview || plan.CDNURL != "https://cdn/fallback.mp3" || plan.TrackID != "123" || plan.KeyID != "456" ||
+		plan.Track.ID != "123" || plan.GainDB != -3 || !plan.Encrypted {
+		t.Fatalf("plan %+v, err %v; want the fallback's full stream", plan, err)
+	}
+	if logins != 0 {
+		t.Errorf("%d logins, want 0", logins)
+	}
+}
+
+// An encrypted stream is decrypted with the key of the id that served it.
+func TestDownloadTrack_DecryptsWithKeyID(t *testing.T) {
+	data := make([]byte, StripeChunk*4)
+	for i := range data {
+		data[i] = byte(i % 251)
+	}
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		_, _ = w.Write(data)
+	}))
+	defer cdn.Close()
+	var got bytes.Buffer
+	if err := DownloadTrack(&StreamPlan{CDNURL: cdn.URL, TrackID: "123", KeyID: "456", Format: "MP3_128", Encrypted: true}, &got); err != nil {
+		t.Fatal(err)
+	}
+	want, _ := DecryptTrack("456", data)
+	if !bytes.Equal(got.Bytes(), want) {
+		t.Fatal("the stream was not decrypted with the key id's key")
+	}
+}
+
+// A cached copy of a fallback stream keeps the id whose key decrypts it.
+func TestPrepareStreamCached_KeepsKeyID(t *testing.T) {
+	mc, err := mediacache.New(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mc.Close()
+	mctest.PutBody(t, mc, "123.MP3_128")
+	_ = mc.PutMeta("123.MP3_128", mediacache.StreamMeta{Format: "MP3_128", KeyID: "456", Encrypted: true})
+	plan, err := New("arl").PrepareStreamCached("123", mc) // not logged in
+	if err != nil || plan.TrackID != "123" || plan.KeyID != "456" {
+		t.Fatalf("plan %+v err %v; want the cached copy's key id", plan, err)
 	}
 }
 

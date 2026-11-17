@@ -129,7 +129,7 @@ func downloadToWriter(ctx context.Context, plan *StreamPlan, w io.Writer) (writt
 	var dec *StripeDecryptor
 	if plan.Encrypted {
 		var derr error
-		dec, derr = NewStripeDecryptor(plan.TrackID)
+		dec, derr = NewStripeDecryptor(plan.CipherID())
 		if derr != nil {
 			return 0, 0, derr
 		}
@@ -350,7 +350,7 @@ func refreshPlanURL(plan *StreamPlan, count *int) string {
 	*count++
 	np, err := plan.Refresh()
 	if err != nil || np == nil || np.CDNURL == "" ||
-		np.Format != plan.Format || np.Encrypted != plan.Encrypted || np.Preview != plan.Preview {
+		np.Format != plan.Format || np.CipherID() != plan.CipherID() || np.Encrypted != plan.Encrypted || np.Preview != plan.Preview {
 		return ""
 	}
 	return np.CDNURL

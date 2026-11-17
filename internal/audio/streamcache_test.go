@@ -343,6 +343,20 @@ func TestSetStreamCacheDuringPlayback(t *testing.T) {
 	}
 }
 
+// A stream Deezer served for another id is decrypted with that id's key.
+func TestStripeCipherUsesKeyID(t *testing.T) {
+	want := make([]byte, deezer.StripeChunk*4)
+	for i := range want {
+		want[i] = byte(i % 251)
+	}
+	b := bytes.Clone(want)
+	encryptStripe("456", b)
+	stripeCipher(&deezer.StreamPlan{TrackID: "123", KeyID: "456", Encrypted: true}).DecryptAt(b, 0)
+	if !bytes.Equal(b, want) {
+		t.Fatal("the stream was not decrypted with the key id's key")
+	}
+}
+
 // The stream fields are stored with the body when the cache adopts it, so a
 // track skipped after its download completed plays from the cache next time
 // with no network.
@@ -351,13 +365,13 @@ func TestAdoptStoresMeta(t *testing.T) {
 		t.Run(fx.format, func(t *testing.T) {
 			mc := newTestCache(t)
 			cdn := newCountingCDN(t, fx.cipher)
-			s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, Format: fx.format, AskedFormat: "FLAC", Encrypted: true, GainDB: -4.5}, 10000)
+			s := newSource(&deezer.StreamPlan{CDNURL: cdn.srv.URL, TrackID: fx.id, KeyID: fx.id, Format: fx.format, AskedFormat: "FLAC", Encrypted: true, GainDB: -4.5}, 10000)
 			s.cache = mc
 			s.download()
 			s.kill() // skipped: the track never finishes
 			m, ok := mc.GetMetaForTrack(fx.id)
-			if !ok || m.Format != fx.format || m.AskedFormat != "FLAC" || !m.Encrypted || m.GainDB != -4.5 || m.Preview {
-				t.Fatalf("meta after the download = %+v, %v; want %s asked as FLAC, encrypted, gain -4.5", m, ok, fx.format)
+			if !ok || m.Format != fx.format || m.AskedFormat != "FLAC" || !m.Encrypted || m.GainDB != -4.5 || m.Preview || m.KeyID != fx.id {
+				t.Fatalf("meta after the download = %+v, %v; want %s asked as FLAC, encrypted, gain -4.5, key id %s", m, ok, fx.format, fx.id)
 			}
 		})
 	}

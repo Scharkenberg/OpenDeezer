@@ -229,10 +229,13 @@ type StreamMeta struct {
 	// AskedFormat is the format asked for when the copy was fetched; Format
 	// is lower when Deezer had nothing better. "" when unknown.
 	AskedFormat string `json:",omitempty"`
-	Encrypted   bool
-	GainDB      float64
-	Preview     bool
-	DurationMS  int64 // milliseconds; 0 if unknown (playback callers often supply separately)
+	// KeyID is the id of the track whose stream the body is, when Deezer
+	// served another version of the track; its key decrypts the body.
+	KeyID      string `json:",omitempty"`
+	Encrypted  bool
+	GainDB     float64
+	Preview    bool
+	DurationMS int64 // milliseconds; 0 if unknown (playback callers often supply separately)
 }
 
 // New creates or opens the cache in dir. maxBytes is the soft limit (entries

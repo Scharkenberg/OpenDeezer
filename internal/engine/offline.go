@@ -762,7 +762,7 @@ func fetchTrack(ctx context.Context, c *deezer.Client, mc *mediacache.Cache, col
 		return err
 	}
 	pins, named := setTrackFetched(id, plan.Track, mediacache.StreamMeta{
-		Format: plan.Format, AskedFormat: plan.AskedFormat, Encrypted: plan.Encrypted, GainDB: plan.GainDB, Preview: plan.Preview,
+		Format: plan.Format, AskedFormat: plan.AskedFormat, KeyID: plan.KeyID, Encrypted: plan.Encrypted, GainDB: plan.GainDB, Preview: plan.Preview,
 	})
 	// Metadata only song.getData brought (a single-track pin's) is saved
 	// before the body: the index entry does not hold it.
@@ -1088,7 +1088,7 @@ func localPlan(id string) (*deezer.StreamPlan, error) {
 		}
 		m = cm
 	}
-	plan := &deezer.StreamPlan{TrackID: id, Format: m.Format, AskedFormat: m.AskedFormat, GainDB: m.GainDB, Encrypted: m.Encrypted, Preview: m.Preview}
+	plan := &deezer.StreamPlan{TrackID: id, KeyID: m.KeyID, Format: m.Format, AskedFormat: m.AskedFormat, GainDB: m.GainDB, Encrypted: m.Encrypted, Preview: m.Preview}
 	if pinned && t.Track.ID != "" {
 		plan.Track = trackFromWire(t.Track)
 	}
