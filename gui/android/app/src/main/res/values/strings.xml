@@ -86,7 +86,7 @@
     <string name="quality_desc_flac">FLAC · lossless</string>
     <string name="quality_desc_high">MP3 · 320 kbps</string>
     <string name="quality_desc_normal">MP3 · 128 kbps</string>
-    <string name="setting_replaygain_sub">Normalise loudness across tracks</string>
+    <string name="setting_replaygain_sub">Normalize loudness across tracks</string>
     <string name="setting_gapless_title">Gapless playback</string>
     <string name="setting_gapless_sub">No silence between tracks</string>
     <string name="settings_crossfade">Crossfade</string>
@@ -195,9 +195,9 @@
     <string name="account_free_hint">Free account · standard quality (128 kbps)</string>
 
     <!-- Ads (Deezer Free only) -->
-    <string name="settings_ads">Ads</string>
-    <string name="setting_disable_ads_title">Disable ads</string>
-    <string name="setting_disable_ads_disclaimer">Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer\'s terms of use. Use at your own risk.</string>
+    <string name="settings_ads">Play reporting</string>
+    <string name="setting_disable_ads_title">Don\'t report my plays</string>
+    <string name="setting_disable_ads_disclaimer">OpenDeezer plays no ads. It reports your plays to Deezer as Deezer\'s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer\'s terms of use. Use at your own risk.</string>
 
     <!-- Update banner -->
     <string name="update_release_notes">Release notes</string>
@@ -306,8 +306,6 @@
     <string name="cd_downloaded">Downloaded</string>
     <string name="cd_reorder">Reorder</string>
     <string name="offline_ready">%1$s available offline</string>
-    <string name="offline_already">%1$s already offline</string>
-    <string name="offline_needs_cache">Enable the stream cache in Settings to download for offline</string>
     <string name="settings_material_you">Material You</string>
     <string name="settings_material_you_hint">Match your system colors</string>
 </resources>

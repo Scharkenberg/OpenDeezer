@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
@@ -20,6 +19,7 @@ import (
 type webRemoteMsg struct {
 	srv          *control.Server // new/active server; nil when disabling
 	replacedCtrl bool            // true when srv replaced the old m.ctrl (loopback rebind)
+	closed       bool            // the disable closed a server the enable had bound
 	enabled      bool
 	code         string // 6-digit pairing code
 	url          string // http://<lan-ip>:<port>/remote
@@ -33,74 +33,35 @@ func (m *Model) webRemoteEnableCmd() tea.Cmd {
 	// Capture everything we need before the closure runs off the update loop.
 	existingCtrl := m.ctrl
 	existingWR := m.webRemoteSrv
-	send := m.ctrlSend
-	statusFn := m.ctrlState.Load
-	acctFn := m.acctSnap.Load
-	client := m.client
-	pl := m.player
-	ctrlCfg := LoadControl() // carry the configured token/same-account to the new server
-
-	hist := m.hist
-	buildCmds := func() control.Commands {
-		if send == nil {
-			return control.Commands{}
-		}
-		// Same callback set as the main control server (thread-safety contract
-		// documented on buildControlCommands).
-		return buildControlCommands(send, client, hist)
-	}
-
-	statusSnap := func() control.State {
-		if p := statusFn(); p != nil {
-			return *p
-		}
-		return control.State{State: "stopped"}
-	}
-	acctSnap := func() control.Account {
-		if p := acctFn(); p != nil {
-			return *p
-		}
-		return control.Account{}
-	}
+	build := m.controlServerFunc()
+	ctrlCfg := config.LoadControl() // carry the configured token/same-account to the new server
 
 	return func() tea.Msg {
 		// Case 1: dedicated web-remote server already LAN-reachable.
-		if existingWR != nil && !isLoopbackAddr(existingWR.Addr()) {
+		if existingWR != nil && !config.IsLoopbackAddr(existingWR.Addr()) {
 			existingWR.EnablePairing()
 			return buildWebRemoteMsg(existingWR, false)
 		}
 		// Case 2: existing control server is already on a LAN address.
-		if existingCtrl != nil && !isLoopbackAddr(existingCtrl.Addr()) {
+		if existingCtrl != nil && !config.IsLoopbackAddr(existingCtrl.Addr()) {
 			existingCtrl.EnablePairing()
 			return buildWebRemoteMsg(existingCtrl, false)
 		}
 
 		startNew := func(addr string) *control.Server {
-			// Carry the persisted credentials so token/same-account clients (MCP,
-			// other OpenDeezer clients) keep working after the loopback rebind —
-			// auth() checks the token branch before the web-remote branch.
-			s := control.New(
-				control.Config{
-					Addr: addr, Token: ctrlCfg.Token,
-					SameAccountOnly: ctrlCfg.SameAccount, WebRemote: true,
-				},
-				statusSnap, acctSnap, buildCmds(), client,
-			)
-			s.SetVersion(Version)
-			s.SetClientInfo("tui", "OpenDeezer TUI")
-			s.SetEQ(control.PlayerEQ(func() control.EQController {
-				if pl != nil {
-					return pl
-				}
-				return nil
-			}, audio.EQPresetNames))
+			// Carry the saved credentials so token and same-account clients keep working after the
+			// LAN rebind: auth() checks the token before the web-remote branch.
+			s := build(control.Config{
+				Addr: addr, Token: ctrlCfg.Token,
+				SameAccountOnly: ctrlCfg.SameAccount, WebRemote: true,
+			})
 			if err := s.Start(); err != nil {
 				return nil
 			}
 			return s
 		}
 
-		// Case 3: existing control server is loopback — close and rebind LAN.
+		// Case 3: the control server is loopback: close it and rebind on the LAN.
 		if existingCtrl != nil {
 			_, portStr, _ := net.SplitHostPort(existingCtrl.Addr())
 			existingCtrl.Close()
@@ -115,7 +76,7 @@ func (m *Model) webRemoteEnableCmd() tea.Cmd {
 			return buildWebRemoteMsg(newSrv, true) // replaced ctrl
 		}
 
-		// Case 4: no server yet — start one.
+		// Case 4: no server yet: start one.
 		newSrv := startNew("0.0.0.0:7654")
 		if newSrv == nil {
 			newSrv = startNew("0.0.0.0:0")
@@ -128,14 +89,20 @@ func (m *Model) webRemoteEnableCmd() tea.Cmd {
 	}
 }
 
-// webRemoteDisableCmd disables pairing on the active web remote server without
-// closing it (existing session tokens remain valid for their TTL).
+// webRemoteDisableCmd ends the web remote: a server the enable bound on the LAN in place
+// of the loopback API is closed (the handler starts that API again); an existing LAN
+// server stops pairing and ends the paired sessions (DisablePairing).
 func (m *Model) webRemoteDisableCmd() tea.Cmd {
 	srv := m.webRemoteSrv
 	if srv == nil {
 		srv = m.ctrl
 	}
+	rebound := m.webRemoteRebound
 	return func() tea.Msg {
+		if srv != nil && rebound {
+			srv.Close()
+			return webRemoteMsg{enabled: false, closed: true}
+		}
 		if srv != nil {
 			srv.DisablePairing()
 		}
@@ -174,7 +141,7 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			tok := strings.TrimSpace(m.search.Value())
 			m.endTokenEdit()
 			err := config.SaveControlToken(tok)
-			m.webCtrlCfg = LoadControl()
+			m.webCtrlCfg = config.LoadControl()
 			if err != nil {
 				m.status = i18n.Tf("Couldn't save token: %s", err.Error())
 			} else if tok == "" {
@@ -191,10 +158,10 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "a":
-		cfg := LoadControl()
+		cfg := config.LoadControl()
 		enable := !cfg.Enabled
 		err := config.SaveControlEnabled(enable, cfg.Addr)
-		m.webCtrlCfg = LoadControl()
+		m.webCtrlCfg = config.LoadControl()
 		if err != nil {
 			m.status = i18n.Tf("Couldn't save: %s", err.Error())
 		} else if enable {
@@ -204,7 +171,7 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "t":
-		cfg := LoadControl()
+		cfg := config.LoadControl()
 		m.search.CharLimit = 0 // tokens can be longer than a search
 		m.search.SetValue(cfg.Token)
 		m.search.EchoMode = textinput.EchoPassword
@@ -219,12 +186,20 @@ func (m *Model) handleWebRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m, tea.Quit
 	case "enter", " ":
+		if m.webRemoteActive && m.webRemoteSrv != nil && m.webRemoteSrv.PairingCode() == "" {
+			// The code was used or expired: a fresh one; paired phones keep their sessions.
+			srv := m.webRemoteSrv
+			return m, func() tea.Msg {
+				srv.EnablePairing()
+				return buildWebRemoteMsg(srv, false)
+			}
+		}
 		if m.webRemoteActive {
 			m.status = i18n.T("Disabling web remote…")
 			return m, m.webRemoteDisableCmd()
 		}
 		if m.loading {
-			return m, nil // an enable is already in flight — don't leak a second server
+			return m, nil // an enable is already in flight; don't leak a second server
 		}
 		m.loading = true
 		m.status = i18n.T("Starting web remote…")
@@ -239,6 +214,14 @@ func (m *Model) endTokenEdit() {
 	m.search.Blur()
 	m.search.EchoMode = textinput.EchoNormal
 	m.search.CharLimit = searchCharLimit
+}
+
+// webRemotePairingCode is the server's live code: "" once used or expired.
+func (m *Model) webRemotePairingCode() string {
+	if m.webRemoteSrv == nil {
+		return ""
+	}
+	return m.webRemoteSrv.PairingCode()
 }
 
 // webRemoteView renders the Web Remote screen.
@@ -258,7 +241,7 @@ func (m *Model) webRemoteView(rows int) string {
 		lines = append(lines,
 			i18n.T("Scan with your phone (same Wi-Fi), then enter the code."),
 			"",
-			i18n.T("Code")+":  "+accent.Render(m.webRemoteCode),
+			i18n.T("Code")+":  "+accent.Render(m.webRemotePairingCode()),
 			"URL:   "+dim.Render(m.webRemoteURL),
 			"",
 		)

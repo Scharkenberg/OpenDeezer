@@ -28,7 +28,7 @@ internal sealed partial class Player
     private readonly DispatcherQueue _dq;
     private readonly Settings _settings;
     private readonly Library _library;
-    private readonly LatestValuePump<long> _seekPump;
+    internal readonly LatestValuePump<long> _seekPump;
     private readonly LatestValuePump<double> _volumePump;
     private readonly DispatcherQueueTimer _positionTimer;
     private ConnectDevice[] _devices = [];
@@ -73,12 +73,19 @@ internal sealed partial class Player
     public IReadOnlyList<Track> Queue => _queue;
     public int QueueIndex => _queueIndex;
     public IReadOnlyList<ConnectDevice> Devices => _devices;
+    // What another session of the account (the web player, a phone) last started.
+    public Elsewhere Elsewhere { get; internal set; } = new();
 
     public event Action? TrackChanged;
     // The play state, shuffle, repeat and format.
     public event Action? StateChanged;
     public event Action? VolumeChanged;
     public event Action? CastChanged;
+    public event Action? ElsewhereChanged;
+
+    // Deezer refused the account's login since it signed in (read on the slow poll); told once.
+    public event Action? SessionExpired;
+    private bool _sessionExpired;
     public event Action? PositionChanged;
     public event Action<QueueChange>? QueueChanged;
     public event Action<string>? LikeChanged;
@@ -109,6 +116,11 @@ internal sealed partial class Player
         _queueSynced = false;
         _mirror.Forget();
         _engineNowId = "";
+        _sessionExpired = false;
+        _queueOwner = "";
+        _saveTimer?.Stop();
+        _resumeTrack = null;
+        _resumeMs = 0;
         Current = null;
         CastAddress = "";
         CastName = "";
@@ -127,6 +139,8 @@ internal sealed partial class Player
 
     public void Shutdown()
     {
+        _saveTimer?.Stop();
+        SaveQueue(wait: true);
         bool started = _pollCts != null;
         StopPolling();
         if (!started) return;
@@ -160,7 +174,9 @@ internal sealed partial class Player
         SetPositionBase(ms, Environment.TickCount64);
         PositionMs = ms;
         PositionChanged?.Invoke();
-        _seekPump.Post(ms);
+        // The restored track is not loaded yet: its first play starts there.
+        if (_resumeTrack != null) _resumeMs = ms;
+        else _seekPump.Post(ms);
     }
 
     public void SetVolume(double volume)

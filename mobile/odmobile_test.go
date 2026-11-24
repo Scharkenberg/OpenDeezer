@@ -2,7 +2,10 @@ package odmobile
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -66,7 +69,7 @@ func TestSetQueueJSONRejectsBadPayload(t *testing.T) {
 	if err := SetQueueJSON(`[{"id":`); err == nil {
 		t.Fatal("truncated payload must be rejected")
 	}
-	// A rejected payload must leave the previously synced queue untouched.
+	// A rejected payload must leave the synced queue untouched.
 	if got := QueueIndex(); got != 0 {
 		t.Fatalf("bad payload disturbed the queue: index = %d, want 0", got)
 	}
@@ -110,11 +113,11 @@ func TestQueueJSONExport(t *testing.T) {
 	}
 }
 
-// TestFavoriteIDsJSONNoClient proves FavoriteIDsJSON degrades to a valid empty
-// JSON array (never null/error) when not logged in.
+// TestFavoriteIDsJSONNoClient: with no client FavoriteIDsJSON answers why,
+// as the desktop export does.
 func TestFavoriteIDsJSONNoClient(t *testing.T) {
-	if got := FavoriteIDsJSON(); got != "[]" {
-		t.Fatalf("FavoriteIDsJSON with no client = %q, want []", got)
+	if got := FavoriteIDsJSON(); got != `{"error":"not logged in"}` {
+		t.Fatalf("FavoriteIDsJSON with no client = %q", got)
 	}
 }
 
@@ -154,5 +157,37 @@ func TestQueueEditExports(t *testing.T) {
 	QueueInsertNext(`{"not":"valid"}`) // noop
 	if got := QueueVersion(); got == 0 {
 		t.Fatal("version zero after edits")
+	}
+}
+
+// In offline mode Fetch asks the network nothing.
+func TestFetchOfflineRequestsNothing(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte("png"))
+	}))
+	t.Cleanup(srv.Close)
+	SetOfflineMode(true)
+	t.Cleanup(func() { SetOfflineMode(false) })
+	if b := Fetch(srv.URL + "/cover.jpg"); b != nil || hits.Load() != 0 {
+		t.Fatalf("offline Fetch returned %q after %d requests", b, hits.Load())
+	}
+}
+
+// A picture whose connection drops mid-body comes back as nothing, not cut.
+func TestFetchDropsCutBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		_, _ = w.Write(make([]byte, 500))
+		w.(http.Flusher).Flush()
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			conn.Close()
+		}
+	}))
+	defer ts.Close()
+	if b := Fetch(ts.URL); b != nil {
+		t.Fatalf("Fetch returned %d bytes of a cut body", len(b))
 	}
 }

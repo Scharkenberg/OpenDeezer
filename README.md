@@ -53,7 +53,7 @@ Prebuilt binaries for everything are on the [Releases](../../releases) page.
 **Playback**
 - **Quality tiers** — Normal (MP3 128), High (MP3 320), **HiFi (FLAC lossless)**.
 - **Free accounts welcome** — a Deezer Free login streams the **full library at
-  128 kbps** (ad-supported, exactly like Deezer's own web player). A paid plan
+  128 kbps**, without the audio ads Deezer's own players play. A paid plan
   unlocks 320/FLAC and downloads. (If a specific track has no full-length source
   for your account, playback falls back to Deezer's 30-second preview, marked as
   such — but that's the exception, not the rule.)
@@ -151,8 +151,8 @@ access to your account.
 
 ## Requirements
 
-- A Deezer account. **Free works** — full-library streaming at 128 kbps,
-  ad-supported (same as Deezer's web player). A **paid plan** unlocks higher
+- A Deezer account. **Free works** — full-library streaming at 128 kbps. A
+  **paid plan** unlocks higher
   quality (Premium for MP3 320, HiFi for FLAC) and **downloads**.
 - Building from source: **Go 1.25+**, a C compiler, and a working audio device.
   The audio backend is [malgo](https://github.com/gen2brain/malgo) (miniaudio),
@@ -458,9 +458,10 @@ your session (the ARL).
 
 **Do I need Deezer Premium?**
 No — a **free** Deezer account works. Deezer Free streams the full library at
-128 kbps and is **ad-supported**: OpenDeezer plays full tracks (like Deezer's own
-web player) and reports plays so the free tier's ads/artist play-counts work.
-Free settings include an at-your-own-risk toggle to disable ads/play-reporting. A
+128 kbps. OpenDeezer plays full tracks, as Deezer's own web player does, but none
+of the audio ads Deezer plays on the free tier. It reports your plays to Deezer as
+the web player does, which credits artists. Free settings include an
+at-your-own-risk toggle to turn play reporting off. A
 **paid plan** unlocks higher quality (Premium for MP3 320, HiFi for FLAC) and
 downloads. (A track with no full-length source for your account falls back to
 Deezer's 30-second preview, marked as such — the exception, not the rule.)

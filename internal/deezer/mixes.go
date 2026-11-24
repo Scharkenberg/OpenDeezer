@@ -6,57 +6,57 @@ import (
 )
 
 // This file holds per-seed mixes: "start radio from this song / this artist".
-// Like Flow (flow.go) these go through gw-light and follow the long-standing
-// community conventions for the mix methods.
+// Like Flow (flow.go) these go through gw-light, as the web player calls them.
 
 // TrackMix returns a mix seeded from one track ("song radio"). Uses the gw
 // song.getSearchTrackMix method; start_with_input_track keeps the seed track
 // as the first entry so playback can begin from the song the user picked.
 func (c *Client) TrackMix(trackID string) ([]Track, error) {
-	if !c.LoggedIn() {
-		return nil, fmt.Errorf("not logged in")
-	}
 	body := fmt.Sprintf(`{"sng_id":%s,"start_with_input_track":"true"}`, jsonEsc(trackID))
 	b, err := c.gw("song.getSearchTrackMix", body)
 	if err != nil {
 		return nil, err
 	}
-	return parseGwTrackList(b), nil
+	return parseGwTrackList(b)
 }
 
 // ArtistMix returns Deezer's "smart radio" seeded from an artist ("artist
 // radio"). Uses the gw smart.getSmartRadio method.
 func (c *Client) ArtistMix(artistID string) ([]Track, error) {
-	if !c.LoggedIn() {
-		return nil, fmt.Errorf("not logged in")
-	}
-	body := fmt.Sprintf(`{"art_id":%s,"limit":50}`, jsonEsc(artistID))
+	body := fmt.Sprintf(`{"art_id":%s}`, jsonEsc(artistID))
 	b, err := c.gw("smart.getSmartRadio", body)
 	if err != nil {
 		return nil, err
 	}
-	return parseGwTrackList(b), nil
+	return parseGwTrackList(b)
 }
 
-// parseGwTrackList decodes a gw track-list response body. The results envelope
-// is usually {results:{data:[...]}}; some radio/mix variants return a bare
-// array ({results:[...]}), so both shapes are accepted (same tolerance as
-// Flow). An unrecognized/empty body yields nil, not an error: the gw error
-// envelope has already been checked by gw().
-func parseGwTrackList(b []byte) []Track {
+// parseGwTrackList decodes a gw track list: {results:{data:[...]}} or a bare
+// {results:[...]}. An empty list is nil; a body of neither shape is an error.
+func parseGwTrackList(b []byte) ([]Track, error) {
 	var obj struct {
 		Results struct {
-			Data []gwTrackDTO `json:"data"`
+			Data *[]gwTrackDTO `json:"data"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(b, &obj); err == nil && len(obj.Results.Data) > 0 {
-		return gwTracksToTracks(obj.Results.Data)
-	}
 	var arr struct {
-		Results []gwTrackDTO `json:"results"`
+		Results *[]gwTrackDTO `json:"results"`
 	}
-	if err := json.Unmarshal(b, &arr); err == nil && len(arr.Results) > 0 {
-		return gwTracksToTracks(arr.Results)
+	var dtos []gwTrackDTO
+	switch {
+	case json.Unmarshal(b, &obj) == nil && obj.Results.Data != nil:
+		dtos = *obj.Results.Data
+	case json.Unmarshal(b, &arr) == nil && arr.Results != nil:
+		dtos = *arr.Results
+	default:
+		return nil, fmt.Errorf("unreadable track list")
 	}
-	return nil
+	if len(dtos) == 0 {
+		return nil, nil
+	}
+	out := make([]Track, len(dtos))
+	for i, t := range dtos {
+		out[i] = t.toTrack()
+	}
+	return out, nil
 }

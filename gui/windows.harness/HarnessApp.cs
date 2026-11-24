@@ -29,8 +29,6 @@ public partial class App : Application
         };
     }
 
-    internal static void ReportException(Exception ex) => Harness.Log("EXCEPTION " + ex);
-
     internal static bool Restart() => false;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

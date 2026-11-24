@@ -8,7 +8,7 @@ import (
 // Re-export every public model from internal/deezer so callers import only
 // this package and never reference the internal path.
 
-// Account summarises the logged-in user's plan and entitlements.
+// Account summarizes the logged-in user's plan and entitlements.
 type Account = internaldeezer.Account
 
 // Artist is a track/album credit.
@@ -45,14 +45,16 @@ type Podcast = internaldeezer.Podcast
 // SearchResults groups tracks, albums, artists and playlists from a query.
 type SearchResults = internaldeezer.SearchResults
 
-// StreamPlan is the resolved CDN URL + metadata needed to download and decrypt
-// a track or episode. Obtain one via [Client.PrepareStream] or
-// [Client.PodcastEpisodeStream], then pass it to [DownloadTrack] or
-// [sdk/player.Player.Play].
+// StreamPlan is the resolved CDN URL and metadata to download and decrypt a track or
+// episode, from [Client.PrepareStream] or [Client.PodcastEpisodeStream], for
+// [DownloadTrack] or [sdk/player.Player.Play].
 type StreamPlan = internaldeezer.StreamPlan
 
 // Track is a Deezer track (metadata only).
 type Track = internaldeezer.Track
+
+// FlowMood is one of Flow's moods: its id (Flow's mood argument) and its title.
+type FlowMood = internaldeezer.FlowMood
 
 // StripeDecryptor streams Deezer's BF_CBC_STRIPE plaintext from arbitrary
 // input chunks. Use [NewStripeDecryptor] to obtain one.
@@ -85,9 +87,7 @@ const (
 // ---- Client ----
 
 // Client holds an authenticated Deezer session. Create one with [New] and call
-// [Client.Login] before issuing any browse or stream request.
-//
-// Client is safe for concurrent use.
+// [Client.Login] before any browse or stream request. Safe for concurrent use.
 type Client struct {
 	c *internaldeezer.Client
 }
@@ -121,12 +121,17 @@ func (cl *Client) SetQuality(q int) { cl.c.SetQuality(q) }
 // Quality returns the current quality preference (0–2).
 func (cl *Client) Quality() int { return cl.c.Quality() }
 
+// GainTarget returns the loudness, in dB, Deezer normalizes the account's
+// tracks to (0 before Login). Pass it to the player's SetReplayGainTarget.
+func (cl *Client) GainTarget() float64 { return cl.c.GainTarget() }
+
 // ---- library reads ----
 
 // Favorites lists the user's liked songs (requires login).
 func (cl *Client) Favorites() ([]Track, error) { return cl.c.Favorites() }
 
-// Playlists lists the user's own playlists (requires login).
+// Playlists lists the profile's playlists tab: the user's own and the ones they follow,
+// each with its owner's user id (requires login).
 func (cl *Client) Playlists() ([]Playlist, error) { return cl.c.Playlists() }
 
 // PlaylistTracks lists the tracks in a playlist by id. Works for private
@@ -143,8 +148,8 @@ func (cl *Client) AlbumTracks(id string) ([]Track, error) {
 // Track fetches a single track's metadata by id (requires login).
 func (cl *Client) Track(id string) (Track, error) { return cl.c.Track(id) }
 
-// Search queries tracks, albums, artists and playlists. At least some results
-// are returned for each category. No login required for public search.
+// Search queries tracks, albums, artists and playlists concurrently. It succeeds when
+// at least one category does; when all four fail the errors are joined and returned.
 func (cl *Client) Search(query string) (*SearchResults, error) {
 	return cl.c.Search(query)
 }
@@ -155,17 +160,23 @@ func (cl *Client) Charts(genreID string) (*Chart, error) {
 	return cl.c.Charts(genreID)
 }
 
-// Flow returns Deezer's personalised radio (requires login and a Premium
+// Flow returns Deezer's personalized radio (requires login and a Premium
 // account).
-func (cl *Client) Flow() ([]Track, error) { return cl.c.Flow() }
+func (cl *Client) Flow() ([]Track, error) { return cl.c.Flow("") }
+
+// FlowMood returns a batch of one of Flow's moods (a FlowMoods id).
+func (cl *Client) FlowMood(mood string) ([]Track, error) { return cl.c.Flow(mood) }
+
+// FlowMoods lists Flow's moods.
+func (cl *Client) FlowMoods() ([]FlowMood, error) { return cl.c.FlowMoods() }
 
 // ArtistTop lists an artist's most popular tracks (public).
 func (cl *Client) ArtistTop(id string) ([]Track, error) {
 	return cl.c.ArtistTop(id)
 }
 
-// ArtistProfile fetches an artist's full profile: biography, top tracks,
-// albums, and related artists (public).
+// ArtistProfile fetches an artist's profile with their top tracks, albums and related
+// artists for a one-shot profile view (public).
 func (cl *Client) ArtistProfile(id string) (*ArtistPage, error) {
 	return cl.c.ArtistProfile(id)
 }
@@ -234,12 +245,9 @@ func (cl *Client) DeletePlaylist(playlistID string) error {
 
 // ---- stream resolution ----
 
-// PrepareStream resolves a track id to a [StreamPlan] containing the CDN URL,
-// format, ReplayGain, and an Encrypted flag. Pass the plan to [DownloadTrack]
-// or [sdk/player.Player.Play].
-//
-// Requires login and a Premium account. Quality falls back automatically when
-// the account is not entitled to the preferred level.
+// PrepareStream resolves a track id to a [StreamPlan] (CDN URL, format, ReplayGain,
+// Encrypted) for [DownloadTrack] or [sdk/player.Player.Play]. Requires login and
+// Premium; quality falls back when the account is not entitled.
 func (cl *Client) PrepareStream(trackID string) (*StreamPlan, error) {
 	return cl.c.PrepareStream(trackID)
 }
@@ -256,12 +264,9 @@ func (cl *Client) PodcastEpisodeStream(episodeID string) (*StreamPlan, error) {
 // label (e.g. "MP3 · 320 kbps").
 func FormatLabel(raw string) string { return internaldeezer.FormatLabel(raw) }
 
-// TrackIDOf extracts the numeric Deezer track id from a URI
-// ("deezer:track:123"), a URL, or a bare numeric string. Any query string or
-// fragment is ignored, so share links carrying utm_* params (including
-// utm_content=track-<id>, whose digits would otherwise be concatenated onto the
-// id) resolve correctly. Trailing slashes are tolerated, and negative ids
-// (user-upload SNG_IDs) are preserved. Returns "" when no valid id is present.
+// TrackIDOf extracts the numeric track id from a URI ("deezer:track:123"), a URL or a
+// bare number, ignoring query and fragment and trailing slashes; negative ids
+// (user uploads) are kept. Returns "" when there is no valid id.
 func TrackIDOf(uri string) string { return internaldeezer.TrackIDOf(uri) }
 
 // BlowfishKey derives the per-track Blowfish key used for BF_CBC_STRIPE
@@ -269,10 +274,9 @@ func TrackIDOf(uri string) string { return internaldeezer.TrackIDOf(uri) }
 // secret. Most callers should use [DownloadTrack] or [DecryptBytes] instead.
 func BlowfishKey(trackID string) []byte { return internaldeezer.BlowfishKey(trackID) }
 
-// NewStripeDecryptor builds a streaming BF_CBC_STRIPE decryptor keyed for
-// trackID (for a [StreamPlan], its CipherID). Feed it arbitrary-sized chunks
-// via StripeDecryptor.Feed; flush the final partial chunk with
-// StripeDecryptor.Finish.
+// NewStripeDecryptor builds a streaming BF_CBC_STRIPE decryptor for trackID (a
+// [StreamPlan]'s CipherID). Feed it chunks of any size via StripeDecryptor.Feed and
+// flush the last partial chunk with StripeDecryptor.Finish.
 func NewStripeDecryptor(trackID string) (*StripeDecryptor, error) {
 	return internaldeezer.NewStripeDecryptor(trackID)
 }

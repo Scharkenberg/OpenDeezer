@@ -1,5 +1,5 @@
 // The one per-item element factory: an ItemsRepeater template that reuses
-// elements from a pool and binds them to their data when realised.
+// elements from a pool and binds them to their data when realized.
 
 using System;
 using System.Collections.Generic;

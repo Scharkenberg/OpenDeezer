@@ -165,18 +165,18 @@ struct SettingsView: View {
                     }
                 }
 
-                // Disable ads — Deezer Free only (paid plans carry no ads). The
+                // Play reporting — Deezer Free only. OpenDeezer plays no ads. The
                 // opt-out is engine-owned; loaded on appear, applied immediately.
                 if !isPremium {
                     Section {
                         Toggle(isOn: $adsDisabled) {
-                            Label("Disable ads", systemImage: "megaphone.slash")
+                            Label("Don't report my plays", systemImage: "megaphone.slash")
                         }
                         .onChange(of: adsDisabled) { _, value in
                             Task { await Engine.setAdsDisabled(value) }
                         }
                     } footer: {
-                        Text("Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk.")
+                        Text("OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk.")
                     }
                 }
 

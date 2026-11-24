@@ -7,10 +7,10 @@ namespace OpenDeezer;
 
 internal sealed class ChartsView : View
 {
-    private readonly TrackList _tracks = new();
-    private readonly TileGrid<Album> _albums = new(Tiles.Album, a => CollectionView.Open(Collection.Of(a)), a => Menus.PlayCollection(Collection.Of(a)));
-    private readonly TileGrid<ArtistInfo> _artists = new(Tiles.Artist, a => ArtistView.Open(a.Id));
-    private readonly TileGrid<Playlist> _playlists = new(Tiles.Playlist, p => CollectionView.Open(Collection.Of(p)), p => Menus.PlayCollection(Collection.Of(p)));
+    private readonly TrackList _tracks = new() { Context = new("tops_track", "0") };
+    private readonly TileGrid<Album> _albums = TileGrids.Albums();
+    private readonly TileGrid<ArtistInfo> _artists = TileGrids.Artists();
+    private readonly TileGrid<Playlist> _playlists = TileGrids.Playlists();
     private readonly Section _tracksSection;
     private readonly ScrollViewer _scroller;
     private readonly StateView _state;
@@ -22,7 +22,7 @@ internal sealed class ChartsView : View
     public ChartsView()
     {
         _tracksSection = new Section("Section_TopTracks", _tracks.Root,
-            () => CollectionView.Open(Collection.Of(Loc.S("Nav_Charts"), _charts.Tracks)));
+            () => CollectionView.Open(Collection.Of(Loc.S("Nav_Charts"), _charts.Tracks, _tracks.Context)));
         _state = new StateView(Section.Stack(
             _tracksSection.Root,
             Section.Tiles("Section_Albums", _albums, Count.TileRows).Root,

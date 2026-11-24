@@ -16,6 +16,8 @@ internal static class PlaybackOptions
     public static int CrossfadeMs { get; private set; }
     public static bool ReplayGain { get; private set; }
     public static bool Gapless { get; private set; }
+    // Pause when another session of the account starts, and announce this app's starts.
+    public static bool SingleDevice { get; private set; } = true;
 
     // The longest preset not over the engine's length (the terminal UI sets any length).
     public static int CrossfadeIndex => Math.Max(0, Array.FindLastIndex(Timing.CrossfadePresetsMs, ms => ms <= CrossfadeMs));
@@ -34,7 +36,7 @@ internal static class PlaybackOptions
         bool held = s.Quality != null || s.CrossfadeMs != null || s.ReplayGain != null || s.Gapless != null;
         var old = (s.Quality ?? 1, s.CrossfadeMs ?? 0, s.ReplayGain ?? false, s.Gapless ?? false);
         string file = Path.Combine(Config.ConfigDir(), "playback.json");
-        var (now, saved) = await Task.Run(() =>
+        var (now, saved, single) = await Task.Run(() =>
         {
             if (held || !File.Exists(file))
             {
@@ -43,9 +45,11 @@ internal static class PlaybackOptions
                 DeezerCore.DZSetReplayGain(old.Item3 ? 1 : 0);
                 DeezerCore.DZSetGapless(old.Item4 ? 1 : 0);
             }
-            return ((DeezerCore.DZQuality(), DeezerCore.DZCrossfadeMS(), DeezerCore.DZReplayGain() == 1, DeezerCore.DZGapless() == 1), File.Exists(file));
+            return ((DeezerCore.DZQuality(), DeezerCore.DZCrossfadeMS(), DeezerCore.DZReplayGain() == 1, DeezerCore.DZGapless() == 1),
+                File.Exists(file), DeezerCore.DZSingleDevice() == 1);
         });
         (Quality, CrossfadeMs, ReplayGain, Gapless) = now;
+        SingleDevice = single;
         if (held && saved && now == old)
         {
             (s.Quality, s.CrossfadeMs, s.ReplayGain, s.Gapless) = (null, null, null, null);
@@ -92,6 +96,14 @@ internal static class PlaybackOptions
         if (on == Gapless) return;
         Gapless = on;
         App.Player.SetGapless(on);
+        Changed?.Invoke();
+    }
+
+    public static void SetSingleDevice(bool on)
+    {
+        if (on == SingleDevice) return;
+        SingleDevice = on;
+        Engine.Post(() => DeezerCore.DZSetSingleDevice(on ? 1 : 0));
         Changed?.Invoke();
     }
 }

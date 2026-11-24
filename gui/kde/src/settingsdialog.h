@@ -5,7 +5,7 @@
 //   * audio quality — Normal (MP3_128) / High (MP3_320) -> DZSetQuality
 //   * close-to-tray  — keep the engine playing in the background on window close
 // The dialog only edits + persists values; it emits the two signals below on
-// accept so MainWindow can apply them (DZSetQuality / tray behaviour).
+// accept so MainWindow can apply them (DZSetQuality / tray behavior).
 //
 // The Remote control group is different: it talks to the engine directly
 // (DZControlConfigJSON / DZSetControlConfig / DZWebRemote*) and applies on

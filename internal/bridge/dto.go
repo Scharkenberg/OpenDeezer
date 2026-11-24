@@ -4,9 +4,7 @@
 package bridge
 
 import (
-	"strings"
-	"unicode"
-	"unicode/utf8"
+	"fmt"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
@@ -45,6 +43,7 @@ type Playlist struct {
 	Owner      string `json:"owner"`
 	TrackCount int    `json:"trackCount"`
 	ArtworkURL string `json:"artworkUrl"`
+	OwnerID    string `json:"ownerId,omitempty"`
 }
 
 // ArtistInfo is an artist search result or profile on the native JSON wire.
@@ -76,10 +75,9 @@ type TrackAlbum struct {
 }
 
 // Contributor is one credit role on a track overview: RoleKey is Deezer's
-// SNG_CONTRIBUTORS key, Role its English display name.
+// SNG_CONTRIBUTORS key.
 type Contributor struct {
 	RoleKey string   `json:"roleKey"`
-	Role    string   `json:"role"`
 	Names   []string `json:"names"`
 }
 
@@ -101,27 +99,6 @@ type TrackInfo struct {
 	Explicit     bool          `json:"explicit,omitempty"`
 	Copyright    string        `json:"copyright,omitempty"`
 	Contributors []Contributor `json:"contributors,omitempty"`
-}
-
-// contributorRoles maps common SNG_CONTRIBUTORS keys to English role names.
-// Other keys are shown with underscores as spaces and a capital first letter.
-var contributorRoles = map[string]string{
-	"main_artist":         "Main artist",
-	"featuring":           "Featured artist",
-	"composer":            "Composer",
-	"author":              "Lyricist",
-	"lyricist":            "Lyricist",
-	"writer":              "Songwriter",
-	"producer":            "Producer",
-	"co-producer":         "Co-producer",
-	"mixer":               "Mixing engineer",
-	"engineer":            "Engineer",
-	"mastering":           "Mastering engineer",
-	"arranger":            "Arranger",
-	"conductor":           "Conductor",
-	"musicpublisher":      "Music publisher",
-	"publisher":           "Publisher",
-	"associatedperformer": "Associated performer",
 }
 
 // Podcast is a podcast on the native JSON wire.
@@ -149,16 +126,18 @@ func FromArtist(a deezer.Artist) Artist {
 	return Artist{ID: a.ID, Name: a.Name}
 }
 
-// FromArtists converts Deezer artists to their native wire representation.
-// It deliberately returns a non-nil empty slice for nil input so JSON remains
-// [] rather than null, matching the original binding implementations.
-func FromArtists(artists []deezer.Artist) []Artist {
-	out := make([]Artist, len(artists))
-	for i, artist := range artists {
-		out[i] = FromArtist(artist)
+// mapSlice converts each element with f. It returns a non-nil empty slice for
+// nil input, so the JSON is [] rather than null.
+func mapSlice[S, T any](in []S, f func(S) T) []T {
+	out := make([]T, len(in))
+	for i, v := range in {
+		out[i] = f(v)
 	}
 	return out
 }
+
+// FromArtists converts Deezer artists to their native wire representation.
+func FromArtists(artists []deezer.Artist) []Artist { return mapSlice(artists, FromArtist) }
 
 // FromTrack converts a Deezer track to its native wire representation.
 func FromTrack(track deezer.Track) Track {
@@ -180,13 +159,7 @@ func FromTrack(track deezer.Track) Track {
 }
 
 // FromTracks converts Deezer tracks to their native wire representation.
-func FromTracks(tracks []deezer.Track) []Track {
-	out := make([]Track, len(tracks))
-	for i, track := range tracks {
-		out[i] = FromTrack(track)
-	}
-	return out
-}
+func FromTracks(tracks []deezer.Track) []Track { return mapSlice(tracks, FromTrack) }
 
 // FromAlbum converts a Deezer album to its native wire representation.
 func FromAlbum(album deezer.Album) Album {
@@ -199,13 +172,7 @@ func FromAlbum(album deezer.Album) Album {
 }
 
 // FromAlbums converts Deezer albums to their native wire representation.
-func FromAlbums(albums []deezer.Album) []Album {
-	out := make([]Album, len(albums))
-	for i, album := range albums {
-		out[i] = FromAlbum(album)
-	}
-	return out
-}
+func FromAlbums(albums []deezer.Album) []Album { return mapSlice(albums, FromAlbum) }
 
 // FromPlaylist converts a Deezer playlist to its native wire representation.
 func FromPlaylist(playlist deezer.Playlist) Playlist {
@@ -215,17 +182,12 @@ func FromPlaylist(playlist deezer.Playlist) Playlist {
 		Owner:      playlist.Owner,
 		TrackCount: playlist.TrackCount,
 		ArtworkURL: playlist.ArtworkURL,
+		OwnerID:    playlist.OwnerID,
 	}
 }
 
 // FromPlaylists converts Deezer playlists to their native wire representation.
-func FromPlaylists(playlists []deezer.Playlist) []Playlist {
-	out := make([]Playlist, len(playlists))
-	for i, playlist := range playlists {
-		out[i] = FromPlaylist(playlist)
-	}
-	return out
-}
+func FromPlaylists(playlists []deezer.Playlist) []Playlist { return mapSlice(playlists, FromPlaylist) }
 
 // FromArtistInfo converts Deezer artist information to its native wire
 // representation.
@@ -239,7 +201,7 @@ func FromArtistInfo(artist deezer.ArtistInfo) ArtistInfo {
 }
 
 // FromTrackInfo converts a Deezer track overview to its native wire
-// representation, naming contributor roles in English.
+// representation.
 func FromTrackInfo(ti deezer.TrackInfo) TrackInfo {
 	out := TrackInfo{
 		ID:      ti.ID,
@@ -268,14 +230,7 @@ func FromTrackInfo(ti deezer.TrackInfo) TrackInfo {
 		out.Artists = append(out.Artists, TrackArtist{ID: a.ID, Name: a.Name, Role: a.Role, PictureURL: a.PictureURL})
 	}
 	for _, c := range ti.Contributors {
-		role, ok := contributorRoles[c.Role]
-		if !ok {
-			role = strings.ReplaceAll(c.Role, "_", " ")
-			if r, size := utf8.DecodeRuneInString(role); size > 0 {
-				role = string(unicode.ToUpper(r)) + role[size:]
-			}
-		}
-		out.Contributors = append(out.Contributors, Contributor{RoleKey: c.Role, Role: role, Names: c.Names})
+		out.Contributors = append(out.Contributors, Contributor{RoleKey: c.Role, Names: c.Names})
 	}
 	return out
 }
@@ -283,11 +238,7 @@ func FromTrackInfo(ti deezer.TrackInfo) TrackInfo {
 // FromArtistInfos converts Deezer artist information to its native wire
 // representation.
 func FromArtistInfos(artists []deezer.ArtistInfo) []ArtistInfo {
-	out := make([]ArtistInfo, len(artists))
-	for i, artist := range artists {
-		out[i] = FromArtistInfo(artist)
-	}
-	return out
+	return mapSlice(artists, FromArtistInfo)
 }
 
 // FromPodcast converts a Deezer podcast to its native wire representation.
@@ -302,12 +253,23 @@ func FromPodcast(podcast deezer.Podcast) Podcast {
 }
 
 // FromPodcasts converts Deezer podcasts to their native wire representation.
-func FromPodcasts(podcasts []deezer.Podcast) []Podcast {
-	out := make([]Podcast, len(podcasts))
-	for i, podcast := range podcasts {
-		out[i] = FromPodcast(podcast)
+func FromPodcasts(podcasts []deezer.Podcast) []Podcast { return mapSlice(podcasts, FromPodcast) }
+
+// Library reads the account's favorite albums, artists or podcasts by kind ("album",
+// "artist", "podcast") as {"albums":[...]}, {"artists":[...]} or {"podcasts":[...]}.
+func Library(c *deezer.Client, kind string) (any, error) {
+	switch kind {
+	case "album":
+		v, err := c.FavoriteAlbums()
+		return map[string]any{"albums": FromAlbums(v)}, err
+	case "artist":
+		v, err := c.FavoriteArtists()
+		return map[string]any{"artists": FromArtistInfos(v)}, err
+	case "podcast":
+		v, err := c.FavoritePodcasts()
+		return map[string]any{"podcasts": FromPodcasts(v)}, err
 	}
-	return out
+	return nil, fmt.Errorf("library: unknown kind %q", kind)
 }
 
 // FromEpisode converts a Deezer podcast episode to its native wire
@@ -326,10 +288,4 @@ func FromEpisode(episode deezer.Episode) Episode {
 
 // FromEpisodes converts Deezer podcast episodes to their native wire
 // representation.
-func FromEpisodes(episodes []deezer.Episode) []Episode {
-	out := make([]Episode, len(episodes))
-	for i, episode := range episodes {
-		out[i] = FromEpisode(episode)
-	}
-	return out
-}
+func FromEpisodes(episodes []deezer.Episode) []Episode { return mapSlice(episodes, FromEpisode) }

@@ -19,16 +19,9 @@ type Row struct {
 	ID     string // Deezer track id, when the source carries one (an M3U of deezer.com URLs)
 }
 
-// ParseCSV reads a playlist from r. Two formats are accepted:
-//
-//   - CSV with an Exportify-style header (Track Name / Artist Name(s) /
-//     Album Name / ISRC, with common aliases like Title/Artist/Album), in any
-//     column order, extra columns ignored;
-//   - a plain text fallback: one "Artist - Title" per line (comment lines
-//     starting with '#' — e.g. an M3U's directives — and blank lines are
-//     skipped; a line without " - " becomes a title-only row).
-//
-// Rows without a title are dropped. An input yielding no rows is an error.
+// ParseCSV reads a playlist from r: a CSV with an Exportify-style header (any column
+// order, common aliases), or plain "Artist - Title" lines ('#' and blank lines
+// skipped). Rows without a title are dropped; no rows is an error.
 func ParseCSV(r io.Reader) ([]Row, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -110,10 +103,9 @@ func parseHeaderedCSV(data []byte) ([]Row, bool) {
 	return rows, true
 }
 
-// parsePlainLines parses the "Artist - Title" text fallback, which also reads
-// an M3U (the app's own export included): "#EXTINF:<secs>,<artist> - <title>"
-// names the entry, and the location line after it is skipped unless it is a
-// Deezer track URL, whose id is then used directly. Other '#' lines are skipped.
+// parsePlainLines parses "Artist - Title" lines and M3U: "#EXTINF:<secs>,<artist> -
+// <title>" names the entry and the location line after it is skipped unless it is a
+// Deezer track URL, whose id is used. Other '#' lines are skipped.
 func parsePlainLines(data []byte) []Row {
 	var rows []Row
 	var info *Row // the last #EXTINF's entry, waiting for its location line

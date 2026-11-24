@@ -8,6 +8,7 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
@@ -34,6 +35,7 @@ func interactionModel(s screen) *Model {
 		height: 24,
 	}
 	m.preloads = preload.New(func() *audio.Player { return m.player }, m.resolvePreload)
+	m.listens = listens.New(func() listens.Sender { return nil })
 	return m
 }
 
@@ -74,7 +76,7 @@ func TestCtrlFStartsListFilterAndSlashStaysSearch(t *testing.T) {
 	if m.list.FilterState() != list.Filtering {
 		t.Fatalf("ctrl+f should start the list filter, state=%v", m.list.FilterState())
 	}
-	// While filtering, plain keys type into the filter — not global bindings.
+	// While filtering, plain keys type into the filter, not global bindings.
 	keyRunes(m, 'q')
 	if m.screen != screenList {
 		t.Fatalf("typing into the filter changed screens: %v", m.screen)
@@ -428,7 +430,7 @@ func TestCtrlQueueSnapshotRebuiltOnlyOnVersionChange(t *testing.T) {
 	if &s1[0] != &s2[0] {
 		t.Fatal("unchanged queue must reuse the cached snapshot slice")
 	}
-	// Cursor moves don't bump the version — still cached.
+	// Cursor moves don't bump the version: still cached.
 	m.q.Next()
 	s3 := m.ctrlQueueSnapshot()
 	if &s1[0] != &s3[0] {
@@ -527,7 +529,7 @@ func TestSettingsFilesWrittenAtomically(t *testing.T) {
 	if pb, _ := config.LoadPlayback(); LoadARL() != "arl-value" || pb.Quality != 2 || LoadTheme() != "nord" {
 		t.Fatalf("read back %q %d %q", LoadARL(), pb.Quality, LoadTheme())
 	}
-	dir, _ := configDir()
+	dir, _ := config.Dir()
 	if tmps, _ := filepath.Glob(filepath.Join(dir, "*.tmp*")); len(tmps) != 0 {
 		t.Fatalf("temp files left: %v", tmps)
 	}
@@ -918,5 +920,19 @@ func TestSameTrackPickedTwicePlaysOnce(t *testing.T) {
 	}
 	if _, cmd := m.Update(streamReadyMsg{plan: &deezer.StreamPlan{}, track: track, seq: m.pickSeq.Load()}); cmd == nil {
 		t.Fatal("the second pick's resolve did not start a play")
+	}
+}
+
+// Tracks that top up a radio queue are appended only while that radio still
+// plays.
+func TestRadioMoreAppendsToItsQueueOnly(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(3), 0)
+	flow := listens.Context{Type: "dynamic_page_user_radio", ID: "7"}
+	m.playCtx = flow
+	_, _ = m.Update(radioMoreMsg{ctx: listens.Context{Type: "track_mix_contextual", ID: "1"}, tracks: []deezer.Track{{ID: "z"}}})
+	_, _ = m.Update(radioMoreMsg{ctx: flow, tracks: []deezer.Track{{ID: "x"}, {ID: "y"}}})
+	if ts := m.q.Tracks(); len(ts) != 5 || ts[3].ID != "x" || ts[4].ID != "y" {
+		t.Fatalf("queue %v", ts)
 	}
 }

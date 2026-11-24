@@ -181,7 +181,7 @@ func TestSetIndexRecordsHistory(t *testing.T) {
 	q := New()
 	q.Set(tracks(10), 0)
 	q.Next() // 0->1
-	q.Next() // 1->2, now at index 2
+	q.Next() // 1->2, at index 2
 	q.SetIndex(7)
 	if q.Index() != 7 {
 		t.Fatalf("SetIndex -> %d want 7", q.Index())
@@ -222,10 +222,8 @@ func TestCycleRepeat(t *testing.T) {
 	}
 }
 
-// TestAlignIndexIsHistoryFree covers the remote/GUI queue sync pattern:
-// Set(tracks, 0) then AlignIndex(N) aligns the cursor to the row that is already
-// playing. That alignment must NOT record the synthetic row 0 in history —
-// otherwise the first remote Prev jumps to a never-played track.
+// TestAlignIndexIsHistoryFree: Set(tracks, 0) then AlignIndex(N) must not record row 0
+// in history, or the first remote Prev jumps to an unplayed track.
 func TestAlignIndexIsHistoryFree(t *testing.T) {
 	q := New()
 	q.Set(tracks(10), 0)
@@ -257,9 +255,8 @@ func TestNextAfterSetStillRecordsHistory(t *testing.T) {
 	}
 }
 
-// TestSetIndexAlwaysRecordsHistory verifies SetIndex (a genuine user pick, e.g.
-// the TUI queue view or a remote QueueJump) records history even as the first
-// cursor move after a Set — unlike AlignIndex, which is history-free.
+// TestSetIndexAlwaysRecordsHistory checks that SetIndex (a user pick) records history
+// even as the first cursor move after a Set, unlike AlignIndex.
 func TestSetIndexAlwaysRecordsHistory(t *testing.T) {
 	q := New()
 	q.Set(tracks(10), 0)

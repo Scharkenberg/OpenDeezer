@@ -8,11 +8,9 @@ import (
 	"github.com/ebitengine/oto/v3"
 )
 
-// otoOutput drives playback through oto (AudioToolbox on macOS via purego). Used
-// on ALL macOS builds (TUI + GUIs): malgo's CoreAudio data callback is unreliable
-// here (choppy playback, especially in the c-archive GUI) — oto's pull model is
-// smooth. The cost is no output-device selection (oto = system default only);
-// Linux/Windows use malgo and keep selection.
+// otoOutput plays through oto (AudioToolbox via purego) on all macOS builds, where
+// malgo's CoreAudio callback plays choppy. oto has no output-device selection; Linux
+// and Windows use malgo.
 type otoOutput struct {
 	ctx    *oto.Context
 	player *oto.Player
@@ -37,9 +35,8 @@ func (o *otoOutput) start(read func(out []byte) int) error {
 	return nil
 }
 
-// otoReader adapts the player's pull function to oto's io.Reader. read fills the
-// buffer (zeroing any tail), so this always returns a full buffer and never EOF —
-// oto keeps pulling, playing silence when nothing is queued.
+// otoReader adapts the player's pull function to oto's io.Reader. read fills the whole
+// buffer (zeroing any tail) and never returns EOF, so oto plays silence when idle.
 type otoReader struct{ read func(out []byte) int }
 
 func (r *otoReader) Read(p []byte) (int, error) {

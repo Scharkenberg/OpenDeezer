@@ -1,11 +1,6 @@
-// eq.go — 10-band graphic equalizer + mono downmix, a DSP stage on the player's
-// realtime PCM path. Peaking biquads (RBJ audio-EQ cookbook) at the fixed
-// 44100 Hz pipeline rate, one filter cascade per channel. A settings change
-// builds a fresh immutable eqConfig (coefficients included) off the audio
-// thread and swaps it in atomically; the filter memory lives on the Player and
-// is touched only from the realtime callback, so the hot path stays lock-free
-// and allocation-free. State persists engine-side (config.SaveEQ), so every
-// client shares one set of settings, like the sleep timer shares one clock.
+// eq.go: 10-band graphic EQ and mono downmix on the realtime PCM path (RBJ peaking
+// biquads at 44100 Hz). Settings build an immutable eqConfig swapped in atomically, so
+// the callback takes no lock and allocates nothing. Settings persist via config.SaveEQ.
 
 package audio
 

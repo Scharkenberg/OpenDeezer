@@ -24,6 +24,12 @@ func (a restAlbumDTO) toAlbum() Album {
 	}
 }
 
+// restUser is a playlist's creator in the public REST API.
+type restUser struct {
+	ID   json.Number `json:"id"`
+	Name string      `json:"name"`
+}
+
 type restArtistDTO struct {
 	ID            json.Number `json:"id"`
 	Name          string      `json:"name"`
@@ -56,11 +62,11 @@ func (c *Client) Charts(genreID string) (*Chart, error) {
 		Artists   struct{ Data []restArtistDTO } `json:"artists"`
 		Playlists struct {
 			Data []struct {
-				ID            json.Number           `json:"id"`
-				Title         string                `json:"title"`
-				User          struct{ Name string } `json:"user"`
-				NbTracks      int                   `json:"nb_tracks"`
-				PictureMedium string                `json:"picture_medium"`
+				ID            json.Number `json:"id"`
+				Title         string      `json:"title"`
+				User          restUser    `json:"user"`
+				NbTracks      int         `json:"nb_tracks"`
+				PictureMedium string      `json:"picture_medium"`
 			}
 		} `json:"playlists"`
 	}
@@ -79,7 +85,7 @@ func (c *Client) Charts(genreID string) (*Chart, error) {
 	}
 	for _, p := range r.Playlists.Data {
 		ch.Playlists = append(ch.Playlists, Playlist{
-			ID: p.ID.String(), Name: p.Title, Owner: p.User.Name,
+			ID: p.ID.String(), Name: p.Title, Owner: p.User.Name, OwnerID: p.User.ID.String(),
 			TrackCount: p.NbTracks, ArtworkURL: p.PictureMedium,
 		})
 	}
@@ -148,9 +154,34 @@ func (c *Client) ArtistProfile(id string) (*ArtistPage, error) {
 	return page, nil
 }
 
-// Lyrics fetches a track's lyrics via gw song.getLyrics, returning both the
-// plain text and, when Deezer provides them, time-synced lines.
+// Lyrics fetches a track's lyrics as the web player does, from Pipe (GetLyrics),
+// with time-synced lines and their translation when Deezer has them; gw
+// song.getLyrics is the fallback when Pipe fails.
 func (c *Client) Lyrics(trackID string) (*Lyrics, error) {
+	var p struct {
+		Track struct {
+			Lyrics *struct {
+				Text  string `json:"text"`
+				Lines []struct {
+					Line         string `json:"line"`
+					Translated   string `json:"lineTranslated"`
+					Milliseconds int64  `json:"milliseconds"`
+				} `json:"synchronizedLines"`
+			} `json:"lyrics"`
+		} `json:"track"`
+	}
+	const q = `query GetLyrics($trackId: String!) { track(trackId: $trackId) { id lyrics { id text synchronizedLines { lrcTimestamp line lineTranslated milliseconds duration } licence copyright writers } } }`
+	if err := c.pipe("GetLyrics", q, map[string]any{"trackId": trackID}, &p); err == nil {
+		lyr := &Lyrics{}
+		if l := p.Track.Lyrics; l != nil {
+			lyr.Plain = l.Text
+			for _, s := range l.Lines {
+				lyr.Synced = append(lyr.Synced, LyricLine{TimeMS: s.Milliseconds, Text: s.Line, Translated: s.Translated})
+			}
+		}
+		return lyr, nil
+	}
+	// Pipe failed: gw song.getLyrics.
 	b, err := c.gw("song.getLyrics", fmt.Sprintf(`{"sng_id":%s}`, jsonEsc(trackID)))
 	if err != nil {
 		return nil, err
@@ -170,7 +201,7 @@ func (c *Client) Lyrics(trackID string) (*Lyrics, error) {
 	lyr := &Lyrics{Plain: r.Results.LyricsText}
 	for _, s := range r.Results.Sync {
 		ms, _ := s.Milliseconds.Int64()
-		// Sync arrays include blank separator entries; keep timing, drop noise.
+		// Blank separator entries are kept for their timing.
 		lyr.Synced = append(lyr.Synced, LyricLine{TimeMS: ms, Text: s.Line})
 	}
 	return lyr, nil

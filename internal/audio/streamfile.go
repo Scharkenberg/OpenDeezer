@@ -15,12 +15,9 @@ import (
 // readWindow is each reader's buffer: the only copy of the stream in memory.
 const readWindow = 64 << 10
 
-// streamFile holds one track's stream in a file, exactly as received
-// (ciphertext for an encrypted stream; plaintext never reaches the disk). One
-// writer (the download) appends; any number of readers read it back as an
-// io.ReadSeeker, decrypted per chunk, blocking until the bytes they ask for
-// have arrived. A waiting reader wakes on arrival, on the writer's finish or
-// error, and on close.
+// streamFile holds one track's stream in a file as received (ciphertext when encrypted).
+// One writer appends; readers read it as decrypted io.ReadSeekers, blocking until their
+// bytes arrive, the writer finishes or fails, or the file closes.
 type streamFile struct {
 	mu   sync.Mutex
 	cond *sync.Cond
@@ -55,7 +52,7 @@ func tempDir() (string, error) {
 }
 
 // RemoveTempFiles deletes the stream files a crashed process left in the temp
-// directory, and the podcast spill files older versions left in the system
+// directory, and leftover podcast spill files in the system
 // temp directory. Call it once at startup, before any playback.
 func RemoveTempFiles() {
 	if dir, err := tempDir(); err == nil {

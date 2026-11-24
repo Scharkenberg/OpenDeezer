@@ -1,7 +1,7 @@
 import SwiftUI
 
 // PlayerBar — the floating Apple-Music-style transport bar: controls left,
-// now-playing centre with a thin scrubber, utilities right.
+// now-playing center with a thin scrubber, utilities right.
 struct PlayerBar: View {
     @EnvironmentObject var app: AppState
     @State private var scrubbing = false

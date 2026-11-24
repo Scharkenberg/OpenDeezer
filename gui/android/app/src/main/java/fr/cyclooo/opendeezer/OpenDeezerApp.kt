@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.ui.LocalFoldState
 import fr.cyclooo.opendeezer.ui.components.PlayerBar
 import fr.cyclooo.opendeezer.ui.components.UpdateBanner
@@ -112,12 +113,9 @@ private fun MainScaffold(vm: AppViewModel) {
                     event.failed > 0 -> context.getString(R.string.download_batch_partial, event.saved, event.failed)
                     else -> context.getString(R.string.download_batch_saved, event.saved)
                 }
-                is DownloadEvent.OfflineReady ->
-                    if (event.alreadyCached) context.getString(R.string.offline_already, event.trackName)
-                    else context.getString(R.string.offline_ready, event.trackName)
+                is DownloadEvent.OfflineReady -> context.getString(R.string.offline_ready, event.trackName)
                 is DownloadEvent.OfflineFailed ->
-                    if (event.needsCache) context.getString(R.string.offline_needs_cache)
-                    else if (event.error.isBlank()) context.getString(R.string.download_failed_generic)
+                    if (event.error.isBlank()) context.getString(R.string.download_failed_generic)
                     else context.getString(R.string.download_failed, event.error)
             }
             // Replace any in-flight snackbar so the result supersedes "Downloading…"
@@ -176,11 +174,11 @@ private fun MainScaffold(vm: AppViewModel) {
                 if (fold.isBook && hinge != null) {
                     PlaylistsBookScreen(player = player, hingeBounds = hinge, onBack = back)
                 } else {
-                    TrackListScreen(stringResource(R.string.home_liked), player, back) { Engine.favorites() }
+                    TrackListScreen(stringResource(R.string.home_liked), player, ListenContext("profile_loved", Engine.userId()), back) { Engine.favorites() }
                 }
             }
             composable(Routes.FLOW) {
-                TrackListScreen("Flow", player, back) { Engine.flow() }
+                TrackListScreen("Flow", player, ListenContext("dynamic_page_user_radio", Engine.userId()), back) { Engine.flow() }
             }
             composable(Routes.PLAYLISTS) {
                 val fold = LocalFoldState.current
@@ -197,6 +195,7 @@ private fun MainScaffold(vm: AppViewModel) {
                 TrackListScreen(
                     title = name,
                     player = player,
+                    context = ListenContext("playlist_page", id),
                     onBack = back,
                     onBulkDownload = { player.downloadPlaylist(id, name) },
                     bulkDownloadLabel = stringResource(R.string.action_download_playlist),
@@ -208,6 +207,7 @@ private fun MainScaffold(vm: AppViewModel) {
                 TrackListScreen(
                     title = name,
                     player = player,
+                    context = ListenContext("album_page", id),
                     onBack = back,
                     onBulkDownload = { player.downloadAlbum(id, name) },
                     bulkDownloadLabel = stringResource(R.string.action_download_album),

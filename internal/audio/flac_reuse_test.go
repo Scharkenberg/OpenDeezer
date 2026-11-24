@@ -15,10 +15,8 @@ import (
 	"github.com/mewkiz/flac/frame"
 )
 
-// TestFramePCMReuseNoAllocs verifies flacStream.framePCM reuses its scratch
-// buffer instead of allocating a fresh []byte per frame. framePCM is tested in
-// isolation (not through Read) so the measurement excludes go-mp3/mewkiz internal
-// allocations in ParseNext and reflects only framePCM's own behavior.
+// TestFramePCMReuseNoAllocs checks that framePCM reuses its scratch buffer. It is
+// measured in isolation so ParseNext's own allocations do not count.
 func TestFramePCMReuseNoAllocs(t *testing.T) {
 	const block = 4096
 	left := make([]int32, block)
@@ -45,10 +43,8 @@ func TestFramePCMReuseNoAllocs(t *testing.T) {
 	}
 }
 
-// TestFLACProgressiveDecodeCorrect verifies the FLAC decoder (which now starts
-// before the download finishes) yields the same PCM whether it reads from a
-// fully-buffered stream or a progressively-fed one — proving the reuse rewrite
-// and progressive path preserve output.
+// TestFLACProgressiveDecodeCorrect checks that the FLAC decoder yields the same PCM
+// from a fully buffered stream and from a progressively fed one.
 func TestFLACProgressiveDecodeCorrect(t *testing.T) {
 	data := makeFLAC(20, 4096)
 
@@ -144,13 +140,9 @@ func TestFLACDecodeExactWithReusedBuffers(t *testing.T) {
 	check(decodeAll(t, f), 37*block)
 }
 
-// testdata/tone.flac is 3 s of generated stereo tone (a 440 Hz tone with a
-// scaled copy on the right, a triangle wave, two fading tones) encoded once
-// by reference libFLAC 1.5.0 (the Windows Media Foundation FLAC encoder), so
-// it holds what real files hold: fixed and LPC subframes, correlated-stereo
-// frames. The patched decoder, reusing its buffers, gives every frame the
-// samples parsing into new buffers gives, and the whole file the MD5 libFLAC
-// recorded for its input.
+// testdata/tone.flac is 3 s of generated stereo tones encoded by libFLAC 1.5.0, with
+// fixed and LPC subframes and correlated-stereo frames. The patched decoder must give
+// the same samples as fresh buffers and the MD5 libFLAC recorded.
 func TestFLACLibFLACFileDecodesExactly(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "tone.flac"))
 	if err != nil {

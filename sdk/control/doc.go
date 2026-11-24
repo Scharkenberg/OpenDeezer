@@ -40,9 +40,9 @@
 //
 // # Auth modes
 //
-//   - token     — bearer token in X-OpenDeezer-Token; set [Config.Token]
-//   - account   — controller proves it is the same Deezer account;
+//   - token: bearer token in X-OpenDeezer-Token; set [Config.Token]
+//   - account: controller proves it is the same Deezer account;
 //     set [Config.SameAccountOnly] = true
-//   - session   — phone web remote; set [Config.WebRemote] = true
-//   - none      — open (safe only on localhost)
+//   - session: phone web remote; set [Config.WebRemote] = true
+//   - none: open (safe only on localhost)
 package control

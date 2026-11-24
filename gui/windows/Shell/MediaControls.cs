@@ -1,8 +1,11 @@
-// The Windows media overlay and media keys (SMTC), following the Player.
+// The Windows media overlay and media keys (SMTC), following the Player: transport, seek, shuffle
+// and repeat. With nothing to play (a reset) the overlay is cleared.
 
 using System;
+using System.IO;
 using Microsoft.UI.Dispatching;
 using Windows.Media;
+using Windows.Storage;
 using Windows.Storage.Streams;
 
 namespace OpenDeezer;
@@ -44,6 +47,21 @@ internal sealed class MediaControls
                 else if (b == SystemMediaTransportControlsButton.Previous) Player.Prev();
             });
         };
+        _smtc.ShuffleEnabledChangeRequested += (_, a) =>
+        {
+            bool on = a.RequestedShuffleEnabled;
+            dq.TryEnqueue(() => Player.SetShuffle(on));
+        };
+        _smtc.AutoRepeatModeChangeRequested += (_, a) =>
+        {
+            var mode = a.RequestedAutoRepeatMode switch
+            {
+                MediaPlaybackAutoRepeatMode.Track => RepeatMode.One,
+                MediaPlaybackAutoRepeatMode.List => RepeatMode.All,
+                _ => RepeatMode.Off,
+            };
+            dq.TryEnqueue(() => Player.SetRepeat(mode));
+        };
         _smtc.PlaybackPositionChangeRequested += (_, a) =>
         {
             long ms = (long)a.RequestedPlaybackPosition.TotalMilliseconds;
@@ -66,26 +84,67 @@ internal sealed class MediaControls
         if (_smtc != null) _smtc.IsEnabled = false;
     }
 
-    private void OnTrack()
+    public void Enable()
     {
-        if (_smtc == null || Player.Current is not { } t) return;
+        if (_smtc != null) _smtc.IsEnabled = true;
+    }
+
+    // The text and the timeline first; then the picture in its own step (a web address, or a local
+    // file for a track kept offline), so a picture that fails leaves the overlay on this track.
+    private async void OnTrack()
+    {
+        if (_smtc == null) return;
+        var du = _smtc.DisplayUpdater;
+        Track t;
         try
         {
-            var du = _smtc.DisplayUpdater;
+            if (Player.Current is not { } current)
+            {
+                du.ClearAll();
+                du.Update();
+                _status = MediaPlaybackStatus.Closed;
+                _smtc.PlaybackStatus = _status;
+                return;
+            }
+            t = current;
             du.Type = MediaPlaybackType.Music;
             du.MusicProperties.Title = t.Name;
             du.MusicProperties.Artist = t.ArtistLine;
             du.MusicProperties.AlbumTitle = t.AlbumName;
-            du.Thumbnail = Uri.TryCreate(t.ArtworkUrl, UriKind.Absolute, out var uri) ? RandomAccessStreamReference.CreateFromUri(uri) : null;
+            du.Thumbnail = null;
             du.Update();
             Timeline(0, t.DurationMs);
         }
-        catch (Exception ex) { AppLog.Write("SMTC update: " + ex.Message); }
+        catch (Exception ex)
+        {
+            AppLog.Write("SMTC update: " + ex.Message);
+            return;
+        }
+        try
+        {
+            RandomAccessStreamReference? thumb = null;
+            if (Uri.TryCreate(t.ArtworkUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                thumb = RandomAccessStreamReference.CreateFromUri(uri);
+            else if (Path.IsPathRooted(t.ArtworkUrl))
+                thumb = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(t.ArtworkUrl));
+            if (thumb == null || Player.Current != t) return;
+            du.Thumbnail = thumb;
+            du.Update();
+        }
+        catch (Exception ex) { AppLog.Write("SMTC picture: " + ex.Message); }
     }
 
     private void OnState()
     {
         if (_smtc == null) return;
+        _smtc.ShuffleEnabled = Player.Shuffle;
+        _smtc.AutoRepeatMode = Player.Repeat switch
+        {
+            RepeatMode.One => MediaPlaybackAutoRepeatMode.Track,
+            RepeatMode.All => MediaPlaybackAutoRepeatMode.List,
+            _ => MediaPlaybackAutoRepeatMode.None,
+        };
+        if (Player.Current == null) return;
         var status = Player.State switch
         {
             PlayState.Playing => MediaPlaybackStatus.Playing,

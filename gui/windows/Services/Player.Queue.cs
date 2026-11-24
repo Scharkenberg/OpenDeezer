@@ -1,8 +1,9 @@
-// The play queue, always in play order: shuffle materialises a shuffled order and keeps
+// The play queue, always in play order: shuffle materializes a shuffled order and keeps
 // the natural one aside. The engine records the shuffle flag only (host-owned).
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,6 +15,9 @@ internal sealed partial class Player
     private List<Track> _queue = new();
     private List<Track>? _natural;
     private int _queueIndex = -1;
+    // The row after the tracks added with Add to queue since the list was played, as the web player
+    // keeps it: the next addition goes there, ahead of the rest of the list. -1 for none.
+    private int _addedEnd = -1;
 
     // DZPlay calls run on one ordered chain; a newer play supersedes a queued one.
     internal Task _playChain = Task.CompletedTask;
@@ -31,9 +35,15 @@ internal sealed partial class Player
 
     private bool HasCurrent => _queueIndex >= 0 && _queueIndex < _queue.Count;
 
-    public void Play(IReadOnlyList<Track> list, int index)
+    // The list each queued track was played from, for Deezer's listen log.
+    private readonly ConditionalWeakTable<Track, ListenContext> _listens = new();
+
+    internal ListenContext ContextOf(Track t) => _listens.TryGetValue(t, out var c) ? c : ListenContext.None;
+
+    public void Play(IReadOnlyList<Track> list, int index, ListenContext listen)
     {
         if (index < 0 || index >= list.Count) return;
+        foreach (var t in list) _listens.AddOrUpdate(t, listen);
         var start = list[index];
         if (Shuffle)
         {
@@ -48,6 +58,7 @@ internal sealed partial class Player
             _queueIndex = index;
         }
         _playFailures = 0;
+        _addedEnd = -1;
         SyncEngineQueue();
         PlayCurrent();
         QueueChanged?.Invoke(new(QueueChangeKind.Reset));
@@ -74,7 +85,7 @@ internal sealed partial class Player
     public void Prev()
     {
         if (_queue.Count == 0) return;
-        if (HasCurrent && PositionMs > Timing.PrevRestartsAfterMs && !IsStoppedOrErrored)
+        if (HasCurrent && PositionMs >= Timing.PrevRestartsAfterMs && !IsStoppedOrErrored)
         {
             Seek(0);
             return;
@@ -107,9 +118,18 @@ internal sealed partial class Player
     {
         if (!HasCurrent) return;
         var t = _queue[_queueIndex];
+        // The restored track's first play starts where it was left.
+        long resumeMs = t == _resumeTrack ? _resumeMs : 0;
+        _resumeTrack = null;
+        _resumeMs = 0;
         SetCurrent(t, fromStart: true);
+        if (resumeMs > 0)
+        {
+            PositionMs = resumeMs;
+            SetPositionBase(resumeMs, Environment.TickCount64);
+        }
         var next = PlaybackOptions.Gapless && !t.IsEpisode && HasDeterministicNext(out int n) ? _queue[n] : null;
-        DispatchPlay(t, next);
+        DispatchPlay(t, next, resumeMs);
         // Loading at once: the poll shows the engine's own state once the play is under way.
         if (State == PlayState.Loading) return;
         State = PlayState.Loading;
@@ -130,10 +150,7 @@ internal sealed partial class Player
         if (fromStart) PositionChanged?.Invoke();
     }
 
-    // DZPlay returns 1 when the play started, 0 on failure with the reason in DZLastErrorJSON
-    // (reported and skipped), 2 when another play (a remote's) superseded it: the poll then adopts
-    // the engine's track.
-    private void DispatchPlay(Track t, Track? next)
+    private void DispatchPlay(Track t, Track? next, long resumeMs = 0)
     {
         int gen = ++_playDispatchGen;
         Interlocked.Increment(ref _playsInFlight);
@@ -144,6 +161,8 @@ internal sealed partial class Player
                 if (gen != Volatile.Read(ref _playDispatchGen)) return;
                 // The poll watches the play resolve, from idle too.
                 Wake();
+                var listen = ContextOf(t);
+                DeezerCore.DZSetListenContext(listen.Type, listen.Id);
                 int r = t.IsEpisode ? DeezerCore.DZPlayEpisode(t.Id, t.DurationMs) : DeezerCore.DZPlay(t.Id, t.DurationMs);
                 // Any finish counted up to now belongs to the replaced track.
                 Volatile.Write(ref _finishedAtPlay, DeezerCore.DZFinishedCount());
@@ -156,12 +175,13 @@ internal sealed partial class Player
                 }
                 if (r == 0)
                 {
-                    string err = DeezerCore.LastError();
-                    _dq.TryEnqueue(() => OnPlayFailed(gen, err));
+                    var err = DeezerCore.LastError();
+                    _dq.TryEnqueue(() => OnPlayFailed(gen, err.Error, err.Network));
                     return;
                 }
                 Volatile.Write(ref _playOkGen, gen);
-                if (next != null) DeezerCore.DZPreload(next.Id, next.DurationMs);
+                if (resumeMs > 0) DeezerCore.DZSeek(resumeMs);
+                if (next != null) PreloadNow(next);
             }
             finally { Interlocked.Decrement(ref _playsInFlight); }
         });
@@ -201,18 +221,46 @@ internal sealed partial class Player
         });
     }
 
-    // After any play still loading on the chain, so that track cannot start afterwards.
+    // After any play still loading on the chain, so that track cannot start afterwards. Until its
+    // DZStop ran, the engine still plays the stopped track.
     private void StopPlayback()
     {
         _playDispatchGen++;
-        Chain(DeezerCore.DZStop);
+        Interlocked.Increment(ref _stopsInFlight);
+        Chain(() =>
+        {
+            try { DeezerCore.DZStop(); }
+            finally { Interlocked.Decrement(ref _stopsInFlight); }
+        });
     }
 
-    private void OnPlayFailed(int gen, string err)
+    // Stops queued on the chain whose DZStop has not run yet.
+    internal int _stopsInFlight;
+
+    // Playback stops (Don't recommend on the last track).
+    public void Stop() => StopPlayback();
+
+    // A manual Next has a track to go to.
+    public bool HasNext => _queueIndex + 1 < _queue.Count || (Repeat == RepeatMode.All && _queue.Count > 1);
+
+    private void OnPlayFailed(int gen, string err, bool network = false)
     {
         if (gen != _playDispatchGen) return;
-        _playFailures++;
         _errHandledGen = gen;
+        // A lost network is not the track's fault: stop on it, keep the cursor and start the next
+        // play where the bar stood.
+        if (network)
+        {
+            StopPlayback();
+            if (Current != null && !Current.IsEpisode && PositionMs > 0)
+            {
+                _resumeTrack = Current;
+                _resumeMs = PositionMs;
+            }
+            Failed?.Invoke(new(Loc.S("NoInternet_Title"), Loc.S("NoInternet_Body")));
+            return;
+        }
+        _playFailures++;
         string reason = err.Length > 0 ? err : Loc.S("Playback_FailBody");
         bool canSkip = _queueIndex + 1 < _queue.Count || (Repeat == RepeatMode.All && _queue.Count > 1);
         if (_playFailures >= Count.PlayFailuresBeforeStop || !canSkip)
@@ -229,7 +277,15 @@ internal sealed partial class Player
     private void Preload(int n)
     {
         var t = _queue[n];
-        ChainIfCurrent(() => DeezerCore.DZPreload(t.Id, t.DurationMs));
+        ChainIfCurrent(() => PreloadNow(t));
+    }
+
+    // On the play chain: preloads t, whose start a gapless promote reports with t's list.
+    private void PreloadNow(Track t)
+    {
+        var listen = ContextOf(t);
+        DeezerCore.DZSetListenContext(listen.Type, listen.Id);
+        DeezerCore.DZPreload(t.Id, t.DurationMs);
     }
 
     private bool HasDeterministicNext(out int next)
@@ -267,7 +323,7 @@ internal sealed partial class Player
         Chain(() =>
         {
             if (gen != Volatile.Read(ref _playDispatchGen)) return;
-            if (next != null) DeezerCore.DZPreload(next.Id, next.DurationMs);
+            if (next != null) PreloadNow(next);
             else DeezerCore.DZClearPreload();
         });
     }
@@ -284,6 +340,7 @@ internal sealed partial class Player
     private void ApplyShuffle(bool on)
     {
         Shuffle = on;
+        _addedEnd = -1;
         Track? cur = HasCurrent ? _queue[_queueIndex] : null;
         if (on)
         {
@@ -321,6 +378,8 @@ internal sealed partial class Player
         if (from == _queueIndex) _queueIndex = to;
         else if (from < _queueIndex && to >= _queueIndex) _queueIndex--;
         else if (from > _queueIndex && to <= _queueIndex) _queueIndex++;
+        if (from < _addedEnd && to >= _addedEnd) _addedEnd--;
+        else if (from >= _addedEnd && to < _addedEnd && _addedEnd >= 0) _addedEnd++;
         EditEngineQueue(e => e.Move(from, to), idxBefore);
         UpdatePreload();
         QueueChanged?.Invoke(new(QueueChangeKind.Move, from, to));
@@ -336,6 +395,7 @@ internal sealed partial class Player
         var removed = _queue[i];
         _queue.RemoveAt(i);
         _natural?.Remove(removed);
+        if (i < _addedEnd) _addedEnd--;
         if (_queue.Count == 0) _queueIndex = -1;
         else if (wasCurrent && _queueIndex >= _queue.Count) _queueIndex = _queue.Count - 1;
         else if (!wasCurrent && i < _queueIndex) _queueIndex--;
@@ -356,53 +416,56 @@ internal sealed partial class Player
         if (_queue.Count == 0) return;
         _queue = HasCurrent ? new List<Track> { _queue[_queueIndex] } : new List<Track>();
         _queueIndex = _queue.Count - 1;
+        _addedEnd = -1;
         _natural = Shuffle ? new List<Track>(_queue) : null;
         SyncEngineQueue();
         UpdatePreload();
         QueueChanged?.Invoke(new(QueueChangeKind.Reset));
     }
 
-    public void PlayNext(Track t)
+    public void PlayNext(Track t) => PlayNext(new[] { t }, ContextOf(t));
+
+    public void Enqueue(Track t) => Enqueue(new[] { t }, ContextOf(t));
+
+    // Inserts the tracks right after the playing one; with nothing queued they play.
+    public void PlayNext(IReadOnlyList<Track> tracks, ListenContext listen)
     {
-        if (PlayIfIdle(t)) return;
+        if (PlayIfIdle(tracks, listen)) return;
         int at = _queueIndex + 1;
-        if (_natural != null)
-        {
-            int ni = _natural.IndexOf(_queue[_queueIndex]);
-            _natural.Insert(ni >= 0 ? ni + 1 : _natural.Count, t);
-        }
-        _queue.Insert(at, t);
-        if (!_queueSynced || t.IsEpisode) SyncEngineQueue();
-        else
-        {
-            _mirror.InsertNext(t, _queue, _queueIndex, _queueIndex);
-        }
+        if (_addedEnd >= at) _addedEnd += tracks.Count;
+        Insert(at, tracks, listen, _natural?.IndexOf(_queue[_queueIndex]) + 1 ?? 0);
+    }
+
+    // Inserts the tracks after those added before them (see _addedEnd).
+    public void Enqueue(IReadOnlyList<Track> tracks, ListenContext listen)
+    {
+        if (PlayIfIdle(tracks, listen)) return;
+        int at = Math.Clamp(_addedEnd, _queueIndex + 1, _queue.Count);
+        _addedEnd = at + tracks.Count;
+        Insert(at, tracks, listen, _natural?.Count ?? 0);
+    }
+
+    private void Insert(int at, IReadOnlyList<Track> tracks, ListenContext listen, int naturalAt)
+    {
+        foreach (var t in tracks)
+            if (!_listens.TryGetValue(t, out _)) _listens.Add(t, listen);
+        _queue.InsertRange(at, tracks);
+        _natural?.InsertRange(Math.Clamp(naturalAt, 0, _natural.Count), tracks);
+        bool one = tracks.Count == 1 && !tracks[0].IsEpisode;
+        // One track crosses to the engine alone; more, or an episode, resend the queue.
+        if (one && _queueSynced && at == _queueIndex + 1) _mirror.InsertNext(tracks[0], _queue, _queueIndex, _queueIndex);
+        else if (one && _queueSynced && at == _queue.Count - 1) _mirror.Append(tracks[0], () => _dq.TryEnqueue(UpdatePreload));
+        else SyncEngineQueue();
         UpdatePreload();
-        QueueChanged?.Invoke(new(QueueChangeKind.Insert, at));
+        QueueChanged?.Invoke(one ? new(QueueChangeKind.Insert, at) : new(QueueChangeKind.Reset));
     }
 
-    public void Enqueue(Track t)
+    // True when nothing was queued, so the tracks started a queue of their own (or there are none).
+    private bool PlayIfIdle(IReadOnlyList<Track> tracks, ListenContext listen)
     {
-        if (PlayIfIdle(t)) return;
-        _queue.Add(t);
-        _natural?.Add(t);
-        // Only the new track crosses to the engine, not the whole queue again. The preload is re-armed
-        // once the append has landed: an append onto the last track drops one sent before it.
-        if (_queueSynced && !t.IsEpisode) _mirror.Append(t, () => _dq.TryEnqueue(UpdatePreload));
-        else if (_queueSynced)
-        {
-            SyncEngineQueue();
-            UpdatePreload();
-        }
-        // An episode queue is not mirrored: the engine's stays empty, nothing to send.
-        QueueChanged?.Invoke(new(QueueChangeKind.Insert, _queue.Count - 1));
-    }
-
-    // True when nothing was queued, so `t` started a queue of its own (or has no id).
-    private bool PlayIfIdle(Track t)
-    {
-        if (t.Id.Length > 0 && HasCurrent) return false;
-        if (t.Id.Length > 0) Play(new List<Track> { t }, 0);
+        if (tracks.Count == 0) return true;
+        if (HasCurrent) return false;
+        Play(tracks, 0, listen);
         return true;
     }
 
@@ -445,6 +508,7 @@ internal sealed partial class Player
             int idx = reply.Index;
             _queueIndex = idx >= 0 && idx < tracks.Count ? idx : (tracks.Count > 0 ? 0 : -1);
             _natural = Shuffle ? new List<Track>(_queue) : null;
+            _addedEnd = -1;
             _queueSynced = tracks.Count > 0;
             UpdatePreload();
             QueueChanged?.Invoke(new(QueueChangeKind.Reset));

@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- C# WinUI 3 (.NET 11), unpackaged + self-contained. The real XAML markup
-       compiler runs over App.xaml, so XamlControlsResources resolves the WinUI
-       theme dictionary and the app launches (the old code-only C++/WinRT build
-       never merged it, giving 0x80004005 at startup). The Go engine DLL
+  <!-- C# WinUI 3 (.NET 11), unpackaged + self-contained. The XAML markup compiler
+       runs over App.xaml, so XamlControlsResources resolves the WinUI theme
+       dictionary. The Go engine DLL
        (lib\libdeezercore.dll) is loaded by name at runtime via P/Invoke (no
        import lib needed) and copied next to OpenDeezer.exe by build.ps1.
        Build it with build.ps1 (dotnet publish, self-contained, win-x64). -->
@@ -34,7 +33,14 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.3.260402-preview2" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.3.260402-preview2" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.6-experimental" />
+    <!-- The Windows App SDK components the app uses; the metapackage would also bring ML, AI,
+         Search and Widgets (about 125 MB of unused ONNX and DirectML files). -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Base" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="2.6.6-experimental" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
   </ItemGroup>
   <ItemGroup>
@@ -51,7 +57,7 @@
        trips NETSDK1022 "Duplicate PRIResource items"). MakePri compiles them into
        resources.pri (one resource subtree "Resources", one qualifier per locale
        folder) which ships next to OpenDeezer.exe and is read by Loc.cs at runtime. -->
-  <!-- I3: one version source. app.manifest carries a $VERSION$ placeholder; this
+  <!-- One version source. app.manifest carries a $VERSION$ placeholder; this
        writes obj\app.versioned.manifest with <Version> as the 4-part number Win32
        manifests require ("3.2.0" -> "3.2.0.0"; a "-beta" suffix is dropped). -->
   <Target Name="StampManifestVersion" BeforeTargets="PrepareForBuild">

@@ -8,18 +8,11 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 )
 
-// ProbePeers lists the OpenDeezer devices for a device picker: the LAN probe
-// (Discover, without this instance's responder on selfPort) and the manually
-// configured peers (config.LoadPeers), which let Connect work over
-// unicast-only networks (Tailscale/VPN) that carry no multicast or broadcast.
-// Each peer is asked for /whoami as account, all concurrently and together
-// with the probe within timeout: on a VPN mesh an offline peer silently drops
-// packets, and the control client's HTTP timeout is 15 s. A peer that does not
-// answer in time is listed by its address, so the user can connect anyway.
-// Peers come after the probe's devices, in the configured order. The list is
-// never nil; the error is the probe's (expected on networks without
-// multicast), the peers are listed regardless.
-func ProbePeers(timeout time.Duration, selfPort int, account string) ([]Device, error) {
+// ProbePeers lists devices for a picker: the LAN probe (minus selfPort) and then the
+// configured peers, each asked /whoami concurrently within timeout and without the
+// account id (any LAN host can answer a probe); a silent peer is listed by address. The
+// list is never nil; the error is the probe's.
+func ProbePeers(timeout time.Duration, selfPort int) ([]Device, error) {
 	deadline := time.After(timeout)
 	var bases, addrs []string // one per configured host:port
 	seen := map[string]bool{}
@@ -37,7 +30,7 @@ func ProbePeers(timeout time.Duration, selfPort int, account string) ([]Device, 
 	for i := range bases {
 		go func(base, hp string) {
 			d := Device{Name: hp, Addr: hp}
-			if who, err := control.NewClient(base, "", account).Whoami(); err == nil {
+			if who, err := control.NewClient(base, "", "").Whoami(); err == nil {
 				if who.Name != "" {
 					d.Name = who.Name
 				}
@@ -86,10 +79,8 @@ func ProbePeers(timeout time.Duration, selfPort int, account string) ([]Device, 
 	return devs, err
 }
 
-// LANIPv4 returns the primary non-loopback IPv4 address of this machine,
-// suitable for building a LAN-reachable URL: the source address of the default
-// route (the first up adapter may be a virtual one), else the first adapter's,
-// else "127.0.0.1".
+// LANIPv4 returns this machine's primary non-loopback IPv4 address for a LAN URL: the
+// default route's source address, else the first adapter's, else "127.0.0.1".
 func LANIPv4() string {
 	// A UDP "connect" picks the route and sends nothing (TEST-NET-1 address).
 	if c, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {

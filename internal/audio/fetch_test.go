@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -91,7 +93,22 @@ func TestFetchWriteFailure(t *testing.T) {
 	}
 }
 
-// Cancelling the context stops a fetch that waits on the network.
+// A fetch that ends on a lost network says so.
+func TestFetchNetworkLossIsNoNetwork(t *testing.T) {
+	prev := deezer.NetDryWait
+	deezer.NetDryWait = 300 * time.Millisecond
+	defer func() { deezer.NetDryWait = prev }()
+	orig := deezer.SetTransport(rtFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
+	}))
+	defer deezer.SetTransport(orig)
+	plan := &deezer.StreamPlan{CDNURL: "http://127.0.0.1:1/a", TrackID: "7", Format: "MP3_128", Encrypted: true}
+	if err := Fetch(context.Background(), plan, newTestCache(t)); !deezer.IsNoNetwork(err) {
+		t.Fatalf("Fetch = %v, want a lost network", err)
+	}
+}
+
+// Canceling the context stops a fetch that waits on the network.
 func TestFetchCancel(t *testing.T) {
 	mc := newTestCache(t)
 	body := makeCipher(100000)

@@ -315,7 +315,7 @@ msgid "Crossfade"
 msgstr "Кроссфейд"
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr "Поведение"
 
 #: src/main.c:1857
@@ -387,11 +387,11 @@ msgid "Removed from Liked Songs"
 msgstr "Убрано из Любимых треков"
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr "Не удалось добавить в избранное"
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr "Не удалось убрать из избранного"
 
 #: src/main.c:2238 src/main.c:3702
@@ -963,25 +963,16 @@ msgid "Preview only — a 30-second clip"
 msgstr "Только фрагмент — отрывок 30 секунд"
 
 #: src/main.c:1836
-msgid "Ads"
-msgstr "Реклама"
+msgid "Play reporting"
+msgstr "Учёт прослушиваний"
 
 #: src/main.c:1839
-msgid "Disable ads"
-msgstr "Отключить рекламу"
+msgid "Don't report my plays"
+msgstr "Не сообщать о моих прослушиваниях"
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
-msgstr ""
-"Deezer Free существует за счёт рекламы. Передача сведений о прослушиваниях — "
-"как в официальном приложении — засчитывает их артистам и обеспечивает показ "
-"рекламы. Отключение убирает рекламу, но также прекращает передачу ваших "
-"прослушиваний, из-за чего артисты теряют счётчик прослушиваний, а вы "
-"нарушаете условия использования Deezer. Используйте на свой страх и риск."
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3
 msgid "OpenDeezer"

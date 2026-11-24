@@ -73,9 +73,6 @@
   <data name="Nav_Flow" xml:space="preserve">
     <value>Flow</value>
   </data>
-  <data name="Nav_Playlists" xml:space="preserve">
-    <value>Playlists</value>
-  </data>
   <data name="Nav_Charts" xml:space="preserve">
     <value>Charts</value>
   </data>
@@ -95,7 +92,7 @@
     <value>Télécharger</value>
   </data>
   <data name="Btn_NewPlaylist" xml:space="preserve">
-    <value>Nouvelle playlist</value>
+    <value>Nouvelle playlist…</value>
   </data>
   <data name="Btn_Cancel" xml:space="preserve">
     <value>Annuler</value>
@@ -176,10 +173,7 @@
     <value>J'aime</value>
   </data>
   <data name="Menu_AddToPlaylist" xml:space="preserve">
-    <value>Ajouter à une playlist…</value>
-  </data>
-  <data name="Menu_Rename" xml:space="preserve">
-    <value>Renommer…</value>
+    <value>Ajouter à une playlist</value>
   </data>
   <data name="Menu_Delete" xml:space="preserve">
     <value>Supprimer…</value>
@@ -232,9 +226,6 @@
   <data name="Dialog_PlaylistNamePlaceholder" xml:space="preserve">
     <value>Nom de la playlist</value>
   </data>
-  <data name="Dialog_RenamePlaylistTitle" xml:space="preserve">
-    <value>Renommer la playlist</value>
-  </data>
   <data name="Dialog_DeletePlaylistTitle" xml:space="preserve">
     <value>Supprimer la playlist</value>
   </data>
@@ -245,31 +236,25 @@
     <value>Impossible de créer la playlist</value>
   </data>
   <data name="Dialog_CreateFailBody" xml:space="preserve">
-    <value>Deezer n'a pas créé la playlist. Réessayez.</value>
+    <value>Deezer n'a pas créé la playlist. Réessayez</value>
   </data>
   <data name="Dialog_AddFailTitle" xml:space="preserve">
     <value>Impossible d'ajouter à la playlist</value>
   </data>
   <data name="Dialog_AddFailBody" xml:space="preserve">
-    <value>Deezer n'a pas ajouté le titre. Réessayez.</value>
-  </data>
-  <data name="Dialog_RenameFailTitle" xml:space="preserve">
-    <value>Impossible de renommer</value>
-  </data>
-  <data name="Dialog_RenameFailBody" xml:space="preserve">
-    <value>Deezer n'a pas renommé la playlist. Réessayez.</value>
+    <value>Deezer n'a pas ajouté le titre. Réessayez</value>
   </data>
   <data name="Dialog_DeleteFailTitle" xml:space="preserve">
     <value>Impossible de supprimer</value>
   </data>
   <data name="Dialog_DeleteFailBody" xml:space="preserve">
-    <value>Deezer n'a pas supprimé la playlist. Réessayez.</value>
+    <value>Deezer n'a pas supprimé la playlist. Réessayez</value>
   </data>
   <data name="Dialog_ConnectFailTitle" xml:space="preserve">
     <value>Impossible de se connecter</value>
   </data>
   <data name="Dialog_ConnectFailBody" xml:space="preserve">
-    <value>L'appareil n'a pas répondu. Vérifiez qu'il est sur le même réseau.</value>
+    <value>L'appareil n'a pas répondu. Vérifiez qu'il est sur le même réseau</value>
   </data>
   <data name="NoInternet_Title" xml:space="preserve">
     <value>Pas de connexion Internet</value>
@@ -398,7 +383,7 @@
     <value>Par défaut du système</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>Redémarrez OpenDeezer pour appliquer la nouvelle langue.</value>
+    <value>Redémarrez OpenDeezer pour appliquer la nouvelle langue</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>Préréglage</value>
@@ -476,16 +461,16 @@
     <value>Échec du téléchargement</value>
   </data>
   <data name="Dialog_DownloadFailBody" xml:space="preserve">
-    <value>Le téléchargement n'a pas abouti. Réessayez.</value>
+    <value>Le téléchargement n'a pas abouti. Réessayez</value>
   </data>
   <data name="Preview_Badge" xml:space="preserve">
     <value>Extrait</value>
   </data>
   <data name="Settings_DisableAds" xml:space="preserve">
-    <value>Désactiver les publicités</value>
+    <value>Ne pas signaler mes écoutes</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Supprime les publicités et cesse de signaler vos écoutes à Deezer. Ces écoutes ne sont pas créditées aux artistes, et cela enfreint les conditions d'utilisation de Deezer.</value>
+    <value>N&apos;envoie plus vos écoutes à Deezer. Les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d&apos;utilisation de Deezer. OpenDeezer ne diffuse aucune publicité dans tous les cas.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>Récents</value>
@@ -503,7 +488,7 @@
     <value>Impossible de lancer la radio</value>
   </data>
   <data name="Dialog_RadioFailBody" xml:space="preserve">
-    <value>Deezer n'a pas de radio pour cela. Essayez un autre titre ou un autre artiste.</value>
+    <value>Deezer n'a pas de radio pour cela. Essayez un autre titre ou un autre artiste</value>
   </data>
   <data name="Section_RecentlyPlayed" xml:space="preserve">
     <value>Écoutés récemment</value>
@@ -530,7 +515,7 @@
     <value>File d'attente</value>
   </data>
   <data name="Queue_Clear" xml:space="preserve">
-    <value>Vider</value>
+    <value>Vider…</value>
   </data>
   <data name="Queue_Remove" xml:space="preserve">
     <value>Retirer de la file</value>
@@ -584,13 +569,16 @@
     <value>Changer de compte</value>
   </data>
   <data name="Account_SignOut" xml:space="preserve">
+    <value>Se déconnecter…</value>
+  </data>
+  <data name="Dialog_SignOutTitle" xml:space="preserve">
     <value>Se déconnecter</value>
   </data>
   <data name="Account_SignOutConfirm" xml:space="preserve">
     <value>Se déconnecter sur ce PC ? La lecture s'arrête.</value>
   </data>
   <data name="Account_UnknownTier" xml:space="preserve">
-    <value>Impossible de charger votre offre. Les téléchargements et les options de qualité peuvent être inexacts jusqu'à son chargement.</value>
+    <value>Impossible de charger votre offre. Les options de téléchargement, hors ligne et de qualité peuvent être inexactes jusqu'à son chargement.</value>
   </data>
   <data name="Playback_FailTitle" xml:space="preserve">
     <value>Échec de la lecture</value>
@@ -599,16 +587,16 @@
     <value>Ce titre n&apos;a pas pu être lu.</value>
   </data>
   <data name="Playback_Skipping" xml:space="preserve">
-    <value>Passage au titre suivant.</value>
+    <value>Passage au titre suivant</value>
   </data>
   <data name="Playback_StoppedBody" xml:space="preserve">
-    <value>Plusieurs titres d'affilée n'ont pas pu être lus. La lecture s'est arrêtée.</value>
+    <value>Plusieurs titres d'affilée n'ont pas pu être lus. La lecture s'est arrêtée</value>
   </data>
   <data name="Like_FailTitle" xml:space="preserve">
     <value>Impossible de mettre à jour votre bibliothèque</value>
   </data>
   <data name="Like_FailBody" xml:space="preserve">
-    <value>Deezer n'a pas accepté la modification. Réessayez plus tard.</value>
+    <value>Deezer n'a pas accepté la modification. Réessayez plus tard</value>
   </data>
   <data name="Menu_Unlike" xml:space="preserve">
     <value>Je n&apos;aime plus</value>
@@ -671,10 +659,10 @@
     <value>Retirer de cette playlist</value>
   </data>
   <data name="Playlist_RemoveFailBody" xml:space="preserve">
-    <value>Deezer n'a pas retiré le titre. Réessayez.</value>
+    <value>Deezer n'a pas retiré le titre. Réessayez</value>
   </data>
   <data name="Login_Busy" xml:space="preserve">
-    <value>Une connexion est déjà en cours.</value>
+    <value>Une connexion est déjà en cours</value>
   </data>
   <data name="Account_FreePlan" xml:space="preserve">
     <value>Gratuit · 128 kbps</value>
@@ -701,7 +689,7 @@
     <value>Bibliothèque</value>
   </data>
   <data name="Recent_ListenTimeLabel" xml:space="preserve">
-    <value>Temps d&apos;écoute, 30 derniers jours</value>
+    <value>Temps d&apos;écoute, {0} derniers jours</value>
   </data>
   <data name="Search_FilterAll" xml:space="preserve">
     <value>Tout</value>
@@ -750,9 +738,6 @@
   </data>
   <data name="Menu_NewPlaylist" xml:space="preserve">
     <value>Nouvelle playlist…</value>
-  </data>
-  <data name="Menu_NoArtistPage" xml:space="preserve">
-    <value>Ce titre n'a pas de page d'artiste</value>
   </data>
   <data name="Empty_Liked" xml:space="preserve">
     <value>Aucun titre favori pour l'instant</value>
@@ -900,10 +885,10 @@
     <value>{0} jours</value>
   </data>
   <data name="Error_FolderRefused" xml:space="preserve">
-    <value>Ce dossier ne peut pas être utilisé. Choisissez-en un autre.</value>
+    <value>Impossible d'utiliser ce dossier. Choisissez-en un autre</value>
   </data>
   <data name="Error_StorageFailed" xml:space="preserve">
-    <value>Cela n&apos;a pas fonctionné. Réessayez.</value>
+    <value>Impossible d'effectuer cette action. Réessayez</value>
   </data>
   <data name="Settings_CacheFolderConfirm" xml:space="preserve">
     <value>Les titres en cache dans l&apos;ancien dossier sont supprimés.</value>
@@ -930,7 +915,7 @@
     <value>Vous êtes hors ligne</value>
   </data>
   <data name="Offline_YoureOfflineBody" xml:space="preserve">
-    <value>Lecture de la musique conservée sur ce PC. Réessayez de vous connecter une fois en ligne.</value>
+    <value>Lecture de votre musique hors ligne. Réessayez de vous connecter une fois en ligne.</value>
   </data>
   <data name="Offline_Empty" xml:space="preserve">
     <value>Les albums, playlists et titres rendus disponibles hors ligne apparaissent ici.</value>
@@ -939,9 +924,333 @@
     <value>Retirer du hors ligne</value>
   </data>
   <data name="Offline_FetchStopped" xml:space="preserve">
-    <value>Téléchargement hors ligne interrompu</value>
+    <value>Impossible de récupérer la musique hors ligne</value>
   </data>
   <data name="Offline_FailTitle" xml:space="preserve">
     <value>Impossible de modifier la musique hors ligne</value>
+  </data>
+  <data name="Tooltip_PlayHere" xml:space="preserve">
+    <value>Lire ici</value>
+  </data>
+  <data name="Tooltip_PlayingElsewhere" xml:space="preserve">
+    <value>Lecture dans un autre lecteur</value>
+  </data>
+  <data name="Settings_SingleDevice" xml:space="preserve">
+    <value>Un lecteur à la fois</value>
+  </data>
+  <data name="Settings_SingleDeviceOn" xml:space="preserve">
+    <value>Se met en pause quand un autre lecteur de votre compte démarre ; lire ici met les autres en pause</value>
+  </data>
+  <data name="Settings_SingleDeviceOff" xml:space="preserve">
+    <value>Joue en même temps que les autres lecteurs de votre compte</value>
+  </data>
+  <data name="Login_ExpiredTitle" xml:space="preserve">
+    <value>Session expirée</value>
+  </data>
+  <data name="Login_SignInAgain" xml:space="preserve">
+    <value>Se reconnecter</value>
+  </data>
+  <data name="Offline_ExpiredBody" xml:space="preserve">
+    <value>Deezer a mis fin à votre session. Votre musique hors ligne reste disponible ; reconnectez-vous pour le reste.</value>
+  </data>
+  <data name="Queue_TrackAdded" xml:space="preserve">
+    <value>Titre ajouté à la file d'attente</value>
+  </data>
+  <data name="Queue_TrackNext" xml:space="preserve">
+    <value>Ce titre sera lu ensuite</value>
+  </data>
+  <data name="Queue_AlbumAdded" xml:space="preserve">
+    <value>Album ajouté à la file d'attente</value>
+  </data>
+  <data name="Queue_AlbumNext" xml:space="preserve">
+    <value>Cet album sera lu ensuite</value>
+  </data>
+  <data name="Queue_PlaylistAdded" xml:space="preserve">
+    <value>Playlist ajoutée à la file d'attente</value>
+  </data>
+  <data name="Queue_PlaylistNext" xml:space="preserve">
+    <value>Cette playlist sera lue ensuite</value>
+  </data>
+  <data name="Queue_PodcastNext" xml:space="preserve">
+    <value>Ce podcast sera lu ensuite</value>
+  </data>
+  <data name="Queue_PodcastAdded" xml:space="preserve">
+    <value>Podcast ajouté à la file d'attente</value>
+  </data>
+  <data name="Queue_AddFailed" xml:space="preserve">
+    <value>Impossible d'ajouter à la file d'attente</value>
+  </data>
+  <data name="Queue_ClearTitle" xml:space="preserve">
+    <value>Vider la file d&apos;attente ?</value>
+  </data>
+  <data name="Queue_ClearBody" xml:space="preserve">
+    <value>Tous les titres de votre file d&apos;attente seront supprimés.</value>
+  </data>
+  <data name="Queue_ClearAll" xml:space="preserve">
+    <value>Tout effacer</value>
+  </data>
+  <data name="Btn_Open" xml:space="preserve">
+    <value>Ouvrir</value>
+  </data>
+  <data name="Btn_OpenQueue" xml:space="preserve">
+    <value>Ouvrir la file d&apos;attente</value>
+  </data>
+  <data name="Btn_Close" xml:space="preserve">
+    <value>Fermer</value>
+  </data>
+  <data name="Episode_MarkPlayed" xml:space="preserve">
+    <value>Marquer comme écouté</value>
+  </data>
+  <data name="Episode_MarkUnplayed" xml:space="preserve">
+    <value>Marquer comme non écouté</value>
+  </data>
+  <data name="Episode_LearnMore" xml:space="preserve">
+    <value>En savoir plus…</value>
+  </data>
+  <data name="Episode_MarkFailTitle" xml:space="preserve">
+    <value>Impossible de modifier l'épisode</value>
+  </data>
+  <data name="Episode_MarkFailBody" xml:space="preserve">
+    <value>Deezer n'a pas accepté la modification. Réessayez</value>
+  </data>
+  <data name="Menu_CopyLink" xml:space="preserve">
+    <value>Copier le lien</value>
+  </data>
+  <data name="Tooltip_Speed" xml:space="preserve">
+    <value>Vitesse de lecture</value>
+  </data>
+  <data name="Tooltip_SpeedFormat" xml:space="preserve">
+    <value>Vitesse de lecture : {0}</value>
+  </data>
+  <data name="Sleep_Set" xml:space="preserve">
+    <value>Minuteur activé</value>
+  </data>
+  <data name="Sleep_Off" xml:space="preserve">
+    <value>Minuteur désactivé</value>
+  </data>
+  <data name="Sleep_EndOfEpisode" xml:space="preserve">
+    <value>Fin de l&apos;épisode</value>
+  </data>
+  <data name="Sleep_TurnOff" xml:space="preserve">
+    <value>Désactiver</value>
+  </data>
+  <data name="Offline_Shuffle" xml:space="preserve">
+    <value>Lecture aléatoire de la musique hors ligne</value>
+  </data>
+  <data name="Offline_StorageFormat" xml:space="preserve">
+    <value>{0} sur ce PC</value>
+  </data>
+  <data name="Offline_StorageUnknown" xml:space="preserve">
+    <value>… Mo</value>
+  </data>
+  <data name="Offline_FailedFormat" xml:space="preserve">
+    <value>{0} n'est pas entièrement disponible hors ligne</value>
+  </data>
+  <data name="Offline_FailedTracksFormat" xml:space="preserve">
+    <value>Titres non disponibles hors ligne : {0}</value>
+  </data>
+  <data name="List_Sort" xml:space="preserve">
+    <value>Trier</value>
+  </data>
+  <data name="List_Search" xml:space="preserve">
+    <value>Rechercher dans cette liste</value>
+  </data>
+  <data name="List_NoMatch" xml:space="preserve">
+    <value>Aucun résultat pour cette recherche.</value>
+  </data>
+  <data name="Sort_Default" xml:space="preserve">
+    <value>Ordre par défaut</value>
+  </data>
+  <data name="Sort_Added" xml:space="preserve">
+    <value>Ajoutés récemment</value>
+  </data>
+  <data name="Sort_TitleAz" xml:space="preserve">
+    <value>Titre A–Z</value>
+  </data>
+  <data name="Sort_ArtistAz" xml:space="preserve">
+    <value>Artiste A–Z</value>
+  </data>
+  <data name="Sort_AlbumAz" xml:space="preserve">
+    <value>Album A–Z</value>
+  </data>
+  <data name="Sort_NameAz" xml:space="preserve">
+    <value>Nom A–Z</value>
+  </data>
+  <data name="Filter_All" xml:space="preserve">
+    <value>Tout</value>
+  </data>
+  <data name="Filter_ByYou" xml:space="preserve">
+    <value>Créées par vous</value>
+  </data>
+  <data name="Filter_ByOthers" xml:space="preserve">
+    <value>Par d&apos;autres</value>
+  </data>
+  <data name="Nav_Favorites" xml:space="preserve">
+    <value>Favoris</value>
+  </data>
+  <data name="Empty_Favorites" xml:space="preserve">
+    <value>Rien pour l'instant. Sélectionnez le cœur d'un album, d'un artiste ou d'un podcast pour le retrouver ici.</value>
+  </data>
+  <data name="Menu_AddFavorite" xml:space="preserve">
+    <value>Ajouter aux favoris</value>
+  </data>
+  <data name="Menu_RemoveFavorite" xml:space="preserve">
+    <value>Retirer des favoris</value>
+  </data>
+  <data name="Menu_SaveAsPlaylist" xml:space="preserve">
+    <value>Enregistrer comme playlist…</value>
+  </data>
+  <data name="Playlist_Edit" xml:space="preserve">
+    <value>Modifier la playlist…</value>
+  </data>
+  <data name="Playlist_EditFailTitle" xml:space="preserve">
+    <value>Impossible de modifier la playlist</value>
+  </data>
+  <data name="Dialog_EditPlaylistTitle" xml:space="preserve">
+    <value>Modifier la playlist</value>
+  </data>
+  <data name="Playlist_Title" xml:space="preserve">
+    <value>Titre</value>
+  </data>
+  <data name="Playlist_Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Playlist_Private" xml:space="preserve">
+    <value>Privée</value>
+  </data>
+  <data name="Playlist_Collaborative" xml:space="preserve">
+    <value>Collaborative</value>
+  </data>
+  <data name="Btn_Save" xml:space="preserve">
+    <value>Enregistrer</value>
+  </data>
+  <data name="Dialog_SaveAsPlaylistTitle" xml:space="preserve">
+    <value>Enregistrer comme playlist</value>
+  </data>
+  <data name="Dialog_SavedAsPlaylistFormat" xml:space="preserve">
+    <value>Enregistrée sous « {0} »</value>
+  </data>
+  <data name="Error_Generic" xml:space="preserve">
+    <value>Une erreur s'est produite</value>
+  </data>
+  <data name="Link_Copied_track" xml:space="preserve">
+    <value>Le lien vers ce titre a été copié</value>
+  </data>
+  <data name="Link_Copied_album" xml:space="preserve">
+    <value>Le lien vers cet album a été copié</value>
+  </data>
+  <data name="Link_Copied_playlist" xml:space="preserve">
+    <value>Le lien vers cette playlist a été copié</value>
+  </data>
+  <data name="Link_Copied_artist" xml:space="preserve">
+    <value>Le lien vers cet artiste a été copié</value>
+  </data>
+  <data name="Link_Copied_show" xml:space="preserve">
+    <value>Le lien vers ce podcast a été copié</value>
+  </data>
+  <data name="Link_Copied_episode" xml:space="preserve">
+    <value>Le lien vers cet épisode a été copié</value>
+  </data>
+  <data name="Ban_Track" xml:space="preserve">
+    <value>Ne pas recommander ce titre</value>
+  </data>
+  <data name="Ban_Artist" xml:space="preserve">
+    <value>Ne pas recommander cet artiste</value>
+  </data>
+  <data name="Ban_Done_track" xml:space="preserve">
+    <value>C'est noté. Nous ne recommanderons plus ce titre</value>
+  </data>
+  <data name="Ban_Done_artist" xml:space="preserve">
+    <value>C'est noté. Nous ne recommanderons plus cet artiste</value>
+  </data>
+  <data name="Credit_Author" xml:space="preserve">
+    <value>Auteur</value>
+  </data>
+  <data name="Credit_Composer" xml:space="preserve">
+    <value>Compositeur</value>
+  </data>
+  <data name="Credit_Other" xml:space="preserve">
+    <value>Autres contributeurs</value>
+  </data>
+  <data name="Search_TopResult" xml:space="preserve">
+    <value>Meilleur résultat</value>
+  </data>
+  <data name="Kind_Track" xml:space="preserve">
+    <value>Titre</value>
+  </data>
+  <data name="Kind_Artist" xml:space="preserve">
+    <value>Artiste</value>
+  </data>
+  <data name="Kind_Episode" xml:space="preserve">
+    <value>Épisode</value>
+  </data>
+  <data name="Search_ClearRecent" xml:space="preserve">
+    <value>Effacer les recherches récentes…</value>
+  </data>
+  <data name="Dialog_ClearRecentTitle" xml:space="preserve">
+    <value>Effacer les recherches récentes</value>
+  </data>
+  <data name="Search_ClearRecentBody" xml:space="preserve">
+    <value>Vos recherches récentes seront effacées.</value>
+  </data>
+  <data name="Search_RecentCleared" xml:space="preserve">
+    <value>Recherches récentes effacées</value>
+  </data>
+  <data name="Account_ManagePlan" xml:space="preserve">
+    <value>Gérer mon offre</value>
+  </data>
+  <data name="Settings_Explicit" xml:space="preserve">
+    <value>Contenu explicite</value>
+  </data>
+  <data name="Explicit_Display" xml:space="preserve">
+    <value>Afficher le contenu explicite</value>
+  </data>
+  <data name="Explicit_NoRecommendation" xml:space="preserve">
+    <value>Ne pas recommander le contenu explicite</value>
+  </data>
+  <data name="Explicit_Hide" xml:space="preserve">
+    <value>Masquer le contenu explicite</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>Thème</value>
+  </data>
+  <data name="Settings_ThemeSystem" xml:space="preserve">
+    <value>Comme Windows</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>Clair</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>Sombre</value>
+  </data>
+  <data name="Lyrics_Translation" xml:space="preserve">
+    <value>Traduction</value>
+  </data>
+  <data name="EQ_Refused" xml:space="preserve">
+    <value>L'égaliseur n'a pas pris en compte cette modification</value>
+  </data>
+  <data name="Settings_DeviceRefused" xml:space="preserve">
+    <value>Impossible d'utiliser ce périphérique de sortie</value>
+  </data>
+  <data name="Section_TopAlbums" xml:space="preserve">
+    <value>Albums du moment</value>
+  </data>
+  <data name="Section_Pinned" xml:space="preserve">
+    <value>Épinglés</value>
+  </data>
+  <data name="Pin_Add" xml:space="preserve">
+    <value>Épingler à l&apos;accueil</value>
+  </data>
+  <data name="Pin_Remove" xml:space="preserve">
+    <value>Désépingler de l&apos;accueil</value>
+  </data>
+  <data name="Pin_Added" xml:space="preserve">
+    <value>Épinglé à l'accueil</value>
+  </data>
+  <data name="Pin_Removed" xml:space="preserve">
+    <value>Désépinglé de l'accueil</value>
+  </data>
+  <data name="Pin_Full" xml:space="preserve">
+    <value>L'accueil est plein. Désépinglez d'abord un élément</value>
   </data>
 </root>

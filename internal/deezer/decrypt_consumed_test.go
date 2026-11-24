@@ -28,10 +28,8 @@ func TestStripeConsumedOffset(t *testing.T) {
 	}
 }
 
-// TestStripeResumeEquivalence verifies that splitting the ciphertext at an
-// arbitrary (non-chunk-aligned) offset and continuing to feed the SAME decryptor
-// from that offset yields output identical to a single-shot decrypt — the
-// property the audio engine relies on for Range resume.
+// TestStripeResumeEquivalence checks that splitting the ciphertext at any offset and
+// feeding the same decryptor yields the single-shot output, as Range resume needs.
 func TestStripeResumeEquivalence(t *testing.T) {
 	const trackID = "3135556"
 	cipher := make([]byte, 40000)

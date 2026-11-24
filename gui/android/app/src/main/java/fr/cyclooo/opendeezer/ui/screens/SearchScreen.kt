@@ -43,6 +43,7 @@ import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.Album
 import fr.cyclooo.opendeezer.engine.ArtistInfo
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.engine.SearchResults
 import fr.cyclooo.opendeezer.player.PlayerController
@@ -87,8 +88,8 @@ fun SearchScreen(
             searchFailed = searchResults == null
             results = searchResults ?: SearchResults.EMPTY
             completedQuery = q
-        } catch (cancelled: CancellationException) {
-            throw cancelled
+        } catch (canceled: CancellationException) {
+            throw canceled
         } catch (_: Throwable) {
             results = SearchResults.EMPTY
             completedQuery = q
@@ -172,6 +173,7 @@ fun SearchScreen(
                     else -> SearchResultsList(
                         results = results,
                         player = player,
+                        context = ListenContext("search_track", completedQuery),
                         onAlbum = onAlbum,
                         onArtist = onArtist,
                         onPlaylist = onPlaylist,

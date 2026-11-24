@@ -11,19 +11,14 @@ import (
 
 // ---- type aliases ----
 
-// Config configures a [Server].
-//
-//   - Addr            — listen address (e.g. "127.0.0.1:7654" or ":7654")
-//   - Token           — bearer token; set to enable token auth
-//   - SameAccountOnly — when Token is empty, require the controller to prove it
-//     is logged into the same Deezer account
-//   - WebRemote       — serve the phone web-remote SPA at GET /remote and
-//     use pairing (6-digit code) as the auth mechanism
+// Config configures a [Server]: Addr is the listen address (e.g. ":7654"), Token
+// enables bearer auth, SameAccountOnly (without Token) requires the same Deezer
+// account, and WebRemote serves the phone SPA at GET /remote with pairing auth.
 type Config = internalcontrol.Config
 
 // Commands are the playback actions a [Server] dispatches. Set only the
-// functions your application implements; nil entries cause the corresponding
-// endpoint to be a no-op.
+// functions your application implements; the endpoint of a nil entry answers
+// 501 Not Implemented (or 404 where the route is optional).
 type Commands = internalcontrol.Commands
 
 // State is the playback snapshot returned by GET /status and all mutation
@@ -50,10 +45,9 @@ type EQState = internalcontrol.EQState
 // Event is a typed control event (a "state" snapshot or a "finished" event).
 type Event = internalcontrol.Event
 
-// EQ is the equalizer bridge a [Server] serves at /eq. Wire the functions to
-// your audio engine (each may be nil individually) and pass it to
-// [Server.SetEQ] before Start; without a bridge the /eq endpoints are 404.
-// [PlayerEQ] builds one from anything satisfying [EQController].
+// EQ is the equalizer bridge a [Server] serves at /eq; each function may be nil. Pass
+// it to [Server.SetEQ] before Start (without it /eq is 404). [PlayerEQ] builds one from
+// an [EQController].
 type EQ = internalcontrol.EQ
 
 // EQController is the player subset an [EQ] bridge built with [PlayerEQ]
@@ -69,24 +63,16 @@ func PlayerEQ(get func() EQController, presets []string) *EQ {
 
 // ---- Server ----
 
-// Server hosts the OpenDeezer remote-control API. Construct one with
-// [NewServer]; call [Server.Start] to bind the port; call [Server.Close] when
-// done.
-//
-// Server is safe for concurrent use once started.
+// Server hosts the OpenDeezer remote-control API. Create it with [NewServer],
+// [Server.Start] binds the port and [Server.Close] stops it. Safe for concurrent use
+// once started.
 type Server struct {
 	s *internalcontrol.Server
 }
 
-// NewServer builds a control server.
-//
-//   - cfg     — listen address and auth mode
-//   - status  — called on each request; must return a race-free snapshot of
-//     the current playback state
-//   - account — called on each request; must return the logged-in identity
-//   - cmds    — the actions the server can dispatch to your player
-//   - dz      — Deezer client used to serve GET /search and GET /playlists;
-//     pass nil to disable browse endpoints
+// NewServer builds a control server from cfg (address and auth), status (a race-free
+// playback snapshot per request), account (the logged-in identity), cmds (player
+// actions) and dz (serves /search and /playlists; nil disables them).
 func NewServer(
 	cfg Config,
 	status func() State,
@@ -142,21 +128,15 @@ func (s *Server) RevokeSession(idOrToken string) { s.s.RevokeSession(idOrToken) 
 
 // ---- Client ----
 
-// Client talks to a [Server] (or any compatible control endpoint) over HTTP.
-// All mutation methods return the post-command playback snapshot. The snapshot
-// may lag the command by one server tick; poll GET /status if you need the
-// settled state.
-//
-// Client is safe for concurrent use.
+// Client talks to a [Server] or compatible endpoint over HTTP. Mutation methods return
+// the snapshot after the command, which may lag by one server tick (poll GET /status).
+// Safe for concurrent use.
 type Client struct {
 	c *internalcontrol.Client
 }
 
-// NewClient builds a control client.
-//
-//   - base      — server URL, e.g. "http://192.168.1.5:7654"
-//   - token     — X-OpenDeezer-Token value; "" to omit
-//   - accountID — X-OpenDeezer-Account value for same-account auth; "" to omit
+// NewClient builds a control client for base (e.g. "http://192.168.1.5:7654"). token
+// sets X-OpenDeezer-Token and accountID X-OpenDeezer-Account; "" omits either.
 func NewClient(base, token, accountID string) *Client {
 	return &Client{c: internalcontrol.NewClient(base, token, accountID)}
 }
@@ -168,14 +148,9 @@ func (c *Client) Whoami() (Whoami, error) { return c.c.Whoami() }
 // Status returns the current playback snapshot.
 func (c *Client) Status() (State, error) { return c.c.Status() }
 
-// Events subscribes to the server's playback state stream (GET /events,
-// Server-Sent Events). Every subscriber receives an initial [State] snapshot
-// immediately, then a snapshot on each wire-visible change — no polling. The
-// returned channel is closed when ctx is cancelled or the connection to the
-// server drops; there is no automatic reconnect (call Events again). Snapshots
-// are buffered and coalesced: a slow consumer may skip intermediate snapshots
-// but always observes the newest one. Like every other method it works over
-// LAN — point the client at a remote device's control address.
+// Events subscribes to the server's state stream (GET /events, SSE): an initial [State]
+// and then one per visible change, coalesced so a slow reader still gets the newest.
+// The channel closes when ctx is canceled or the connection drops (no reconnect).
 func (c *Client) Events(ctx context.Context) (<-chan State, error) { return c.c.Events(ctx) }
 
 // PlayPause toggles play/pause on the server.
@@ -255,9 +230,8 @@ func (c *Client) CancelSleepTimer() (State, error) { return c.c.CancelSleepTimer
 // server has no equalizer bridge (the /eq endpoints are 404).
 func (c *Client) EQ() (EQState, error) { return c.c.EQ() }
 
-// SetEQ applies a partial equalizer update. params carries any of the POST /eq
-// query params — on=0|1, mono=0|1, preset=name, band=N&db=X, preamp=dB — and
-// the server applies whichever are present (at least one is required).
+// SetEQ applies a partial EQ update. params holds any of the POST /eq query params
+// (on=0|1, mono=0|1, preset=name, band=N&db=X, preamp=dB); at least one is required.
 func (c *Client) SetEQ(params url.Values) (EQState, error) { return c.c.SetEQ(params) }
 
 // Search returns the server's raw search-results JSON for query q
@@ -280,10 +254,9 @@ func (c *Client) SetQueue(tracksJSON string, index int) (State, error) {
 	return c.c.SetQueue(tracksJSON, index)
 }
 
-// EventsTyped subscribes to the server's typed event stream (GET /events): both
-// "state" snapshots and explicit "finished" events, so a controller learns a
-// natural track end instantly instead of inferring it from a state diff. The
-// channel closes on ctx cancel or when the stream drops (no auto-reconnect).
+// EventsTyped subscribes to GET /events with both "state" snapshots and "finished"
+// events, so a controller learns a natural track end at once. The channel closes on
+// ctx cancel or when the stream drops (no reconnect).
 func (c *Client) EventsTyped(ctx context.Context) (<-chan Event, error) {
 	return c.c.EventsTyped(ctx)
 }

@@ -56,10 +56,9 @@ func filledSource(t *testing.T, nbytes int) *source {
 	return s
 }
 
-// TestReadPCMFadeOut drives the realtime callback directly and confirms that
-// arming a fade-out (as Pause/Stop/skip/seek do) makes the next callback ramp the
-// PCM down instead of cutting it hard, and that once the ramp is spent the output
-// is muted until the deferred state flip.
+// TestReadPCMFadeOut drives the realtime callback directly: an armed fade-out ramps
+// the PCM down instead of cutting it, and output stays muted after the ramp until the
+// deferred state flip.
 func TestReadPCMFadeOut(t *testing.T) {
 	p := newPlayer(&mockOutput{})
 	frames := int(fadeOutFrames)
@@ -77,8 +76,8 @@ func TestReadPCMFadeOut(t *testing.T) {
 		t.Fatalf("baseline first frame should be full scale, got %d", got)
 	}
 
-	// Arm the fade-out (what Pause/Stop/skip/seek do before their deferred flip);
-	// frame count first, then armed — the publication order fadeOutAndWait uses.
+	// Arm the fade-out as Pause/Stop/skip/seek do: frame count first, then armed, the
+	// order fadeOutAndWait uses.
 	p.fadeOut.Store(fadeOutFrames)
 	p.fadeOutArmed.Store(true)
 	p.readPCM(buf)
@@ -104,15 +103,9 @@ func TestReadPCMFadeOut(t *testing.T) {
 	}
 }
 
-// TestFadeOutArmPublishesFramesFirst pins fadeOutAndWait's publication order:
-// the RT callback reads fadeOutArmed first and, when set with fadeOut==0,
-// hard-mutes the buffer (the intended post-ramp mute). At ARM time that
-// combination must be unobservable — armed==true has to imply the frame count
-// is already published, or the callback hard-zeroes a full-volume buffer
-// before the ramp even starts (the exact discontinuity the fade prevents).
-// Go atomics are sequentially consistent, so storing fadeOut before
-// fadeOutArmed makes the bad interleaving impossible; an observer goroutine
-// emulating the callback's read order asserts it never appears.
+// TestFadeOutArmPublishesFramesFirst checks fadeOutAndWait's publication order: an
+// observer reading in the callback's order never sees armed with fadeOut == 0, which
+// would hard-mute a full-volume buffer before the ramp.
 func TestFadeOutArmPublishesFramesFirst(t *testing.T) {
 	for iter := 0; iter < 200; iter++ {
 		p := newPlayer(&mockOutput{})

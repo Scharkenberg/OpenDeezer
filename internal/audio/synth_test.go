@@ -12,10 +12,8 @@ import (
 // in memory so the streaming/decode paths can be exercised without network or
 // fixture files.
 
-// makeMP3 builds a valid MPEG-1 Layer III, 44.1kHz, 128kbps, stereo stream of
-// nFrames frames. The payload is zeroed (decodes to silence), which is all the
-// tests need — they assert on byte counts and timing, not audio content.
-// go-mp3 accepts and fully decodes these frames.
+// makeMP3 builds a valid MPEG-1 Layer III 44.1kHz 128kbps stereo stream of nFrames
+// zeroed frames (silence); the tests check byte counts and timing only.
 func makeMP3(nFrames int) []byte {
 	// 144 * 128000 / 44100 = 417 bytes per frame (no padding).
 	fh := make([]byte, 417)

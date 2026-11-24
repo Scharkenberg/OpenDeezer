@@ -50,7 +50,7 @@ func TestJSONEsc(t *testing.T) {
 }
 
 func TestClientSearch(t *testing.T) {
-	// (a) All four categories succeed concurrently — verify results are merged correctly
+	// (a) All four categories succeed concurrently: results are merged correctly
 	t.Run("all success", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -94,7 +94,7 @@ func TestClientSearch(t *testing.T) {
 		}
 	})
 
-	// (b) One category returns a 500/garbage JSON — verify the other three still come back and error is nil
+	// (b) One category returns a 500/garbage JSON: the other three still come back and error is nil
 	t.Run("one category fails", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -143,7 +143,7 @@ func TestClientSearch(t *testing.T) {
 		}
 	})
 
-	// (c) All four fail — verify a non-nil error
+	// (c) All four fail: the error is non-nil
 	t.Run("all fail", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -172,7 +172,7 @@ func TestClientSearch(t *testing.T) {
 	})
 }
 
-// --- Phase 3: PrepareStreamCached from meta (zero network) ---
+// --- PrepareStreamCached from meta (zero network) ---
 
 func TestPrepareStreamCached_FromMeta_NoHTTP(t *testing.T) {
 	dir := t.TempDir()

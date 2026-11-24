@@ -228,9 +228,9 @@
     <string name="favorite_update_failed">无法更新喜欢，请检查网络连接。</string>
     <string name="preview_chip">试听</string>
     <string name="account_free_hint">免费账户 · 标准音质（128 kbps）</string>
-    <string name="settings_ads">广告</string>
-    <string name="setting_disable_ads_title">关闭广告</string>
-    <string name="setting_disable_ads_disclaimer">Deezer Free 靠广告支持。像官方应用一样上报你的播放记录，可以为艺人计入收益并支撑广告投放。关闭此项会移除广告，但会停止上报你的播放记录，使艺人无法获得播放计数，并违反 Deezer 的使用条款。请自行承担风险。</string>
+    <string name="settings_ads">播放上报</string>
+    <string name="setting_disable_ads_title">不上报我的播放</string>
+    <string name="setting_disable_ads_disclaimer">OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -264,8 +264,6 @@
     <string name="cd_downloaded">已下载</string>
     <string name="cd_reorder">重新排序</string>
     <string name="offline_ready">%1$s 可离线播放</string>
-    <string name="offline_already">%1$s 已离线</string>
-    <string name="offline_needs_cache">在设置中启用流媒体缓存以下载离线内容</string>
     <string name="device_self_phone">OpenDeezer (Android)</string>
     <string name="device_self_tv">OpenDeezer (Android TV)</string>
     <string name="settings_connect">OpenDeezer Connect</string>

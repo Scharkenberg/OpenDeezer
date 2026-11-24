@@ -80,6 +80,8 @@ internal sealed class Offline
 
     public bool IsPinned(string kind, string id) => Collections.Any(c => c.Kind == kind && c.Id == id);
 
+    public IReadOnlyList<OfflineJob> Jobs => _jobs;
+
     public OfflineJob? Job(string kind, string id) => _jobs.FirstOrDefault(j => j.Kind == kind && j.Id == id);
 
     // A pin or unpin of this item is on its way to the engine.
@@ -120,8 +122,8 @@ internal sealed class Offline
         var (last, pending) = _busy[key];
         if (pending == 1) _busy.Remove(key);
         else _busy[key] = (last, pending - 1);
+        // The reload reports progress, the busy state with it.
         await LoadAsync();
-        Progress?.Invoke();
         return error;
     }
 

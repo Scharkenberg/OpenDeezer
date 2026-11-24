@@ -1309,7 +1309,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>Comportement</translation>
     </message>
     <message>
@@ -1424,18 +1424,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>Publicités</translation>
+        <source>Play reporting</source>
+        <translation>Signalement des écoutes</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>Désactiver les publicités</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>Ne pas signaler mes écoutes</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>Deezer Free est financé par la publicité. Signaler vos écoutes — comme l&apos;application officielle — rémunère les artistes et alimente les publicités. Désactiver cette option supprime les publicités mais cesse de signaler vos écoutes, ce qui prive les artistes de leur nombre d&apos;écoutes et enfreint les conditions d&apos;utilisation de Deezer. À utiliser à vos propres risques.</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>OpenDeezer ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l&apos;arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d&apos;utilisation de Deezer. À vos risques et périls.</translation>
     </message>
 </context>
 </TS>

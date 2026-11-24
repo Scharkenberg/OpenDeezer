@@ -12,11 +12,8 @@ import (
 // State is the player lifecycle state.
 type State = internalaudio.State
 
-// Device is an audio output device the user can select.
-//
-//   - ID        — opaque id passed to [Player.SetDevice]; "" = system default
-//   - Name      — human-readable display name
-//   - IsDefault — true if this is the system default device
+// Device is an audio output device: ID is passed to [Player.SetDevice] ("" = system
+// default), Name is the display name, IsDefault marks the system default.
 type Device = internalaudio.Device
 
 // ---- state constants ----
@@ -36,19 +33,14 @@ const (
 
 // ---- Player ----
 
-// Player streams, decrypts, decodes (MP3 + FLAC) and plays Deezer audio with
-// gapless/crossfade transitions, ReplayGain normalisation, and output-device
-// selection.
-//
-// Create one with [NewPlayer]. A Player must be closed with [Player.Close] when
-// no longer needed; it owns an audio output device for its lifetime.
-//
-// All methods are safe for concurrent use.
+// Player streams, decrypts, decodes (MP3, FLAC) and plays Deezer audio with gapless and
+// crossfade transitions, ReplayGain and output-device selection. Create it with
+// [NewPlayer] and close it with [Player.Close]. Safe for concurrent use.
 type Player struct {
 	p *internalaudio.Player
 }
 
-// NewPlayer initialises the audio output device and starts the playback engine.
+// NewPlayer initializes the audio output device and starts the playback engine.
 // Returns an error if no audio output is available (e.g. headless server).
 func NewPlayer() (*Player, error) {
 	p, err := internalaudio.NewPlayer()
@@ -60,11 +52,9 @@ func NewPlayer() (*Player, error) {
 
 // ---- playback ----
 
-// Play starts playing plan immediately, replacing any current track. plan must
-// come from [sdk/deezer.Client.PrepareStream] or
-// [sdk/deezer.Client.PodcastEpisodeStream]. durationMS is the track's duration
-// in milliseconds (used for progress and gapless timing); pass the value from
-// the Track metadata.
+// Play starts plan at once, replacing the current track. plan comes from
+// [sdk/deezer.Client.PrepareStream] or PodcastEpisodeStream; durationMS is the track's
+// length from its metadata (for progress and gapless timing).
 func (pl *Player) Play(plan *sdkdeezer.StreamPlan, durationMS int64) error {
 	return pl.p.Play(plan, durationMS)
 }
@@ -95,8 +85,9 @@ func (pl *Player) Close() { pl.p.Close() }
 // SeekMS seeks to ms milliseconds from the start of the current track.
 func (pl *Player) SeekMS(ms int64) { pl.p.SeekMS(ms) }
 
-// SetOnFinish registers a callback that is called when a track ends naturally
-// (not when stopped or skipped). Use this to advance the queue.
+// SetOnFinish registers a callback that is called when a track ends (not when stopped
+// or skipped): at its natural end, on a gapless swap to the preloaded track, and after a
+// stream that failed. Use it to advance the queue, unless [Player.State] is [Errored].
 func (pl *Player) SetOnFinish(fn func()) { pl.p.SetOnFinish(fn) }
 
 // ---- state ----
@@ -126,12 +117,18 @@ func (pl *Player) Volume() float64 { return pl.p.Volume() }
 // SetVolume sets the absolute volume (clamped to 0.0–1.0).
 func (pl *Player) SetVolume(v float64) { pl.p.SetVolume(v) }
 
-// SetReplayGain enables (true) or disables (false) loudness normalisation using
-// the per-track ReplayGain value from [sdkdeezer.StreamPlan.GainDB].
+// SetReplayGain turns loudness normalization on or off, as Deezer's Android app does: a
+// track whose gain ([sdkdeezer.StreamPlan.GainDB]) is above the target
+// ([Player.SetReplayGainTarget]) is turned down to it; others play as they are.
 func (pl *Player) SetReplayGain(on bool) { pl.p.SetReplayGain(on) }
 
-// ReplayGain reports whether ReplayGain normalisation is enabled.
+// ReplayGain reports whether ReplayGain normalization is enabled.
 func (pl *Player) ReplayGain() bool { return pl.p.ReplayGain() }
+
+// SetReplayGainTarget sets the target loudness in dB: the account's, from
+// [sdkdeezer.Client.GainTarget] after Login. Until it is set (0), nothing is
+// turned down.
+func (pl *Player) SetReplayGainTarget(db float64) { pl.p.SetReplayGainTarget(db) }
 
 // ---- gapless / crossfade ----
 
@@ -153,10 +150,9 @@ func (pl *Player) CrossfadeMS() int { return pl.p.CrossfadeMS() }
 
 // ---- sleep timer ----
 
-// SetSleepTimer arms the sleep timer. With endOfTrack true, playback pauses when
-// the current track finishes (d is ignored); otherwise it fades out over the last
-// few seconds and pauses after d elapses. A non-positive d with endOfTrack false
-// cancels any armed timer.
+// SetSleepTimer arms the sleep timer: with endOfTrack playback pauses when the track
+// ends (d ignored), else it fades out and pauses after d. d <= 0 without endOfTrack
+// cancels.
 func (pl *Player) SetSleepTimer(d time.Duration, endOfTrack bool) { pl.p.SetSleepTimer(d, endOfTrack) }
 
 // CancelSleepTimer disarms the sleep timer and restores full volume.

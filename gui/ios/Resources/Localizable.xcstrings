@@ -1773,43 +1773,43 @@
         }
       }
     },
-    "Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk.": {
+    "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk.": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "‏Deezer Free مدعوم بالإعلانات. الإبلاغ عن مرات تشغيلك — مثل التطبيق الرسمي — يمنح الفنانين حقهم ويُشغّل الإعلانات. تعطيل هذا الخيار يزيل الإعلانات لكنه يوقف الإبلاغ عن مرات تشغيلك، مما يحرم الفنانين من عدد مرات تشغيلهم ويخالف شروط استخدام Deezer. استخدمه على مسؤوليتك الخاصة."
+            "value": "لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deezer Free se financia con anuncios. Informar de tus reproducciones —como hace la app oficial— acredita a los artistas e impulsa los anuncios. Desactivar esto elimina los anuncios, pero deja de informar de tus reproducciones, lo que priva a los artistas de su recuento de reproducciones e incumple las condiciones de uso de Deezer. Úsalo bajo tu propia responsabilidad."
+            "value": "OpenDeezer no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deezer Free est financé par la publicité. Signaler vos écoutes — comme l'app officielle — crédite les artistes et alimente les publicités. Désactiver cette option supprime les publicités mais cesse de signaler vos écoutes, ce qui prive les artistes de leur nombre d'écoutes et enfreint les conditions d'utilisation de Deezer. À utiliser à vos propres risques."
+            "value": "OpenDeezer ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l'arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d'utilisation de Deezer. À vos risques et périls."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deezer Free विज्ञापन-समर्थित है। आधिकारिक ऐप की तरह आपके प्ले की रिपोर्टिंग कलाकारों को श्रेय देती है और विज्ञापनों को सक्षम बनाती है। इसे बंद करने पर विज्ञापन हट जाते हैं, लेकिन आपके प्ले की रिपोर्टिंग भी रुक जाती है, जिससे कलाकारों को उनकी प्ले गिनती नहीं मिलती और Deezer की उपयोग शर्तों का उल्लंघन होता है। इसका उपयोग अपने जोखिम पर करें।"
+            "value": "OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deezer Free поддерживается рекламой. Передача данных о прослушиваниях — как в официальном приложении — засчитывает их артистам и обеспечивает работу рекламы. Отключение убирает рекламу, но прекращает передачу данных о прослушиваниях, из-за чего артисты лишаются засчитанных прослушиваний, а также нарушаются условия использования Deezer. Используйте на свой страх и риск."
+            "value": "OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deezer Free 依靠广告支持。像官方应用一样上报你的播放记录，可为艺术家计入播放量并支撑广告投放。关闭此项会移除广告，但同时停止上报你的播放记录，从而使艺术家失去应得的播放量，并违反 Deezer 的使用条款。请自行承担风险。"
+            "value": "OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。"
           }
         }
       }
@@ -2019,43 +2019,43 @@
         }
       }
     },
-    "Disable ads": {
+    "Don't report my plays": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعطيل الإعلانات"
+            "value": "لا تبلّغ عن استماعي"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desactivar anuncios"
+            "value": "No informar de mis reproducciones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Désactiver les publicités"
+            "value": "Ne pas signaler mes écoutes"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "विज्ञापन बंद करें"
+            "value": "मेरे प्ले रिपोर्ट न करें"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Отключить рекламу"
+            "value": "Не сообщать о моих прослушиваниях"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭广告"
+            "value": "不上报我的播放"
           }
         }
       }

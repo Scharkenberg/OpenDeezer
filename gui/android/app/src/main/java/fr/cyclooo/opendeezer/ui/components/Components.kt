@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.ConnectDevice
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Track
 import fr.cyclooo.opendeezer.player.PlayerController
 
@@ -99,12 +100,14 @@ fun Artwork(
  * long-press menu (Play next / Add to queue / Download / Download for offline)
  * and the "downloaded" badge from the player's premium flag + offline-id set, so
  * browse/list screens get the full queue + download affordances with one call.
+ * [context] is the list the row belongs to, for tracks it queues.
  * [onStartRadio] and [trailing] stay caller-supplied.
  */
 @Composable
 fun TrackRow(
     track: Track,
     player: PlayerController,
+    context: ListenContext,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
@@ -119,8 +122,8 @@ fun TrackRow(
         onDownload = { player.download(track) },
         downloadEnabled = player.premium,
         onStartRadio = onStartRadio,
-        onPlayNext = { player.playNext(track) },
-        onAddToQueue = { player.addToQueue(track) },
+        onPlayNext = { player.playNext(track, context) },
+        onAddToQueue = { player.addToQueue(track, context) },
         onDownloadOffline = { player.downloadForOffline(track) },
         downloadOfflineEnabled = player.premium,
         offlineDownloaded = offlineIds.contains(track.id),
@@ -387,5 +390,5 @@ fun formatDuration(ms: Long): String {
     return "%d:%02d".format(m, s)
 }
 
-// Subtle row divider colour used across lists.
+// Subtle row divider color used across lists.
 val dividerColor: Color get() = Color(0x14FFFFFF)

@@ -200,17 +200,6 @@ func TestTrackChangeRecordsOutgoingAndStartsNewSession(t *testing.T) {
 	}
 }
 
-func TestEpisodeSessionsAreNotRecorded(t *testing.T) {
-	m := interactionModel(screenList)
-	m.hist = history.New(filepath.Join(t.TempDir(), "history.jsonl"))
-	m.episodeMode = true
-	m.histStartSession(deezer.Track{ID: "ep", Name: "Episode", DurationMS: 600000})
-	m.histPosMS = 60000
-	if m.historyFlushCmd() != nil {
-		t.Fatal("podcast episodes must not be recorded")
-	}
-}
-
 // ---- stats screen ----
 
 func TestStatsScreenBuildsSectionedListAndPlaysByID(t *testing.T) {
@@ -326,5 +315,32 @@ func TestStartRadioSeedsFromContext(t *testing.T) {
 	_, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	if cmd == nil {
 		t.Fatal("m on an artist page must seed from the page artist")
+	}
+}
+
+// The TUI's history rows carry the length, picture and kind the app reads; an episode is
+// recorded as one.
+func TestHistoryFlushRecordsLengthArtworkAndKind(t *testing.T) {
+	m := interactionModel(screenList)
+	m.hist = history.New(filepath.Join(t.TempDir(), "history.jsonl"))
+	m.histStartSession(deezer.Track{ID: "1", Name: "Song", DurationMS: 180000, ArtworkURL: "https://cdn.test/1.jpg"})
+	m.histPosMS = 42000
+	_ = m.historyFlushCmd()()
+	m.episodeMode = true
+	m.histStartSession(deezer.Track{ID: "e1", Name: "Episode", DurationMS: 600000})
+	m.histPosMS = 30000
+	if cmd := m.historyFlushCmd(); cmd != nil {
+		_ = cmd()
+	}
+	got, _ := m.hist.Recent(2)
+	if len(got) != 2 {
+		t.Fatalf("%d entries, want 2", len(got))
+	}
+	byID := map[string]history.Entry{got[0].TrackID: got[0], got[1].TrackID: got[1]}
+	if s := byID["1"]; s.DurationMS != 180000 || s.ArtworkURL == "" {
+		t.Fatalf("song entry %+v", s)
+	}
+	if e := byID["e1"]; e.Kind != history.KindEpisode {
+		t.Fatalf("episode entry %+v", e)
 	}
 }

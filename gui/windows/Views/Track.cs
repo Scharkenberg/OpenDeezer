@@ -13,7 +13,7 @@ internal sealed class TrackView : View
 {
     private readonly Backdrop _backdrop;
     internal readonly Hero _hero;
-    private readonly Button _like;
+    private readonly Button _like, _radio;
     internal readonly Grid _details = Ui.Grid("auto *", Space.L);
     internal readonly Grid _credits = Ui.Grid("auto *", Space.L);
     private readonly Section _detailsSection, _creditsSection;
@@ -35,10 +35,12 @@ internal sealed class TrackView : View
     public TrackView()
     {
         _like = Ui.LikeButton(Size.IconButton, () => Player.Like(_track, !Player.IsLiked(_track.Id)));
+        _radio = Ui.Button(Loc.S("Menu_StartRadio"), () => Menus.StartRadio(_track), Icons.Flow);
         _hero = new Hero(ArtShape.Large, Size.TrackArt,
-            Ui.Button(Loc.S("Btn_Play"), () => Player.Play(new[] { _track }, 0), Icons.Play, accent: true),
-            Ui.Button(Loc.S("Menu_StartRadio"), () => Menus.StartRadio(_track), Icons.Flow),
-            _like);
+            Ui.Button(Loc.S("Btn_Play"), () => Player.Play(new[] { _track }, 0, new("track_page", _track.Id)), Icons.Play, accent: true),
+            _radio,
+            _like,
+            Menus.MoreButton(items => Menus.Track(items, _track, new TrackMenu(Page: true))));
         _details.RowSpacing = _credits.RowSpacing = Space.S;
         _detailsSection = new Section("Section_Details", _details);
         _creditsSection = new Section("Section_Credits", _credits);
@@ -54,6 +56,8 @@ internal sealed class TrackView : View
         Player.LikeChanged += OnLikeChanged;
         _track = t;
         Ui.ShowLiked(_like, Player.IsLiked(t.Id));
+        // Disabled in offline mode, as in the menus.
+        _like.IsEnabled = _radio.IsEnabled = !App.Offline.Mode;
         _hero.Set(Loc.S("Nav_Track"), t.Name, t.ArtistLine, t.ArtworkUrl);
         _backdrop.Set(t.ArtworkUrl);
         if (!isBack) _scroller.ChangeView(null, 0, null, disableAnimation: true);
@@ -98,7 +102,7 @@ internal sealed class TrackView : View
         if (i.Artists.Count > 0) Row(_details, "Track_Artists", Links(i.Artists.Select(a => (a.Name, a.Id.Length > 0 ? () => ArtistView.Open(a.Id) : (System.Action?)null))));
         if (i.Album.Title.Length > 0)
             Row(_details, "Track_Album", Links(new (string, System.Action?)[] { (i.Album.Title, i.Album.Id.Length > 0
-                ? () => CollectionView.Open(Collection.Of(new Album { Id = i.Album.Id, Name = i.Album.Title, ArtworkUrl = art }))
+                ? () => CollectionView.Open(Collection.Of(new Album { Id = i.Album.Id, Name = i.Album.Title, ArtworkUrl = art, Artists = i.Artists.Where(a => a.Role == "main").Select(a => new ArtistRef { Id = a.Id, Name = a.Name }).ToList() }))
                 : null) }));
         string released = i.ReleaseDate.Length > 0 ? i.ReleaseDate : i.Album.ReleaseDate;
         Row(_details, "Track_Released", System.DateTime.TryParse(released, System.Globalization.CultureInfo.InvariantCulture,
@@ -116,22 +120,31 @@ internal sealed class TrackView : View
 
         _credits.Children.Clear();
         _credits.RowDefinitions.Clear();
+        // As the web player groups them: authors, composers, then everyone else, names joined by " - ".
+        var groups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>>();
         foreach (var c in i.Contributors)
-            if (c.Names.Count > 0) Row(_credits, c.Role, string.Join(", ", c.Names), localized: false);
+        {
+            string key = c.RoleKey switch { "author" => "Credit_Author", "composer" => "Credit_Composer", _ => "Credit_Other" };
+            if (!groups.TryGetValue(key, out var names)) groups[key] = names = new();
+            foreach (var n in c.Names)
+                if (!names.Contains(n)) names.Add(n);
+        }
+        foreach (var key in new[] { "Credit_Author", "Credit_Composer", "Credit_Other" })
+            if (groups.TryGetValue(key, out var names) && names.Count > 0) Row(_credits, key, string.Join(" - ", names));
         _creditsSection.Visible = _credits.Children.Count > 0;
     }
 
-    private static void Row(Grid g, string label, string value, bool localized = true)
+    private static void Row(Grid g, string label, string value)
     {
         if (value.Length == 0) return;
-        Row(g, label, Ui.Text(value, wrap: true), localized);
+        Row(g, label, Ui.Text(value, wrap: true));
     }
 
-    private static void Row(Grid g, string label, UIElement value, bool localized = true)
+    private static void Row(Grid g, string label, UIElement value)
     {
         int r = g.RowDefinitions.Count;
         g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var name = Ui.Text(localized ? Loc.S(label) : label, TextKind.SecondaryBody);
+        var name = Ui.Text(Loc.S(label), TextKind.SecondaryBody);
         Grid.SetRow(name, r);
         Grid.SetRow((FrameworkElement)value, r);
         Grid.SetColumn((FrameworkElement)value, 1);

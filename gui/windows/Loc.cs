@@ -19,7 +19,7 @@ internal static class Loc
 
     internal static readonly (string Tag, string Native)[] Languages =
     {
-        ("",       "System default"),
+        ("",       ""),
         ("en-US",  "English"),
         ("zh-CN",  "简体中文"),
         ("hi-IN",  "हिन्दी"),

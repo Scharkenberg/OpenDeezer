@@ -53,7 +53,7 @@ struct AppSettings: Codable {
 }
 
 // SettingsView — a compact Liquid Glass sheet for audio quality and background
-// behaviour. Reachable from the sidebar account row.
+// behavior. Reachable from the sidebar account row.
 struct SettingsView: View {
     @EnvironmentObject var app: AppState
 
@@ -379,7 +379,7 @@ struct SettingsView: View {
                 }
             }
 
-            // Disable ads — Deezer Free only (premium plans carry no ads). The
+            // Play reporting — Deezer Free only. OpenDeezer plays no ads. The
             // opt-out is engine-owned; loading on appear and applied immediately.
             if !app.isPremium {
                 settingsCard {
@@ -390,12 +390,12 @@ struct SettingsView: View {
                                 adsDisabled = on
                                 Task.detached { Core.setAdsDisabled(on) }
                             })) {
-                            Label(L("Disable ads"), systemImage: "megaphone.slash")
+                            Label(L("Don't report my plays"), systemImage: "megaphone.slash")
                                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(DZ.textPri)
                         }
                         .toggleStyle(.switch)
                         .tint(DZ.accent)
-                        Text(L("Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk."))
+                        Text(L("OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."))
                             .font(.caption).foregroundStyle(DZ.textSec)
                     }
                 }

@@ -37,16 +37,19 @@ type fakeDeezer struct {
 	mu        sync.Mutex
 	playlists map[string][]string
 	albums    map[string][]string
-	gone      map[string]bool   // tracks Deezer no longer serves
+	gone      map[string]bool   // tracks Deezer does not serve
 	fallback  map[string]string // refused track -> the version Deezer serves instead
+	history   []map[string]any  // user.getSongsHistory, newest first
+	logs      []string          // "method body" of each listen log call
 
 	calls    atomic.Int32 // requests through deezer.Transport
+	menus    atomic.Int32 // deezer.userMenu calls (episode bookmarks)
 	conns    atomic.Int32 // connections accepted
 	streams  atomic.Int32 // CDN body requests
 	inFlight atomic.Int32
 	maxIn    atomic.Int32
-	down     atomic.Bool // every request fails as with no network
-	listErr  atomic.Bool // playlist.getSongs answers a gateway error
+	down     atomic.Bool  // every request fails as with no network
+	listErr  atomic.Bool  // playlist.getSongs answers a gateway error
 	unlisted atomic.Int32 // tracks a listing declares in its total but leaves out
 	delay    time.Duration
 }
@@ -75,17 +78,29 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 			b := bodyOf(strings.TrimPrefix(p, "/stream/"))
 			w.Header().Set("Content-Length", strconv.Itoa(len(b)))
 			_, _ = w.Write(b)
+		case p == "/": // the logged-in web player's page names its script
+			_, _ = w.Write([]byte(`<script src="https://cdn-files.dzcdn.net/cache/js/app-web.cafe.js"></script>`))
+		case p == "/cache/js/app-web.cafe.js":
+			_, _ = w.Write([]byte(`env:"production",releaseNumeric:"10020261124120000",bot:1`))
 		case strings.HasPrefix(p, "/images/"):
 			_, _ = w.Write([]byte("picture " + p))
 		case p == "/v1/get_url":
 			var body struct {
 				Tokens []string `json:"track_tokens"`
+				Media  []struct {
+					Type string `json:"type"`
+				} `json:"media"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			id := strings.TrimPrefix(body.Tokens[0], "tok")
 			fd.mu.Lock()
 			_, refused := fd.fallback[id]
 			fd.mu.Unlock()
+			if body.Media[0].Type == "PREVIEW" {
+				write(w, map[string]any{"data": []any{map[string]any{"media": []any{map[string]any{
+					"format": "MP3_128", "sources": []any{map[string]any{"url": fd.srv.URL + "/stream/preview" + id}}}}}}})
+				return
+			}
 			if refused {
 				write(w, map[string]any{"data": []any{map[string]any{"errors": []any{map[string]any{
 					"code": 2002, "message": "Track token has no sufficient rights on requested media"}}}}})
@@ -106,15 +121,21 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 			}
 			write(w, map[string]any{"data": data, "total": len(ids) + int(fd.unlisted.Load())})
 		default:
+			raw, _ := io.ReadAll(r.Body)
 			var body map[string]json.RawMessage
-			_ = json.NewDecoder(r.Body).Decode(&body)
+			_ = json.Unmarshal(raw, &body)
 			str := func(k string) string { var s string; _ = json.Unmarshal(body[k], &s); return s }
-			switch r.URL.Query().Get("method") {
+			switch m := r.URL.Query().Get("method"); m {
+			case "log.listen", "log.batch_listen":
+				fd.mu.Lock()
+				fd.logs = append(fd.logs, m+" "+string(raw))
+				fd.mu.Unlock()
+				write(w, map[string]any{"error": map[string]any{}, "results": false})
 			case "deezer.getUserData":
 				user := strings.TrimPrefix(r.Header.Get("Cookie"), "arl=")
 				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"checkForm": "tok",
 					"USER":   map[string]any{"USER_ID": user, "BLOG_NAME": "u", "OPTIONS": map[string]any{"license_token": "lic", "web_hq": user == "1003"}},
-					"OFFERS": []any{map[string]any{"title": "Premium"}}}})
+					"OFFERS": []any{map[string]any{"title": "Premium"}}, "GAIN": map[string]any{"TARGET": "-15", "ADS": "-13"}}})
 			case "song.getData":
 				var id json.Number
 				_ = json.Unmarshal(body["sng_id"], &id)
@@ -149,6 +170,15 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 					}
 				}
 				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"data": data, "total": len(ids) + int(fd.unlisted.Load())}})
+			case "deezer.userMenu":
+				fd.menus.Add(1)
+				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"EPISODE_BOOKMARKS": map[string]any{
+					"data": []any{map[string]any{"EPISODE_ID": "77", "OFFSET": "120", "IS_HEARD": "0"}}}}})
+			case "user.getSongsHistory":
+				fd.mu.Lock()
+				data := fd.history
+				fd.mu.Unlock()
+				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"data": data}})
 			case "playlist.getData":
 				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"TITLE": "Playlist " + str("playlist_id"),
 					"PLAYLIST_PICTURE": "pl" + str("playlist_id"), "PICTURE_TYPE": "playlist"}})
@@ -195,6 +225,9 @@ func offlineEngine(t *testing.T, user string) *fakeDeezer {
 		waitJobsDone(t)
 		deezer.SetTransport(orig)
 	})
+	prevLearn := learnRelease
+	learnRelease = func(*deezer.Client) {} // no deezer.com here
+	t.Cleanup(func() { learnRelease = prevLearn })
 	mu.Lock()
 	prevClient, prevPlayer := client, player
 	player = &audio.Player{}
@@ -289,10 +322,9 @@ func TestPinPlaylistFetchesTracks(t *testing.T) {
 	}
 }
 
-// A track Deezer refuses in this country plays the version song.getData names
-// as its fallback, as Deezer's web player does: the pin stores that stream
-// under the refused track's id with the fallback's id, whose key decrypts it,
-// and the track plays from the pin offline.
+// A track refused in this country plays the fallback version song.getData names: the
+// pin stores that stream under the refused track's id with the fallback's id (whose key
+// decrypts it), and it plays offline.
 func TestRefusedTrackFetchesFallback(t *testing.T) {
 	fd := offlineEngine(t, "1001")
 	fd.fallback["101"] = "901"
@@ -512,7 +544,7 @@ func TestPinSurvivesKillBetweenAdoptAndSave(t *testing.T) {
 	var onDisk []byte
 	fetchStream = func(ctx context.Context, plan *deezer.StreamPlan, c audio.StreamCache) error {
 		err := audio.Fetch(ctx, plan, c)
-		onDisk, _ = os.ReadFile(filepath.Join(dir, offlineFileName)) // what a kill now leaves
+		onDisk, _ = os.ReadFile(filepath.Join(dir, offlineFileName)) // what a kill leaves at this point
 		return err
 	}
 	pinAndWait(t, "track", "101")
@@ -526,7 +558,7 @@ func TestPinSurvivesKillBetweenAdoptAndSave(t *testing.T) {
 	}
 }
 
-// countSaves counts the writes of offline.json from now on; fail makes the
+// countSaves counts the writes of offline.json after the call; fail makes the
 // writes after the first n fail.
 func countSaves(t *testing.T, failAfter int32) *atomic.Int32 {
 	t.Helper()
@@ -570,7 +602,7 @@ func TestSingleTrackKilledAfterAdoptKeepsTitle(t *testing.T) {
 	var onDisk []byte
 	fetchStream = func(ctx context.Context, plan *deezer.StreamPlan, c audio.StreamCache) error {
 		err := audio.Fetch(ctx, plan, c)
-		onDisk, _ = os.ReadFile(filepath.Join(dir, offlineFileName)) // what a kill now leaves
+		onDisk, _ = os.ReadFile(filepath.Join(dir, offlineFileName)) // what a kill leaves at this point
 		return err
 	}
 	pinAndWait(t, "track", "101")
@@ -942,7 +974,7 @@ func TestFullDiskStopsFetch(t *testing.T) {
 	}
 }
 
-// Cancel stops the fetches; each stays listed as cancelled until the next
+// Cancel stops the fetches; each stays listed as canceled until the next
 // unpin.
 func TestCancelOffline(t *testing.T) {
 	fd := offlineEngine(t, "1001")
@@ -963,7 +995,7 @@ func TestCancelOffline(t *testing.T) {
 	CancelOffline()
 	waitJobsDone(t)
 	active, jobs := OfflineProgress()
-	if active || len(jobs) != 1 || jobs[0].Error != "cancelled" {
+	if active || len(jobs) != 1 || jobs[0].Error != "canceled" {
 		t.Fatalf("progress %v %+v after a cancel", active, jobs)
 	}
 	if err := UnpinOffline("playlist", "9"); err != nil {
@@ -1227,8 +1259,36 @@ func TestSetDirKeepsStoppedReason(t *testing.T) {
 	}
 }
 
+// A fetch that ends on a lost network stops its job, listed with the reason, and
+// the next resume fetches it again.
+func TestNetworkLossStopsJobAndResumes(t *testing.T) {
+	fd := offlineEngine(t, "1001")
+	fd.setPlaylist("9", "101", "102")
+	var down atomic.Bool
+	down.Store(true)
+	fetchStream = func(ctx context.Context, plan *deezer.StreamPlan, c audio.StreamCache) error {
+		if down.Load() {
+			return fmt.Errorf("%w: read: connection reset", deezer.ErrNoNetwork)
+		}
+		return audio.Fetch(ctx, plan, c)
+	}
+	pinAndWait(t, "playlist", "9")
+	if _, js := OfflineProgress(); len(js) != 1 || !strings.Contains(js[0].Error, "no internet") {
+		t.Fatalf("jobs %+v after a lost network, want one listed with the reason", js)
+	}
+	down.Store(false)
+	resumeJobs()
+	waitJobsDone(t)
+	mc := caches.Current()
+	_, ok1 := mc.Path("101.MP3_128")
+	_, ok2 := mc.Path("102.MP3_128")
+	if _, js := OfflineProgress(); len(js) != 0 || !ok1 || !ok2 {
+		t.Fatalf("jobs %+v, stored %v %v after the network came back", js, ok1, ok2)
+	}
+}
+
 // pinWithHeldFetch pins playlist 9 of two tracks for account 1001 with a
-// fetch that holds every track until it is cancelled, and returns once one
+// fetch that holds every track until it is canceled, and returns once one
 // is held.
 func pinWithHeldFetch(t *testing.T) {
 	t.Helper()
@@ -1282,8 +1342,8 @@ func TestAccountSwitchDropsFetches(t *testing.T) {
 }
 
 // Pin, cancel and pin again runs one job for the collection: the new pin
-// replaces the cancelled job, which fetches nothing beside it and leaves no
-// "cancelled" entry.
+// replaces the canceled job, which fetches nothing beside it and leaves no
+// "canceled" entry.
 func TestPinCancelPinRunsOneJob(t *testing.T) {
 	fd := offlineEngine(t, "1001")
 	fd.setPlaylist("9", "101")
@@ -1297,7 +1357,7 @@ func TestPinCancelPinRunsOneJob(t *testing.T) {
 		if calls.Add(1) == 1 {
 			close(started)
 			<-ctx.Done()
-			<-windDown // a cancelled download that takes a moment to stop
+			<-windDown // a canceled download that takes a moment to stop
 			return ctx.Err()
 		}
 		return audio.Fetch(ctx, plan, c)
@@ -1424,8 +1484,44 @@ func TestPlaySupersededWhileResolving(t *testing.T) {
 	}
 }
 
-// A pinned track Deezer no longer serves stays playable from its pin, also
-// online when a stream would be asked at a better quality than the pin's.
+// A play superseded while it resolves and then failing reports superseded and sets
+// no error over the newer play.
+func TestPlaySupersededThenFailing(t *testing.T) {
+	offlineEngine(t, "1001")
+	inner := deezer.Transport()
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	deezer.SetTransport(rtFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Query().Get("method") == "song.getData" {
+			held := false
+			once.Do(func() {
+				held = true
+				close(entered)
+				<-release
+			})
+			if held {
+				return nil, errors.New("connection reset")
+			}
+		}
+		return inner.RoundTrip(r)
+	}))
+	t.Cleanup(func() { deezer.SetTransport(inner) })
+	signIn(t, "1001")
+	result := make(chan PlayResult, 1)
+	go func() { result <- Play("101", 0) }()
+	<-entered
+	plays.claim()
+	close(release)
+	if r := <-result; r != PlaySuperseded {
+		t.Fatalf("Play = %d, want %d (superseded)", r, PlaySuperseded)
+	}
+	if e := Player().LastError(); e != "" {
+		t.Fatalf("LastError %q after a superseded play", e)
+	}
+}
+
+// A pinned track Deezer does not serve stays playable from its pin, also online
+// when a stream would be asked at a better quality than the pin's.
 func TestPinnedTrackPlaysWhenNoLongerServed(t *testing.T) {
 	fd := offlineEngine(t, "1003") // an account with MP3 320
 	pinAndWait(t, "track", "101")  // fetched at quality 0: MP3 128
@@ -1440,4 +1536,45 @@ func TestPinnedTrackPlaysWhenNoLongerServed(t *testing.T) {
 	if _, err := preparePlan(netClient(), "102"); err == nil {
 		t.Fatal("an unpinned track planned")
 	}
+}
+
+// A login that fails for want of a network turns offline mode on and stops the live watch.
+func TestInitOfflineStopsElsewhere(t *testing.T) {
+	fd := offlineEngine(t, "1001")
+	watchElsewhere(Client())
+	t.Cleanup(stopElsewhere)
+	t.Cleanup(Logout)
+	fd.down.Store(true)
+	if Init("1001") || !OfflineMode() {
+		t.Fatalf("login kind %d, offline %v", LoginErrorKind(), OfflineMode())
+	}
+	if elsewhereWatching() {
+		t.Fatal("offline at a failed login left the live watch running")
+	}
+}
+
+// A login while the host set offline mode starts no live watch and reads no web release.
+func TestInitInOfflineModeRequestsNothing(t *testing.T) {
+	offlineEngine(t, "1001")
+	t.Cleanup(stopElsewhere)
+	t.Cleanup(Logout)
+	t.Cleanup(func() { SetOfflineMode(false) })
+	var learned atomic.Int32
+	prev := learnRelease
+	learnRelease = func(*deezer.Client) { learned.Add(1) }
+	t.Cleanup(func() { learnRelease = prev })
+	SetOfflineMode(true)
+	if !Init("1001") || !OfflineMode() {
+		t.Fatal("login failed or turned off the host's offline mode")
+	}
+	if elsewhereWatching() || learned.Load() != 0 {
+		t.Fatalf("watching %v, web release read %d times", elsewhereWatching(), learned.Load())
+	}
+}
+
+// elsewhereWatching reports whether the live watch runs.
+func elsewhereWatching() bool {
+	elseMu.Lock()
+	defer elseMu.Unlock()
+	return elseStop != nil && elseAnnounce != nil
 }

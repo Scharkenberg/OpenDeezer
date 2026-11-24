@@ -201,12 +201,9 @@ func firstInt(vals ...json.Number) int64 {
 	return 0
 }
 
-// TrackInfo returns everything known about one track. gw song.getData and
-// REST /track/{id} run concurrently, all within trackInfoTimeout; REST
-// /album/{id} starts as soon as either names the album. Any one source may
-// fail and the rest still fill the result; only when gw and REST /track both
-// fail is it an error. Results are cached per id: complete ones until evicted,
-// partial ones for partialInfoTTL. Concurrent calls for one id share a fetch.
+// TrackInfo returns everything known about one track from gw song.getData, REST /track
+// and REST /album, run concurrently within trackInfoTimeout; an error only when gw and
+// REST /track both fail. Results are cached per id; concurrent calls share a fetch.
 func (c *Client) TrackInfo(id string) (ti TrackInfo, err error) {
 	c.infoMu.Lock()
 	if e, ok := c.infoCache[id]; ok && (e.until.IsZero() || time.Now().Before(e.until)) {

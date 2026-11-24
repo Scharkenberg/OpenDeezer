@@ -1195,6 +1195,11 @@ final class AppState: ObservableObject {
 
     func prev() {
         guard !queue.isEmpty else { return }
+        // From 5 s in, restart the track instead, as the engine does.
+        if Core.positionMs >= 5000 {
+            seek(toMs: 0)
+            return
+        }
         if queueIndex > 0 { queueIndex -= 1 }
         syncQueueIndexToEngine()
         playCurrent()

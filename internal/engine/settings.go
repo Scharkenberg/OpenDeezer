@@ -1,10 +1,8 @@
 package engine
 
-// Playback settings the engine keeps for every host: the stream quality,
-// gapless, crossfade and loudness normalization, in playback.json (shared
-// with the terminal UI). They are applied when the player is made and at each
-// login; every setter saves them. Until the file exists the player's and the
-// engine's own values stand, and the first setter writes them with its change.
+// Playback settings kept for every host in playback.json (shared with the TUI):
+// quality, gapless, crossfade, loudness normalization and single-device playback.
+// Applied when the player is made and at each login; every setter saves them.
 
 import (
 	"sync/atomic"
@@ -18,19 +16,28 @@ import (
 // quality is the stream quality (0..2), kept also before a login.
 var quality atomic.Int32
 
-// applyPlayback applies playback.json, when it exists, to p and c (either may
-// be nil); a client gets the quality in force either way.
+// applyPlayback applies playback.json, when it exists, to p and c (either may be nil).
+// The client always gets the quality in force; the player always gets the account's
+// target loudness, which is then saved when playback.json exists and holds another.
 func applyPlayback(p *audio.Player, c *deezer.Client) {
-	if pb, ok := config.LoadPlayback(); ok {
+	pb, ok := config.LoadPlayback()
+	if ok {
 		quality.Store(int32(clampQuality(pb.Quality)))
+		playAlongside.Store(pb.PlayAlongside)
 		if p != nil {
 			p.SetGapless(pb.Gapless)
 			p.SetCrossfadeMS(pb.CrossfadeMS)
 			p.SetReplayGain(pb.ReplayGain)
+			p.SetReplayGainTarget(pb.GainTarget)
 		}
 	}
 	if c != nil {
 		c.SetQuality(Quality())
+		target := c.GainTarget()
+		withPlayer(func(p *audio.Player) { p.SetReplayGainTarget(target) })
+		if ok && pb.GainTarget != target {
+			savePlayback(func(pb *config.Playback) { pb.GainTarget = target })
+		}
 	}
 }
 
@@ -39,9 +46,9 @@ func clampQuality(q int) int { return min(max(q, deezer.QualityNormal), deezer.Q
 // savePlayback saves playback.json with edit applied.
 func savePlayback(edit func(*config.Playback)) {
 	current := func() config.Playback {
-		pb := config.Playback{Quality: Quality(), Gapless: true}
+		pb := config.Playback{Quality: Quality(), Gapless: true, PlayAlongside: playAlongside.Load()}
 		if p := Player(); p != nil {
-			pb.Gapless, pb.CrossfadeMS, pb.ReplayGain = p.Gapless(), p.CrossfadeMS(), p.ReplayGain()
+			pb.Gapless, pb.CrossfadeMS, pb.ReplayGain, pb.GainTarget = p.Gapless(), p.CrossfadeMS(), p.ReplayGain(), p.ReplayGainTarget()
 		}
 		return pb
 	}

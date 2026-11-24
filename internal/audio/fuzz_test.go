@@ -5,13 +5,9 @@ import (
 	"testing"
 )
 
-// Fuzz the FLAC decode path (flac.go). The engine decodes whatever bytes the
-// CDN (or, for podcasts, an off-Deezer host) returns, so a malformed stream
-// must never panic the player. Run locally with:
-//
-//	go test -run=^$ -fuzz=FuzzFLACDecode -fuzztime=60s ./internal/audio
-//
-// Also fuzzed continuously by OSS-Fuzz / ClusterFuzzLite.
+// Fuzz the FLAC decode path: a malformed stream from the CDN or a podcast host must
+// never panic the player. Run locally with
+// go test -run=^$ -fuzz=FuzzFLACDecode -fuzztime=60s ./internal/audio
 func FuzzFLACDecode(f *testing.F) {
 	f.Add([]byte("fLaC"))                 // FLAC magic, then truncated
 	f.Add([]byte("fLaC\x00\x00\x00\x22")) // magic + a bogus STREAMINFO header

@@ -34,11 +34,15 @@ internal sealed class Settings
     // The navigation pane's width in DIPs; 0 = the default.
     public double PaneWidth { get; set; }
     // SHA-256 of the %DEEZER_ARL% value active when the user signed in or out in
-    // the app. That value is then ignored in favour of arl.txt; a new one is honoured.
+    // the app. That value is then ignored in favor of arl.txt; a new one is honored.
     public string IgnoredEnvArlHash { get; set; } = "";
     public bool WipeWebProfile { get; set; }
     // The account signed in last: its cached Home paints while the next sign-in runs.
     public string LastUserId { get; set; } = "";
+    // Each list's sort (ListControls), by list.
+    public System.Collections.Generic.Dictionary<string, int> ListSorts { get; set; } = new();
+    // "" follows Windows, else "light" or "dark".
+    public string Theme { get; set; } = "";
 }
 
 internal static class Config
@@ -115,7 +119,7 @@ internal static class Config
         if (Array.FindIndex(Loc.Languages, l => l.Tag == s.Language) < 0) s.Language = "";
         s.Volume = double.IsFinite(s.Volume) ? Math.Clamp(s.Volume, 0, 1) : 1.0;
         s.PaneWidth = double.IsFinite(s.PaneWidth) && s.PaneWidth >= Size.PaneMin && s.PaneWidth <= Size.PaneMax ? s.PaneWidth : 0;
-        if (s.WinW < 0 || s.WinH < 0 || s.WinW > 32000 || s.WinH > 32000)
+        if (s.WinW < 0 || s.WinH < 0 || s.WinW > Size.SavedWindowMax || s.WinH > Size.SavedWindowMax)
         {
             s.WinW = 0;
             s.WinH = 0;
@@ -135,7 +139,7 @@ internal static class Config
     }
 
     // Temp file, then swap: a crash or a concurrent writer never leaves a truncated file.
-    private static void WriteAtomic(string path, string text)
+    internal static void WriteAtomic(string path, string text)
     {
         lock (s_writeLock)
         {

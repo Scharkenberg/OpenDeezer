@@ -71,9 +71,8 @@ func newTestCache(t *testing.T) *mediacache.Cache {
 	return mc
 }
 
-// TestStreamCacheHitSkipsHTTP verifies that after one full play the second play
-// of the same track+format is served entirely from the cache — zero HTTP
-// requests — and yields byte-identical decrypted output.
+// TestStreamCacheHitSkipsHTTP checks that a second play of the same track and format
+// makes no HTTP request and yields identical decrypted output.
 func TestStreamCacheHitSkipsHTTP(t *testing.T) {
 	const trackID = "3135556"
 	cipher := makeCipher(300000)
@@ -144,10 +143,8 @@ func TestStreamCacheStoresExactCiphertext(t *testing.T) {
 	}
 }
 
-// TestStreamCacheResumedDownloadCached verifies that a torn first download
-// (mid-body drop + Range resume) still ends as the whole body in the stream
-// file, which the cache adopts: the entry is exactly the served ciphertext and
-// plays back as the plaintext's PCM.
+// TestStreamCacheResumedDownloadCached checks that a torn, resumed first download is
+// adopted whole: the entry is the served ciphertext and plays back correctly.
 func TestStreamCacheResumedDownloadCached(t *testing.T) {
 	for _, fx := range fixtures() {
 		t.Run(fx.format, func(t *testing.T) {
@@ -226,8 +223,8 @@ func TestStreamCacheSkipsPreviewAndPassthrough(t *testing.T) {
 		t.Fatalf("passthrough play mismatch: got %d bytes, want %d", len(got), len(body))
 	}
 
-	// Preview (the 30-second free fallback) — excluded even when flagged
-	// encrypted, so a preview can never shadow the full track under its key.
+	// Preview (the 30-second free fallback): excluded even when flagged encrypted, so a
+	// preview never shadows the full track under its key.
 	cipher := makeCipher(80000)
 	cdn2 := newCountingCDN(t, cipher)
 	s2 := newSource(&deezer.StreamPlan{CDNURL: cdn2.srv.URL, TrackID: "3135556", Format: "MP3_128", Encrypted: true, Preview: true}, 10000)
@@ -377,10 +374,9 @@ func TestAdoptStoresMeta(t *testing.T) {
 	}
 }
 
-// A source that started with a cache since closed (the folder changed, or the
-// cache went off and on again) neither reads nor fills it: the track streams,
-// the cache now on that folder gets no entry and keeps its index, and the
-// temp file goes with the source.
+// A source whose cache was closed since it started (folder changed, cache toggled)
+// neither reads nor fills it: the track streams, the current cache gets no entry, and
+// the temp file goes with the source.
 func TestClosedCacheNotWritten(t *testing.T) {
 	for _, fx := range fixtures() {
 		t.Run(fx.format, func(t *testing.T) {
@@ -540,11 +536,8 @@ func drainRing(t *testing.T, s *source) []byte {
 	}
 }
 
-// A plan from the cache whose entry went before the source opened, and whose
-// Refresh answers another format, plays that format: its decoder, its key for
-// the cache and the meta stored with it, and the player publishes its format
-// and gain while the source is current. The other fixture's format stands for
-// the format the cache held.
+// A cached plan whose entry is gone and whose Refresh answers another format plays that
+// format: its decoder, cache key and meta, and the published format and gain.
 func TestCachedPlanMissOtherFormat(t *testing.T) {
 	fxs := fixtures()
 	for i, fx := range fxs {
@@ -574,11 +567,8 @@ func TestCachedPlanMissOtherFormat(t *testing.T) {
 			if f := p.Format(); f != fx.format {
 				t.Fatalf("published format %q, want %q", f, fx.format)
 			}
-			if g, want := math.Float64frombits(p.gainFac.Load()), dbToFactor(-6); g != want {
+			if g, want := math.Float64frombits(p.gainFac.Load()), p.rgFactor(s.plan()); g != want || s.plan().GainDB != -6 {
 				t.Fatalf("published gain %v, want %v", g, want)
-			}
-			if f := s.plan().rgFac; f != dbToFactor(-6) {
-				t.Fatalf("source gain %v, want %v", f, dbToFactor(-6))
 			}
 			waitFor(t, "the entry", func() bool {
 				_, _, ok := mc.Get(fx.id + "." + fx.format)
@@ -673,7 +663,7 @@ func TestStreamCacheOfflineMiss(t *testing.T) {
 	s.cache = mc
 	s.download()
 
-	// Ensure the source error was set to ErrOffline
+	// The source error is ErrOffline.
 	gotErr := s.lastErr()
 	if gotErr != ErrOffline.Error() {
 		t.Fatalf("expected error %q, got %q", ErrOffline.Error(), gotErr)

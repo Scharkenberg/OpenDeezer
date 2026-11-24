@@ -1,10 +1,14 @@
 package ui
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,7 +18,7 @@ import (
 // that file does not exist, its own older files are migrated into it once.
 func TestPlaybackMigratesTUIFilesOnce(t *testing.T) {
 	useTempConfig(t)
-	dir, _ := configDir()
+	dir, _ := config.Dir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -36,6 +40,37 @@ func TestPlaybackMigratesTUIFilesOnce(t *testing.T) {
 	}
 }
 
+// A login hands the account's target loudness (GAIN.TARGET) to the player and
+// playback.json; the next start applies the saved one before any login.
+func TestLoginAppliesGainTarget(t *testing.T) {
+	useTempConfig(t)
+	prev := deezer.SetTransport(roundTrip(func(r *http.Request) (*http.Response, error) {
+		body := `{"error":{},"results":{"checkForm":"tok","USER":{"USER_ID":"7","BLOG_NAME":"u","OPTIONS":{"license_token":"lic"}},` +
+			`"OFFERS":[{"title":"Premium"}],"GAIN":{"TARGET":"-15","ADS":"-13"}}}`
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+	}))
+	t.Cleanup(func() { deezer.SetTransport(prev) })
+	m := interactionModel(screenLoading)
+	m.client = deezer.New("arl")
+	m.Update(m.loginCmd()())
+	if got := m.player.ReplayGainTarget(); got != -15 {
+		t.Fatalf("player target %v after the login, want -15", got)
+	}
+	if pb, ok := config.LoadPlayback(); !ok || pb.GainTarget != -15 {
+		t.Fatalf("playback.json %+v %v, want gainTarget -15", pb, ok)
+	}
+	p := &audio.Player{}
+	New(deezer.New("arl"), p)
+	if got := p.ReplayGainTarget(); got != -15 {
+		t.Fatalf("a new model's player target %v, want the saved -15", got)
+	}
+}
+
+// roundTrip is an http.RoundTripper made of a function.
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 // The TUI's playback keys save into playback.json.
 func TestPlaybackKeysSaveSharedFile(t *testing.T) {
 	useTempConfig(t)
@@ -51,5 +86,49 @@ func TestPlaybackKeysSaveSharedFile(t *testing.T) {
 	pb, ok := config.LoadPlayback()
 	if !ok || pb.CrossfadeMS != 3000 || pb.Quality != 1 || !pb.ReplayGain || pb.Gapless != m.player.Gapless() {
 		t.Fatalf("playback.json %+v %v after the keys", pb, ok)
+	}
+}
+
+// After a login the TUI learns the web player's build and keeps it for the
+// next start (web-release.json); a new model starts from the kept one.
+func TestLoginKeepsWebRelease(t *testing.T) {
+	useTempConfig(t)
+	t.Cleanup(func() { deezer.SetWebRelease("", "") })
+	deezer.SetWebRelease("", "")
+	const bundle = "https://cdn-files.dzcdn.net/cache/js/app-web.cafe.js"
+	prev := deezer.SetTransport(roundTrip(func(r *http.Request) (*http.Response, error) {
+		body := `{"error":{},"results":{"checkForm":"tok","USER":{"USER_ID":"7","BLOG_NAME":"u","OPTIONS":{"license_token":"lic"}},"OFFERS":[{"title":"Premium"}]}}`
+		switch {
+		case r.URL.Host == "www.deezer.com" && r.URL.Path == "/":
+			body = `<script src="` + bundle + `"></script>`
+		case r.URL.String() == bundle:
+			body = `releaseNumeric:"10020261124120000",`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+	}))
+	t.Cleanup(func() { deezer.SetTransport(prev) })
+	m := interactionModel(screenLoading)
+	m.client = deezer.New("arl")
+	_, cmd := m.Update(m.loginCmd()())
+	runCmds(cmd)
+	if b, release := config.LoadWebRelease(); b != bundle || release != "10020261124120000" {
+		t.Fatalf("web-release.json %q %q", b, release)
+	}
+	deezer.SetWebRelease("", "")
+	New(deezer.New("arl"), &audio.Player{})
+	if release, _ := deezer.WebRelease(); release != "10020261124120000" {
+		t.Fatalf("a new model starts from release %q", release)
+	}
+}
+
+// runCmds runs cmd and the commands its batches hold, on this goroutine.
+func runCmds(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if b, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range b {
+			runCmds(c)
+		}
 	}
 }

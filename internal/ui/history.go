@@ -9,13 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Listening-history session tracking. A session starts when a track becomes
-// the active one (onTrackChanged) and ends on the next track change, a stop,
-// or quit. The seconds listened come from the playback position the TUI
-// already tracks: the 1s tick keeps histPosMS fresh, playCurrent/stop refresh
-// it just before the player switches away, and a natural finish marks the
-// full duration. Flushing clears the session, so a pause/resume (which never
-// flushes) cannot double-record a track.
+// Listening-history sessions: one starts when a track becomes active and ends at the
+// next track change, stop or quit, measured from histPosMS (a finish marks the full
+// duration). Flushing clears it, so pause and resume never record twice.
 
 // histSyncPos refreshes the session's last-observed position while the player
 // is still on the session's track. Only live states are sampled so a stopped
@@ -48,10 +44,9 @@ func (m *Model) histStartSession(t deezer.Track) {
 	m.histEpisode = m.episodeMode
 }
 
-// historyFlushCmd ends the current session and returns a tea.Cmd that records
-// it off the update loop (history.Record fsyncs — never block the UI on disk).
-// Returns nil when there is nothing to record. The session is cleared here, on
-// the update loop, so a second flush is a no-op (duplicate guard).
+// historyFlushCmd ends the session and returns a tea.Cmd recording it off the update
+// loop (history.Record fsyncs), or nil when there is nothing to record. A second flush
+// is a no-op.
 func (m *Model) historyFlushCmd() tea.Cmd {
 	t := m.histTrack
 	if t.ID == "" {
@@ -67,19 +62,27 @@ func (m *Model) historyFlushCmd() tea.Cmd {
 	m.histTrack = deezer.Track{}
 	m.histPosMS = 0
 	m.histEpisode = false
-	if store == nil || episode || secs <= 0 {
+	if store == nil || secs <= 0 {
 		return nil
+	}
+	// The same fields the engine records, so the app shows the row with its cover and length.
+	kind := ""
+	if episode {
+		kind = history.KindEpisode
 	}
 	e := history.Entry{
 		TrackID:           t.ID,
 		Title:             t.Name,
 		Artist:            t.ArtistLine(),
 		Album:             t.AlbumName,
+		Kind:              kind,
+		ArtworkURL:        t.ArtworkURL,
+		DurationMS:        t.DurationMS,
 		StartedAt:         started.Unix(),
 		DurationPlayedSec: secs,
 	}
 	return func() tea.Msg {
-		_ = store.Record(e) // best-effort: stats are a convenience, not critical state
+		_ = store.Record(e) // a failed write is ignored: stats are optional
 		return nil
 	}
 }

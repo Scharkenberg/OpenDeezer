@@ -1,4 +1,5 @@
-// One track row: index, art, title and artist, album, like, duration and More. A queue row is
+// One track row: index, art, title and artist, album, like, duration and More; an episode shows its
+// date for the album, how far the account got under its title, and dims once played. A queue row is
 // compact: art (with the play button and the now-playing mark over it), title and artist across
 // the row, and the duration, which hover or focus swaps for Remove and More. Built once per container.
 
@@ -33,6 +34,9 @@ internal sealed class TrackRow
     private readonly TextBlock _artist = Ui.Text("", TextKind.SecondaryCaption);
     private readonly TextBlock _album = Ui.Text("", TextKind.SecondaryCaption);
     private readonly TextBlock _duration = Ui.Time(0);
+    // An episode's progress, made the first time the row shows one part-heard.
+    private ProgressBar? _progress;
+    private readonly StackPanel _lines;
     // Shown in the trailing cell while the track is available offline.
     internal readonly FontIcon _pinned = Ui.Icon(Icons.Pinned, IconSize.Small);
     private readonly ColumnDefinition? _albumColumn;
@@ -66,8 +70,8 @@ internal sealed class TrackRow
         _index.HorizontalAlignment = HorizontalAlignment.Center;
         _duration.TextAlignment = TextAlignment.Right;
         _duration.HorizontalAlignment = HorizontalAlignment.Right;
-        var lines = Ui.Stack(0, Ui.Grid("auto *", 0, _explicit, _title), _artist);
-        lines.VerticalAlignment = VerticalAlignment.Center;
+        _lines = Ui.Stack(0, Ui.Grid("auto *", 0, _explicit, _title), _artist);
+        _lines.VerticalAlignment = VerticalAlignment.Center;
         _art.Root.VerticalAlignment = VerticalAlignment.Center;
         if (_queue)
         {
@@ -87,7 +91,7 @@ internal sealed class TrackRow
             trailing.Children.Add(atRest);
             trailing.Children.Add(_actions);
             g.ColumnSpacing = Space.S;
-            Ui.Fill(g, s_queueColumns, artCell, lines, trailing);
+            Ui.Fill(g, s_queueColumns, artCell, _lines, trailing);
         }
         else
         {
@@ -98,7 +102,7 @@ internal sealed class TrackRow
             _moreCell = new Grid();
             _moreCell.Children.Add(_pinned);
             g.ColumnSpacing = Space.M;
-            Ui.Fill(g, s_columns, _indexCell, _art.Root, lines, _album, _likeCell, _duration, _moreCell);
+            Ui.Fill(g, s_columns, _indexCell, _art.Root, _lines, _album, _likeCell, _duration, _moreCell);
             _albumColumn = g.ColumnDefinitions[3];
         }
 
@@ -156,7 +160,7 @@ internal sealed class TrackRow
         _explicit.Visibility = Ui.Show(t.IsExplicit);
         Ui.SetText(_title, t.Name);
         Ui.SetText(_artist, t.ArtistLine);
-        Ui.SetText(_album, t.AlbumName);
+        Ui.SetText(_album, t.IsEpisode && Episodes.Info(t) is { } ep ? Fmt.Date(ep.ReleaseDate) : t.AlbumName);
         Ui.SetText(_duration, t.DurationMs > 0 ? Fmt.Time(t.DurationMs) : "");
         AutomationProperties.SetName(Container, t.ArtistLine.Length == 0 ? t.Name : t.Name + ", " + t.ArtistLine);
         Render();
@@ -181,8 +185,17 @@ internal sealed class TrackRow
         if (Track is not { } t) return;
         bool playable = t.Id.Length > 0;
         bool playing = _queue ? Index == _queueIndex : playable && t.Id == App.Player.Current?.Id;
-        bool played = _queue && Index < _queueIndex;
+        var mark = t.IsEpisode ? Episodes.Mark(t.Id) : null;
+        bool played = _queue ? Index < _queueIndex : mark is { Heard: true };
         bool menus = playable && !t.IsEpisode;
+        double heard = mark is { Heard: false, Offset: > 0 } && t.DurationMs > 0 ? Math.Min(1, mark.Offset * 1000.0 / t.DurationMs) : 0;
+        if (heard > 0 && _progress == null)
+            _lines.Children.Add(_progress = new ProgressBar { Maximum = 1, Height = Size.EpisodeProgress, MinHeight = Size.EpisodeProgress });
+        if (_progress != null)
+        {
+            _progress.Value = heard;
+            _progress.Visibility = Ui.Show(heard > 0);
+        }
         bool reveal = _hover || _focused;
         bool pinned = menus && App.Offline.IsPinned(t.Id);
         _title.Style = playing ? Ui.Styles.RowTitlePlaying : played ? Ui.Styles.RowTitlePlayed : Ui.Styles.RowTitle;
@@ -197,7 +210,7 @@ internal sealed class TrackRow
             _actions!.Visibility = Ui.Show(reveal);
             _duration.Visibility = Ui.Show(!reveal);
             _pinned.Visibility = Ui.Show(pinned && !reveal);
-            _more!.Visibility = Ui.Show(menus);
+            _more!.Visibility = Ui.Show(playable);
             return;
         }
         // The mark gives way to More on hover or focus.
@@ -209,8 +222,9 @@ internal sealed class TrackRow
         if (_play == null) return;
         Ui.Reveal(_play, _hover && playable);
         Ui.ShowLiked(_like!, liked);
+        _like!.IsEnabled = !App.Offline.Mode;
         Ui.Reveal(_like!, menus && (liked || reveal));
-        Ui.Reveal(_more!, menus && reveal);
+        Ui.Reveal(_more!, playable && reveal);
     }
 
     private void CreateButtons()

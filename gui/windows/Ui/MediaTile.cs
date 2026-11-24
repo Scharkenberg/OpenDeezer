@@ -2,6 +2,7 @@
 // people), title, subtitle. Albums and playlists reveal a play button on hover.
 
 using System;
+using System.Linq;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -20,6 +21,9 @@ internal static class Tiles
     public static TileData OwnPlaylist(Playlist p) => new(p.Name, Loc.Plural("Tracks", p.TrackCount), p.ArtworkUrl);
     public static TileData Podcast(Podcast p) => new(p.Name, p.EpisodeCount > 0 ? Loc.Plural("Episodes", p.EpisodeCount) : p.Description, p.ArtworkUrl);
     public static TileData Track(Track t) => new(t.Name, t.ArtistLine, t.ArtworkUrl);
+    // A Home pin: what it is, and whose, under its title.
+    public static TileData Pinned(SearchItem p) => new(p.Title,
+        string.Join(" · ", new[] { SearchView.KindLabel(p.Type), p.Subtitle }.Where(s => s.Length > 0)), p.Picture, Round: p.Type == "Artist");
     // How much of it is stored while that is not all of it.
     public static TileData Offline(OfflineCollection o) => new(
         o.Kind == OpenDeezer.Offline.TrackKind ? Loc.S("Offline_Songs") : o.Title,
@@ -42,8 +46,7 @@ internal sealed partial class MediaTile : Button
     {
         Style = Ui.Styles.Subtle;
         Padding = Pad.Tile;
-        var art = _art;
-        art.Children.Add(_square.Root);
+        _art.Children.Add(_square.Root);
         if (play != null)
         {
             var button = Ui.PlayButton(Ui.Icon(Icons.Play));
@@ -53,7 +56,7 @@ internal sealed partial class MediaTile : Button
             button.VerticalAlignment = VerticalAlignment.Bottom;
             Ui.Name(button, Loc.S("Btn_Play"));
             button.Click += (_, _) => play(this);
-            art.Children.Add(button);
+            _art.Children.Add(button);
             Ui.Reveal(button, false);
             Ui.Fades(button, Timing.RevealMs);
             PointerEntered += (_, e) => Ui.Reveal(button, e.Pointer.PointerDeviceType != PointerDeviceType.Touch);
@@ -61,7 +64,7 @@ internal sealed partial class MediaTile : Button
             GotFocus += (_, _) => Ui.Reveal(button, true);
             LostFocus += (_, _) => Ui.Reveal(button, false);
         }
-        Content = Ui.Stack(Space.S, art, Ui.Stack(0, _title, _subtitle));
+        Content = Ui.Stack(Space.S, _art, Ui.Stack(0, _title, _subtitle));
         Click += (_, _) => open(this);
     }
 
@@ -84,5 +87,4 @@ internal sealed partial class MediaTile : Button
         _subtitle.Visibility = Ui.Show(d.Subtitle.Length > 0);
         AutomationProperties.SetName(this, d.Subtitle.Length == 0 ? d.Title : d.Title + ", " + d.Subtitle);
     }
-
 }

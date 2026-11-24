@@ -34,16 +34,9 @@ func (c *Client) TrackByISRC(isrc string) (Track, error) {
 	return t, nil
 }
 
-// SearchTracks searches tracks only. With a non-empty artist it uses Deezer's
-// advanced query syntax (artist:"..." track:"...") for a targeted match;
-// otherwise it falls back to a plain track search on the title.
-//
-// Live-observed quirk (2026-07): the advanced syntax is precise when it hits
-// (artist:"eminem" track:"lose yourself" -> exact match) but returns zero
-// results for some multi-word artist phrases (artist:"daft punk"), while a
-// plain combined query finds those tracks fine. Callers that get an empty
-// result from a targeted query should retry with artist=="" and the artist
-// folded into the title (impex.ImportPlaylist's resolver does exactly that).
+// SearchTracks searches tracks only, with Deezer's artist:"..." track:"..." syntax when
+// artist is set, else a title search. The advanced syntax misses some multi-word
+// artists, so callers retry with the artist folded into the title.
 func (c *Client) SearchTracks(artist, title string) ([]Track, error) {
 	// The advanced syntax delimits terms with double quotes, so embedded quotes
 	// must be dropped (jsonEsc-style escaping does not apply to search queries).

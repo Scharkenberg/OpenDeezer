@@ -19,19 +19,35 @@ internal static class AccountPanel
         : Session.IsFree ? Loc.S("Account_FreePlan")
         : Session.Account.Offer;
 
-    // Switch account and Sign out, side by side.
-    public static StackPanel Actions(Action done) =>
-        Ui.Row(Space.S,
-            Ui.Button(Loc.S("Account_Switch"), () =>
+    // Switch account and Sign out, side by side and equally wide; a long label wraps.
+    public static Grid Actions(Action done)
+    {
+        Button Action(string key, Action run)
+        {
+            var b = Ui.Button(Loc.S(key), () =>
             {
                 done();
-                SwitchAccount();
-            }),
-            Ui.Button(Loc.S("Account_SignOut"), () =>
-            {
-                done();
-                SignOut();
-            }));
+                run();
+            });
+            var label = Ui.Text(Loc.S(key), wrap: true);
+            label.TextAlignment = TextAlignment.Center;
+            b.Content = label;
+            b.HorizontalAlignment = HorizontalAlignment.Stretch;
+            b.VerticalAlignment = VerticalAlignment.Stretch;
+            return b;
+        }
+        return Ui.Grid("* *", Space.S, Action("Account_Switch", SwitchAccount), Action("Account_SignOut", SignOut));
+    }
+
+    // "Manage my plan": the plans page of deezer.com, in the app's language where Deezer has one.
+    public static HyperlinkButton ManagePlan()
+    {
+        return Ui.Link(Loc.S("Account_ManagePlan"), async () =>
+        {
+            string lang = Loc.Culture.TwoLetterISOLanguageName is "fr" or "es" or "ru" or "ar" ? Loc.Culture.TwoLetterISOLanguageName : "en";
+            await Windows.System.Launcher.LaunchUriAsync(new Uri($"https://www.deezer.com/{lang}/offers"));
+        });
+    }
 
     public static void SwitchAccount()
     {
@@ -41,7 +57,7 @@ internal static class AccountPanel
 
     public static async void SignOut()
     {
-        if (await Dialogs.Confirm(Loc.S("Account_SignOut"), Loc.S("Account_SignOutConfirm"), Loc.S("Account_SignOut"))) Session.SignOut();
+        if (await Dialogs.Confirm(Loc.S("Dialog_SignOutTitle"), Loc.S("Account_SignOutConfirm"), Loc.S("Dialog_SignOutTitle"))) Session.SignOut();
     }
 
     public static Button TitleBarButton()
@@ -63,15 +79,13 @@ internal static class AccountPanel
             c.HorizontalAlignment = HorizontalAlignment.Stretch;
         }
         Flyout? flyout = null;
-        // A long name or plan wraps instead of widening the flyout.
+        // A long name or plan wraps; the flyout keeps its width.
         var panel = new Border
         {
-            MaxWidth = Size.FlyoutWidth,
-            Child = Ui.Stack(Space.S, Ui.Stack(0, name, plan), Actions(() => flyout!.Hide()), new Border { Style = Ui.Styles.Get("DividerLine") },
+            Child = Ui.Stack(Space.S, Ui.Stack(0, name, plan, ManagePlan()), Actions(() => flyout!.Hide()), new Border { Style = Ui.Styles.Get("DividerLine") },
                 quality, crossfade, replayGain),
         };
-        // As wide as the account buttons, no wider.
-        flyout = Ui.Flyout(null, panel, minWidth: 0);
+        flyout = Ui.Flyout(null, panel);
         flyout.Opening += (_, _) =>
         {
             name.Text = Name;

@@ -7,11 +7,9 @@ import (
 	"github.com/mewkiz/flac/frame"
 )
 
-// flacStream decodes a whole (already-decrypted) FLAC buffer to interleaved
-// s16 stereo PCM, satisfying the same Read+Seek contract as go-mp3's decoder so
-// the player can treat both uniformly. Deezer HiFi is 16-bit/44100 FLAC; other
-// bit depths are shifted to 16-bit (sample rate is assumed 44100, matching the
-// oto context).
+// flacStream decodes a decrypted FLAC buffer to interleaved s16 stereo PCM with the
+// same Read+Seek contract as go-mp3's decoder. Other bit depths are shifted to 16-bit;
+// the sample rate is assumed to be 44100.
 type flacStream struct {
 	s     *flac.Stream
 	pcm   []byte // one frame's rendered interleaved PCM, reused across frames
@@ -41,12 +39,9 @@ func (f *flacStream) conv(s int32) int16 {
 	return int16(s)
 }
 
-// framePCM renders one FLAC frame into f.pcm as interleaved s16 stereo bytes
-// (mono is duplicated; >2 channels keep the first two) and resets the read
-// offset. frame.Correlate has already undone any inter-channel decorrelation by
-// the time ParseNext returns. The scratch buffer is reused across frames: since
-// FLAC block size is fixed within a stream, only the first frame allocates —
-// eliminating a per-frame allocation on the decode hot path.
+// framePCM renders one FLAC frame into f.pcm as interleaved s16 stereo (mono
+// duplicated, extra channels dropped) and resets the read offset. The scratch buffer
+// is reused, so only the first frame allocates.
 func (f *flacStream) framePCM(fr *frame.Frame) {
 	n := int(fr.BlockSize)
 	need := n * 4 // n * 2ch * 2 bytes

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Networking.Connectivity;
 
 namespace OpenDeezer;
 
@@ -44,6 +45,9 @@ internal sealed class Session
     public bool SignedIn { get; internal set; }
     // Signed in to the music kept offline only: the sign-in found no network and pins exist.
     public bool IsOffline { get; internal set; }
+
+    // An offline session because Deezer refused the saved login: it ends with a new sign-in.
+    public bool Expired { get; private set; }
     public bool Busy { get; private set; }
     public bool StartupPending => _startup != null;
     public Account Account { get; private set; } = new();
@@ -119,6 +123,14 @@ internal sealed class Session
         if (g != _gen) return r;
         if (r == SignInResult.Ok) await FinishAsync(reset: false, painted);
         else if (r == SignInResult.Offline && (IsOffline || await StartOfflineAsync(g))) return r;
+        // Deezer ended the session: the music kept offline plays until the account signs in again.
+        else if (r == SignInResult.Expired)
+        {
+            Expired = true;
+            if (await StartOfflineAsync(g)) return r;
+            Expired = false;
+            _library.Clear();
+        }
         else _library.Clear();
         return r;
     }
@@ -151,7 +163,29 @@ internal sealed class Session
         await PlaybackOptions.LoadAsync();
     }
 
-    // From an offline session a login that is no longer good ends it on the sign-in page; any other
+    // Retries by itself once Windows reports Internet access again: one watch, kept while a sign-in
+    // failed for want of a network or the session is offline.
+    private NetworkStatusChangedEventHandler? _online;
+
+    public void WatchNetwork(Action retry)
+    {
+        StopNetworkWatch();
+        var dq = DispatcherQueue.GetForCurrentThread();
+        _online = _ => dq.TryEnqueue(() =>
+        {
+            if (_online != null && NetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess) retry();
+        });
+        NetworkInformation.NetworkStatusChanged += _online;
+    }
+
+    public void StopNetworkWatch()
+    {
+        if (_online == null) return;
+        NetworkInformation.NetworkStatusChanged -= _online;
+        _online = null;
+    }
+
+    // Repeats the last sign-in attempt. An expired session found while offline signs out; any other
     // failure keeps it.
     public async Task<SignInResult> RetryAsync()
     {
@@ -162,7 +196,9 @@ internal sealed class Session
         _player.StopPolling();
         _library.Clear();
         _offline.Reset();
+        StopNetworkWatch();
         IsOffline = false;
+        Expired = false;
         SignedIn = false;
         SignedInChanged?.Invoke();
         return r;
@@ -192,7 +228,9 @@ internal sealed class Session
             _ = Task.Run(() => Config.SaveArl(arl));
             _settings.IgnoredEnvArlHash = Config.EnvArlHash();
             SaveSettingsSoon();
-            await FinishAsync(reset: switching);
+            // The same account signing in again (its session had ended) keeps what plays.
+            Account? next = switching ? await Task.Run(DeezerCore.Account) : null;
+            await FinishAsync(reset: next != null && next.UserId != Account.UserId, known: next);
         }
         else if (switching) Toast.Error(Loc.S("Login_ErrorTitle"), FailureText(r));
         return r;
@@ -234,8 +272,9 @@ internal sealed class Session
         }
     }
 
-    // `painted`: the account whose cached Home is already shown, "" for none.
-    private async Task FinishAsync(bool reset, string painted = "")
+    // `painted`: the account whose cached Home is already shown, "" for none; `known`: the account
+    // when it was read already.
+    private async Task FinishAsync(bool reset, string painted = "", Account? known = null)
     {
         int g = _gen;
         if (reset || IsOffline)
@@ -243,14 +282,19 @@ internal sealed class Session
             _player.Reset();
             _library.Clear();
             _offline.Reset();
+            Episodes.Reset();
         }
         var s = _settings;
+        StopNetworkWatch();
         IsOffline = false;
+        Expired = false;
         await ApplyPlaybackSettingsAsync();
         _ = _offline.LoadAsync();
-        var account = Task.Run(DeezerCore.Account);
+        var account = known != null ? Task.FromResult(known) : Task.Run(DeezerCore.Account);
         var liked = _library.RefreshLikedIdsAsync();
         var home = _library.GetAsync<HomeReply>(Library.HomeKey);
+        // The menus offer Pin or Unpin from what is pinned.
+        _ = _library.GetAsync<PinnedReply>(Library.PinnedKey);
         await _player.StartAsync();
         if (g != _gen)
         {
@@ -264,6 +308,7 @@ internal sealed class Session
         var acct = await account;
         if (g != _gen) return;
         SetAccount(acct);
+        _player.Restore(acct.UserId);
         if (!AccountKnown) Toast.Show(InfoBarSeverity.Warning, Loc.S("Account_Title"), Loc.S("Account_UnknownTier"));
         if (acct.UserId.Length > 0 && acct.UserId != s.LastUserId)
         {
@@ -289,8 +334,11 @@ internal sealed class Session
         _player.Reset();
         _library.Clear();
         _offline.Reset();
+        Episodes.Reset();
         SignedIn = false;
+        StopNetworkWatch();
         IsOffline = false;
+        Expired = false;
         _player.StopPolling();
         Config.DeleteArl();
         if (cache.Length > 0)
@@ -305,10 +353,14 @@ internal sealed class Session
         SignedInChanged?.Invoke();
     }
 
-    // The account, and everything that shows it told.
+    // The account's explicit-content setting as last read or set this session; null until read.
+    internal ExplicitContent? Explicit { get; set; }
+
+    // The account, and everything that shows it told; its kept settings go with the old one.
     internal void SetAccount(Account account)
     {
         Account = account;
+        Explicit = null;
         AccountChanged?.Invoke();
     }
 

@@ -1,7 +1,6 @@
-// Package preload is the next-track preload the engine hosts share (the
-// desktop library, the mobile binding and the terminal UI): a host records
-// which track follows the playing one (Request), and the player's near-end
-// hook (Attach) resolves and arms it once the playing track nears its end.
+// Package preload is the next-track preload the hosts share: a host records the track
+// that follows the playing one (Request), and the player's near-end hook (Attach)
+// resolves and arms it.
 package preload
 
 import (
@@ -61,12 +60,9 @@ func (l *Preloader) Request(id string, durationMS int64) {
 	}
 }
 
-// Resolve is the near-end hook: it resolves the recorded request and arms it
-// on the player, unless the request was replaced or dropped meanwhile. With
-// gapless and crossfade both off it resolves nothing (the player would drop
-// the preload) and the request stays: a change of either setting runs the
-// hook again. A resolve that fails leaves the track to the host's advance,
-// as without a preload.
+// Resolve is the near-end hook: it resolves the recorded request and arms it unless it
+// was replaced or dropped meanwhile. With gapless and crossfade off it keeps the
+// request unresolved; a failed resolve leaves the advance to the host.
 func (l *Preloader) Resolve() {
 	l.mu.Lock()
 	req, gen := l.req, l.gen
@@ -95,10 +91,9 @@ func (l *Preloader) Resolve() {
 	}
 }
 
-// Clear drops the request, the player's armed preload and its identity
-// together, and makes a resolve in flight arm nothing. For every path where
-// the upcoming track is no longer determined (queue edits, repeat or shuffle
-// changes, a new play).
+// Clear drops the request, the armed preload and its identity, and makes a resolve in
+// flight arm nothing. Call it whenever the upcoming track changes (queue edits, repeat
+// or shuffle, a new play).
 func (l *Preloader) Clear() {
 	l.armMu.Lock()
 	defer l.armMu.Unlock()

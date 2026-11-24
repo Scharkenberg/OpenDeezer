@@ -24,11 +24,9 @@ type malgoOutput struct {
 	closed     bool
 }
 
-// malgoDevice wraps one initialized device with a per-device "intentional stop"
-// flag: miniaudio fires the Stop callback both on a stop we caused (suspend) and
-// on an unexpected device loss (unplugged DAC, dropped Bluetooth). The flag lets
-// the callback tell them apart. (Uninit deletes the callback before stopping, so
-// a device we tear down never reaches the callback at all.)
+// malgoDevice wraps one initialized device with an "intentional stop" flag, so the
+// Stop callback can tell a stop we caused (suspend) from a device loss. Uninit removes
+// the callback before stopping.
 type malgoDevice struct {
 	dev         *malgo.Device
 	intentional atomic.Bool
@@ -90,10 +88,8 @@ func (o *malgoOutput) initDevice(deviceID *malgo.DeviceID) error {
 		dev.Uninit()
 		return fmt.Errorf("audio output closed")
 	}
-	// Stop the old device BEFORE starting the new one: miniaudio pre-fills the new
-	// device's periods by invoking the data callback from Start(), so starting
-	// first would run two realtime callbacks into readPCM concurrently — a data
-	// race on the mix scratch buffer plus double-draining of the ring.
+	// Stop the old device before starting the new one: Start() pre-fills the new device
+	// through the data callback, so two realtime callbacks would race on readPCM.
 	if o.cur != nil {
 		o.cur.intentional.Store(true)
 		o.cur.dev.Uninit()
@@ -110,14 +106,9 @@ func (o *malgoOutput) initDevice(deviceID *malgo.DeviceID) error {
 	return nil
 }
 
-// initDeviceRecover wraps initDevice for runtime device switches. A failure in
-// dev.Start() has already torn down the previous device (it must be stopped
-// before the new one starts; see initDevice), so returning the error alone
-// would leave no device pulling readPCM — the player would sit silently frozen
-// in "Playing". Recover instead: retry once on the system default, and if audio
-// still cannot flow, surface it through the lost handler so the player moves to
-// Errored. An InitDevice-stage failure leaves the old device intact (deviceDown
-// is false), so it just returns the error like before.
+// initDeviceRecover wraps initDevice for runtime device switches. When dev.Start()
+// fails the old device is already gone, so it retries once on the system default and
+// otherwise reports the loss so the player moves to Errored.
 func (o *malgoOutput) initDeviceRecover(deviceID *malgo.DeviceID) error {
 	err := o.initDevice(deviceID)
 	if err == nil {
@@ -134,8 +125,8 @@ func (o *malgoOutput) initDeviceRecover(deviceID *malgo.DeviceID) error {
 	return err
 }
 
-// deviceDown reports that no playback device is running (and we are not simply
-// shutting down) — the state after a failed dev.Start() destroyed the old device.
+// deviceDown reports that no playback device runs (and we are not shutting down),
+// the state after a failed dev.Start() destroyed the old device.
 func (o *malgoOutput) deviceDown() bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()

@@ -1,23 +1,26 @@
 package ui
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
 
-func TestIsLoopbackAddr(t *testing.T) {
-	cases := []struct {
-		addr string
-		want bool
-	}{
-		{"127.0.0.1:7654", true},
-		{"localhost:7654", true},
-		{"[::1]:7654", true},
-		{"192.168.1.5:7654", false},
-		{":7654", false}, // wildcard = all interfaces
-		{"0.0.0.0:7654", false},
-		{"[::]:7654", false},
-	}
-	for _, c := range cases {
-		if got := isLoopbackAddr(c.addr); got != c.want {
-			t.Errorf("isLoopbackAddr(%q) = %v, want %v", c.addr, got, c.want)
-		}
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+)
+
+// The TUI's control config is the shared one: an empty control.txt still
+// loads the token (a LAN server the TUI starts honors it), from the folder
+// config.SetBaseDir names.
+func TestTUIControlConfigIsShared(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("APPDATA", dir)
+	t.Setenv("OPENDEEZER_CONTROL", "")
+	t.Setenv("OPENDEEZER_CONTROL_TOKEN", "")
+	config.SetBaseDir(dir)
+	t.Cleanup(func() { config.SetBaseDir("") })
+	_ = os.WriteFile(filepath.Join(dir, "control.txt"), []byte("\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "control-token.txt"), []byte("abc\n"), 0o600)
+	if got := config.LoadControl().Token; got != "abc" {
+		t.Fatalf("token %q with an empty control.txt, want abc", got)
 	}
 }

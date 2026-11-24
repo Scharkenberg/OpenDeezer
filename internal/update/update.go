@@ -1,6 +1,5 @@
-// Package update checks GitHub for a newer OpenDeezer release. Clients call it
-// on startup to show a non-intrusive "update available" prompt — it never
-// downloads or installs anything itself.
+// Package update checks GitHub for a newer OpenDeezer release so clients can show an
+// "update available" prompt. It never downloads or installs anything.
 package update
 
 import (

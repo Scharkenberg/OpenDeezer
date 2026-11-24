@@ -7,6 +7,18 @@ import org.json.JSONObject
 
 data class Artist(val id: String, val name: String)
 
+/**
+ * The list a track is played from, as Deezer's listen log names it: a page
+ * type ("playlist_page", "dynamic_page_user_radio", ...) and the id of what
+ * it shows. The engine reports each play with it, and keeps a list played
+ * from Flow or a mix going as it runs low.
+ */
+data class ListenContext(val type: String, val id: String) {
+    companion object {
+        val NONE = ListenContext("", "")
+    }
+}
+
 data class Track(
     val id: String,
     val name: String,
@@ -343,58 +355,16 @@ object Json {
     }
 
     // ---- artist profile ----
-    // Unlike the browse endpoints above (purpose-built DTOs with lowerCamelCase
-    // json tags), ArtistProfile marshals the engine's raw Go structs, so Go's
-    // default encoding emits the exported field names verbatim: Artist/Top/
-    // Albums/Related, and ID/Name/DurationMS/ArtworkURL/... inside them.
-
-    private fun JSONObject.rawArtists(key: String): List<Artist> {
-        val arr = optJSONArray(key) ?: return emptyList()
-        return (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.let { Artist(it.optString("ID"), it.optString("Name")) }
-        }
-    }
-
-    private fun JSONObject.toRawTrack(): Track {
-        val arts = rawArtists("Artists")
-        return Track(
-            id = optString("ID"),
-            name = optString("Name"),
-            durationMs = optLong("DurationMS"),
-            artists = arts,
-            artistLine = arts.joinToString(", ") { it.name },
-            albumName = optString("AlbumName"),
-            artworkUrl = optString("ArtworkURL"),
-            explicit = optBoolean("Explicit"),
-        )
-    }
-
-    private fun JSONObject.toRawAlbum() = Album(
-        id = optString("ID"),
-        name = optString("Name"),
-        artistLine = rawArtists("Artists").joinToString(", ") { it.name },
-        artworkUrl = optString("ArtworkURL"),
-    )
-
-    private fun JSONObject.toRawArtistInfo() = ArtistInfo(
-        id = optString("ID"),
-        name = optString("Name"),
-        artworkUrl = optString("ArtworkURL"),
-        nbFans = optInt("NbFans"),
-    )
 
     fun artistPage(s: String?): ArtistPage? {
         val o = obj(s) ?: return null
         if (o.has("error")) return null
-        val info = o.optJSONObject("Artist") ?: return null
-        val top = o.optJSONArray("Top")
-        val albums = o.optJSONArray("Albums")
-        val related = o.optJSONArray("Related")
+        val info = o.optJSONObject("artist") ?: return null
         return ArtistPage(
-            artist = info.toRawArtistInfo(),
-            top = if (top == null) emptyList() else (0 until top.length()).mapNotNull { top.optJSONObject(it)?.toRawTrack() },
-            albums = if (albums == null) emptyList() else (0 until albums.length()).mapNotNull { albums.optJSONObject(it)?.toRawAlbum() },
-            related = if (related == null) emptyList() else (0 until related.length()).mapNotNull { related.optJSONObject(it)?.toRawArtistInfo() },
+            artist = info.toArtistInfo(),
+            top = tracksOf(o.optJSONArray("top")),
+            albums = albumsOf(o.optJSONArray("albums")),
+            related = artistsOf(o.optJSONArray("related")),
         )
     }
 
@@ -418,13 +388,13 @@ object Json {
         return o.toTrack()
     }
 
-    // Lyrics marshal the raw Go struct: {"Plain": "...", "Synced": [{"TimeMS":..,"Text":..}]}.
+    // Lyrics: {"plain": "...", "synced": [{"timeMs":..,"text":..}], "isSynced": ..}.
     fun lyrics(s: String?): Lyrics {
         val o = obj(s) ?: return Lyrics("", emptyList())
-        val plain = o.optString("Plain")
-        val synced = o.optJSONArray("Synced")
+        val plain = o.optString("plain")
+        val synced = o.optJSONArray("synced")
         val lines = if (synced == null) emptyList() else (0 until synced.length()).mapNotNull { i ->
-            synced.optJSONObject(i)?.let { LyricLine(it.optLong("TimeMS"), it.optString("Text")) }
+            synced.optJSONObject(i)?.let { LyricLine(it.optLong("timeMs"), it.optString("text")) }
         }
         return Lyrics(plain, lines)
     }
@@ -505,13 +475,13 @@ object Json {
     }
 
     // FavoriteIDsJSON returns a bare JSON array of track-id strings (e.g.
-    // ["123","456"]); "[]" / unparseable yields an empty set.
-    fun favoriteIds(s: String?): Set<String> {
+    // ["123","456"]); {"error"}, a missing reply or unparseable yields null.
+    fun favoriteIds(s: String?): Set<String>? {
         val arr = try {
             if (s.isNullOrBlank()) null else JSONArray(s)
         } catch (_: Throwable) {
             null
-        } ?: return emptySet()
+        } ?: return null
         return buildSet {
             for (i in 0 until arr.length()) arr.optString(i).takeIf { it.isNotBlank() }?.let { add(it) }
         }

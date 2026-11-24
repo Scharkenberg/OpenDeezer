@@ -6,10 +6,8 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
 
-// A source parked after decoder EOF must wake and report a pending seek when one
-// is requested (so seeking back into a fully-decoded / tail-of-track source still
-// works) and must wake reporting "dead" when killed (so the decode goroutine
-// exits instead of leaking).
+// A source parked after decoder EOF wakes with a pending seek when one is requested,
+// and wakes reporting "dead" when killed so the decode goroutine exits.
 func TestSourceWaitSeekWakesOnSeek(t *testing.T) {
 	s := newSource(&deezer.StreamPlan{Format: "MP3"}, 1000)
 	done := make(chan bool, 1)

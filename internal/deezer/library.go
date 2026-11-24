@@ -6,11 +6,9 @@ import (
 	"strings"
 )
 
-// This file holds write operations against the user's library/playlists. All go
-// through gw-light and require a logged-in session. The exact gw method+param
-// shapes follow the long-standing community/deemix conventions; they cannot be
-// exercised without a live Premium account, so treat them as needing real-world
-// validation before relying on them.
+// Library and playlist write operations, all over gw-light with a logged-in session.
+// The method and param shapes follow the deemix conventions and need a Premium account
+// to verify.
 
 // AddFavoriteTrack likes a track (adds it to Liked Songs).
 func (c *Client) AddFavoriteTrack(trackID string) error {

@@ -1,33 +1,6 @@
-// Package control exposes playback control + status over a small HTTP/JSON API.
-// It is the shared foundation for remote control (one OpenDeezer client driving
-// another) and the MCP server (an AI agent driving playback). A frontend wires
-// it like the MPRIS bridge: provide a status snapshot func + a set of command
-// callbacks, plus the Deezer client for read-only browse (search/playlists).
-//
-// Auth has three modes, picked by Config. Credentials are accepted via request
-// HEADERS only (never the query string, which leaks into logs/history), except
-// that GET /events alone accepts ?session= for the browser EventSource API,
-// which cannot set X-OpenDeezer-Session:
-//   - Token: a bearer token in "X-OpenDeezer-Token". Strongest.
-//   - Same-account: no token, but a controller must prove it is logged into the
-//     SAME Deezer account by sending its OWN Deezer user id in
-//     "X-OpenDeezer-Account". This is accepted directly from loopback clients
-//     (backward compat) and from LAN peers (for token-less same-account Connect
-//     and the LAN-trust tradeoff); the plaintext id is accepted on non-loopback
-//     binds. Pairing via short-TTL single-use 6-digit code may still be used to
-//     obtain a per-device session token (X-OpenDeezer-Session) instead.
-//   - Session (web remote): a phone pairs with a 6-digit code minted at enable
-//     time; on success it receives a short-lived session token sent as
-//     X-OpenDeezer-Session. The code is now single-use + time-limited; failed
-//     verifies have lockout. Per-device ids allow individual revocation.
-//   - None: open (only safe bound to localhost).
-//
-// Mutating endpoints require POST and reject requests carrying a browser Origin
-// header, so a web page the user happens to visit can't drive playback (CSRF).
-// The exception is requests that also carry a valid X-OpenDeezer-Session token:
-// those come from our own SPA (same origin in the browser), so they are allowed.
-// GET /whoami is unauthenticated so a controller can discover the account NAME
-// (not id), auth mode and supported command families before connecting.
+// Package control serves playback control and status over a small HTTP/JSON API, used
+// for remote control and the MCP server. Auth modes: token, same-account, web-remote
+// session or none (loopback only); mutations need POST and reject browser Origins.
 package control
 
 import (
@@ -52,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
 
@@ -78,10 +52,9 @@ type State struct {
 	Shuffle    bool    `json:"shuffle"`
 	Format     string  `json:"format,omitempty"`
 	Queue      []Track `json:"queue,omitempty"`
-	// QueueVersion changes whenever Queue's content does (0: the host does not
-	// version its queue). GET /status always carries Queue; GET /events carries
-	// it only when QueueVersion differs from the one it last sent on that
-	// stream, so a reader keeps its last queue while the version is unchanged.
+	// QueueVersion changes with Queue's content (0: the host does not version it). GET
+	// /status always carries Queue; GET /events only when QueueVersion changed on that
+	// stream.
 	QueueVersion uint64 `json:"queueVersion,omitempty"`
 
 	// Sleep timer (0/false when not armed).
@@ -231,11 +204,8 @@ type Account struct {
 	Offer  string
 }
 
-// Whoami is the unauthenticated identity and command-capability discovery
-// response returned by GET /whoami. It carries the account display NAME (for the
-// controller to recognise its own device) but never the user id: in same-account
-// mode that id IS the credential, so echoing it here would let any bystander read
-// and replay it.
+// Whoami is the unauthenticated GET /whoami response: account display name and command
+// capabilities, never the user id, which is the credential in same-account mode.
 type Whoami struct {
 	Name     string   `json:"name"`
 	Offer    string   `json:"offer,omitempty"`
@@ -279,10 +249,9 @@ const (
 type eventSubscriber struct {
 	// State notifications are level-triggered prompts and may be coalesced.
 	state chan struct{}
-	// Finished notifications are edge-triggered and therefore have a separate
-	// bounded queue. On pathological overflow it retains the newest edges; a
-	// slow peer may fall back to state diffing, but can never block the host's
-	// audio callback or another subscriber.
+	// Finished notifications are edges, so they have their own bounded queue; on overflow
+	// the newest edges are kept. A slow peer never blocks the audio callback or another
+	// subscriber.
 	finished chan FinishedEvent
 }
 
@@ -369,6 +338,8 @@ type Server struct {
 	eventStop        chan struct{}
 	eventDone        chan struct{}
 	eventLoopStarted bool
+	eventTicker      *time.Ticker // the fallback tick; runs only while someone subscribes
+	eventSignals     atomic.Int64 // signalEventSubscribers calls (tests read it)
 
 	// Pairing, web-remote and session state (all guarded by pairMu).
 	pairMu                   sync.Mutex
@@ -477,10 +448,9 @@ func (s *Server) EnablePairing() string {
 func (s *Server) DisablePairing() {
 	s.pairMu.Lock()
 	s.webRemote = false
-	// A server already listening without token/account auth must never become
-	// unauthenticated merely because its LAN web remote was disabled. Preserve
-	// the historical open-loopback behaviour, but fail closed off-loopback.
-	s.sessionOnly = s.token == "" && !s.sameAccount && !isLoopbackAddr(s.addr)
+	// A server listening without token or account auth must not become unauthenticated when
+	// its LAN web remote is disabled: open loopback stays open, off-loopback fails closed.
+	s.sessionOnly = s.token == "" && !s.sameAccount && !config.IsLoopbackAddr(s.addr)
 	s.pairEnabled = false
 	s.pairCode = ""
 	s.pairCodeExpiry = time.Time{}
@@ -538,11 +508,9 @@ func (s *Server) RevokeSession(idOrToken string) {
 
 // Start binds the port and serves in a background goroutine.
 func (s *Server) Start() error {
-	// Fail closed: never serve unauthenticated ("none" mode) on a non-loopback
-	// address — a config mistake (e.g. OPENDEEZER_CONTROL_SAMEACCOUNT=0 on a LAN
-	// bind) must not silently expose playback + private playlists to the LAN.
-	// Web-remote mode is exempt: the pairing code IS the auth for that path.
-	if s.token == "" && !s.sameAccount && !s.sessionAuthRequired() && !isLoopbackAddr(s.addr) {
+	// Fail closed: never serve "none" mode on a non-loopback address. Web-remote mode is
+	// exempt, since the pairing code is its auth.
+	if s.token == "" && !s.sameAccount && !s.sessionAuthRequired() && !config.IsLoopbackAddr(s.addr) {
 		return errors.New("control: refusing to serve unauthenticated on a non-loopback address; " +
 			"set OPENDEEZER_CONTROL_TOKEN or keep same-account auth enabled")
 	}
@@ -637,10 +605,9 @@ func call(fn func()) {
 	}
 }
 
-// eventSourceSession adapts the browser EventSource API to the existing session
-// authentication path. EventSource cannot set request headers, so /events alone
-// accepts one non-empty ?session= value and presents it to auth as the normal
-// X-OpenDeezer-Session header. Token and account credentials remain header-only.
+// eventSourceSession lets /events accept one non-empty ?session= value as the
+// X-OpenDeezer-Session header, since EventSource cannot set headers. Token and account
+// credentials stay header-only.
 func (s *Server) eventSourceSession(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-OpenDeezer-Session") == "" {
@@ -678,10 +645,9 @@ func (s *Server) NotifyStateChanged() {
 	}
 }
 
-// NotifyFinished publishes a natural end-of-track edge to current /events
-// subscribers. It is non-blocking so it is safe to call directly from a
-// player's onFinish callback. Hosts that do not wire this method retain the
-// previous behaviour: controllers can infer finishes from State transitions.
+// NotifyFinished publishes a natural end-of-track edge to /events subscribers. It does
+// not block, so a player's onFinish callback can call it. Without it, controllers infer
+// finishes from State changes.
 func (s *Server) NotifyFinished(trackID string) {
 	finished := FinishedEvent{TrackID: trackID}
 	s.eventsMu.Lock()
@@ -739,7 +705,18 @@ func (s *Server) stopEventLoop() {
 func (s *Server) runEventLoop(stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(eventFallbackInterval)
-	defer ticker.Stop()
+	s.eventsMu.Lock()
+	if len(s.eventSubscribers) == 0 {
+		ticker.Stop()
+	}
+	s.eventTicker = ticker
+	s.eventsMu.Unlock()
+	defer func() {
+		s.eventsMu.Lock()
+		s.eventTicker = nil
+		s.eventsMu.Unlock()
+		ticker.Stop()
+	}()
 
 	for {
 		select {
@@ -756,10 +733,9 @@ func (s *Server) runEventLoop(stop <-chan struct{}, done chan<- struct{}) {
 	}
 }
 
-// stateEventPayload is the state event for a stream that last carried the
-// queue at version sent: the queue is left out while a versioned queue is
-// unchanged, so a long queue is not resent with every position update. It
-// returns the queue version the event leaves the stream at.
+// stateEventPayload is the state event for a stream that last carried queue version
+// sent: an unchanged versioned queue is left out. It returns the stream's new queue
+// version.
 func (s *Server) stateEventPayload(sent uint64) (string, uint64, error) {
 	var st State
 	if s.statusSince != nil {
@@ -778,6 +754,7 @@ func (s *Server) stateEventPayload(sent uint64) (string, uint64, error) {
 }
 
 func (s *Server) signalEventSubscribers() {
+	s.eventSignals.Add(1)
 	s.eventsMu.Lock()
 	defer s.eventsMu.Unlock()
 	for subscriber := range s.eventSubscribers {
@@ -795,6 +772,9 @@ func (s *Server) subscribeEvents() *eventSubscriber {
 	}
 	s.eventsMu.Lock()
 	s.eventSubscribers[subscriber] = struct{}{}
+	if len(s.eventSubscribers) == 1 && s.eventTicker != nil {
+		s.eventTicker.Reset(eventFallbackInterval)
+	}
 	s.eventsMu.Unlock()
 	return subscriber
 }
@@ -802,6 +782,9 @@ func (s *Server) subscribeEvents() *eventSubscriber {
 func (s *Server) unsubscribeEvents(subscriber *eventSubscriber) {
 	s.eventsMu.Lock()
 	delete(s.eventSubscribers, subscriber)
+	if len(s.eventSubscribers) == 0 && s.eventTicker != nil {
+		s.eventTicker.Stop()
+	}
 	s.eventsMu.Unlock()
 }
 
@@ -815,16 +798,9 @@ func (s *Server) requireMethod(method string, h http.HandlerFunc) http.HandlerFu
 	}
 }
 
-// noBrowser rejects requests carrying a browser Origin header. A native
-// controller / MCP client never sends one, but a web page does — this blocks
-// drive-by CSRF that would otherwise reach the no-auth localhost mode via a
-// simple cross-origin POST.
-//
-// Exception: a request that also carries a valid X-OpenDeezer-Session token is
-// allowed through. The session token lives in the phone's localStorage; cross-
-// site JS cannot read another origin's localStorage nor set custom headers
-// cross-origin (CORS blocks that), so a valid session header is proof the
-// request originates from our own SPA on the same device.
+// noBrowser rejects requests with a browser Origin header (CSRF), unless they carry a
+// valid X-OpenDeezer-Session token: cross-site pages can neither read that token nor
+// set the header.
 func (s *Server) noBrowser(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != "" {
@@ -864,11 +840,8 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		case s.sameAccount:
-			// Accept the X-OpenDeezer-Account header for same-account auth from
-			// both loopback and LAN clients. We preserve account auth for
-			// non-loopback LAN peers (the documented LAN-trust tradeoff): the
-			// built-in control client only ever sends the account id (no
-			// session-token path), and /whoami advertises "account".
+			// Accept X-OpenDeezer-Account for same-account auth from loopback and LAN clients (the
+			// documented LAN-trust tradeoff): the built-in control client sends only the account id.
 			want := s.accountID()
 			got := r.Header.Get("X-OpenDeezer-Account")
 			// Constant-time compare (defense-in-depth; the id is only semi-secret).
@@ -877,11 +850,9 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		case s.sessionAuthRequired():
-			// Web-remote mode: a valid session token is mandatory. A valid session
-			// already returned above; reaching here means no/invalid session, so
-			// reject — never fall through to open "none" mode. Without this a
-			// non-browser LAN client (no Origin header, so noBrowser lets it pass)
-			// could drive playback and read private playlists without ever pairing.
+			// Web-remote mode requires a valid session token, and a valid one returned above, so
+			// reject here. Falling through to "none" would let a non-browser LAN client drive
+			// playback without pairing.
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
@@ -908,8 +879,7 @@ func (s *Server) hasValidSession(tok string) bool {
 	}
 	found := false
 	for stored, se := range s.sessions {
-		// Constant-time compare even if the token isn't in the map (timing leak
-		// on map presence is negligible vs 64-char entropy, but we do it right).
+		// Each stored token is compared in constant time.
 		if subtle.ConstantTimeCompare([]byte(tok), []byte(stored)) == 1 && now.Before(se.expiry) {
 			found = true
 		}
@@ -934,9 +904,8 @@ func (s *Server) injectSession(tok string, exp time.Time) {
 	s.pairMu.Unlock()
 }
 
-// handleRemote serves the embedded web remote SPA. Only active when web remote
-// is enabled (persistent flag); returns 404 otherwise. The pairing code itself
-// remains single-use. No auth — the SPA itself enforces pairing.
+// handleRemote serves the embedded web remote SPA while the web remote is enabled,
+// 404 otherwise. It needs no auth: the SPA enforces pairing.
 func (s *Server) handleRemote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -955,10 +924,9 @@ func (s *Server) handleRemote(w http.ResponseWriter, r *http.Request) {
 // issues a per-device session token (and id). The code is single-use and
 // time-limited (5min TTL). Failed attempts are rate-limited with lockout.
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
-	// Only the bundled SPA may try codes: another page open on the phone could
-	// otherwise burn the attempts and lock pairing out. A cross-site page cannot
-	// send a JSON body without a CORS preflight (never answered), and a browser
-	// names its page in Origin.
+	// Only the bundled SPA may try codes, so another page cannot burn the attempts: a
+	// cross-site page cannot send a JSON body without a CORS preflight (never answered),
+	// and a browser names its page in Origin.
 	if ct, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); !strings.EqualFold(strings.TrimSpace(ct), "application/json") {
 		writeJSONError(w, http.StatusUnsupportedMediaType, "content type must be application/json")
 		return
@@ -969,11 +937,8 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Read the code from the JSON body only. The pairing code is a credential that
-	// mints a 12h session token, so it must never travel in the query string (which
-	// leaks into proxy/access logs, browser history and Referer) — matching this
-	// package's header/body-only credential policy. The bundled SPA already POSTs it
-	// in the body. Read outside the lock to avoid holding it across I/O.
+	// Read the code from the JSON body only: it mints a 12h session token, so it must
+	// never be in the query string (logs, history, Referer). Read outside the lock.
 	var body struct {
 		Code string `json:"code"`
 	}
@@ -1016,8 +981,8 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Success: single-use (invalidate code now), mint per-device session (token + id),
-	// reap, set paired account, reset counters.
+	// Success: invalidate the single-use code, mint a per-device session (token and id),
+	// reap, set the paired account and reset the counters.
 	tok, err := mintToken()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
@@ -1116,11 +1081,8 @@ func (s *Server) resetPairRateLimitsLocked() {
 	s.pairGlobalLockoutUntil = time.Time{}
 }
 
-// checkHost wraps the mux with a DNS-rebinding guard. A browser tricked into
-// re-resolving attacker.com to a loopback/LAN address still sends
-// Host: attacker.com, which we reject — closing the read-exfiltration path in
-// the open "none" mode. It fronts every route so the web-remote SPA and /pair
-// flow are covered too (they are reached by localhost or LAN IP, which pass).
+// checkHost guards every route against DNS rebinding: a rebound attacker.com still
+// sends Host: attacker.com, which is rejected. Localhost and LAN IPs pass.
 func (s *Server) checkHost(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.allowedHost(r.Host) {
@@ -1131,10 +1093,8 @@ func (s *Server) checkHost(h http.Handler) http.Handler {
 	})
 }
 
-// allowedHost reports whether the request Host header is safe to serve. Accepted:
-// an empty Host (non-browser HTTP/1.0 clients omit it), localhost, any literal IP
-// (LAN clients connect by IP, and an IP literal cannot be DNS-rebound), and the
-// configured bind host. Any other DNS name is rejected as a rebinding attempt.
+// allowedHost accepts an empty Host, localhost, any literal IP and the configured bind
+// host; any other DNS name is rejected as a rebinding attempt.
 func (s *Server) allowedHost(host string) bool {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
@@ -1150,24 +1110,6 @@ func (s *Server) allowedHost(host string) bool {
 	}
 	if bindHost, _, err := net.SplitHostPort(s.addr); err == nil && bindHost != "" && host == bindHost {
 		return true
-	}
-	return false
-}
-
-// isLoopbackAddr reports whether a host:port binds only the loopback interface.
-func isLoopbackAddr(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-	}
-	switch host {
-	case "", "0.0.0.0", "::":
-		return false // wildcard = all interfaces
-	case "localhost":
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
 	}
 	return false
 }
@@ -1281,12 +1223,9 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, who)
 }
 
-// act returns a handler that runs fn then replies with the status snapshot.
-//
-// NOTE: commands are dispatched asynchronously onto the frontend's update loop,
-// so the snapshot returned here reflects state as of the request — it may not yet
-// show the just-issued change (it lands within one tick). Clients that need the
-// post-command state should poll GET /status.
+// act returns a handler that runs fn then replies with the status snapshot. Commands
+// run asynchronously on the frontend's loop, so the snapshot may not show the change
+// yet (it lands within one tick); poll GET /status for it.
 func (s *Server) act(fn func()) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fn()
@@ -1296,11 +1235,9 @@ func (s *Server) act(fn func()) http.HandlerFunc {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.status()) }
 
-// handleEvents streams State snapshots and natural-finish edges as named SSE
-// events. Every connection receives an initial state snapshot, then only
-// wire-visible state changes plus every buffered finished edge. State prompts
-// are coalesced; finished edges use a separate queue so state churn cannot
-// suppress them.
+// handleEvents streams State snapshots and natural-finish edges as named SSE events:
+// an initial snapshot, then visible state changes (coalesced) and every finished edge
+// (own queue, so state churn cannot drop them).
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	subscriber := s.subscribeEvents()
 	defer s.unsubscribeEvents(subscriber)
@@ -1797,7 +1734,7 @@ func (s *Server) handleSleep(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.status())
 		return
 	}
-	// Preserve the documented legacy cancellation forms: no parameters and
+	// The documented cancellation forms: no parameters and
 	// minutes=0. Any non-zero duration has already been validated as 1..1440.
 	if !eot && (!minutesPresent || minutes == 0) {
 		if s.cmds.CancelSleepTimer != nil {
@@ -1813,7 +1750,7 @@ func (s *Server) handleSleep(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRepeat handles POST /repeat. With ?mode=off|all|one it prefers the SET
-// callback; with no param it prefers the legacy cycle callback. Hosts that only
+// callback; with no param it prefers the cycle callback. Hosts that only
 // implement the other variant still receive a derived command.
 func (s *Server) handleRepeat(w http.ResponseWriter, r *http.Request) {
 	mode, present, valid := singleQueryValue(r.URL.Query(), "mode")
@@ -1865,8 +1802,8 @@ func repeatCyclesTo(current, target string) int {
 	case "one":
 		from = 2
 	default:
-		// State promises a valid repeat value. If a host violates that contract,
-		// make one best-effort legacy cycle instead of silently dropping the set.
+		// State promises a valid repeat value. If a host breaks that, cycle once instead of
+		// dropping the set.
 		return 1
 	}
 	var to int
@@ -1884,7 +1821,7 @@ func repeatCyclesTo(current, target string) int {
 }
 
 // handleShuffle handles POST /shuffle. With ?on=true|false it prefers the SET
-// callback; with no param it prefers the legacy toggle callback. Hosts that only
+// callback; with no param it prefers the toggle callback. Hosts that only
 // implement the other variant still receive a derived command.
 func (s *Server) handleShuffle(w http.ResponseWriter, r *http.Request) {
 	raw, present, valid := singleQueryValue(r.URL.Query(), "on")

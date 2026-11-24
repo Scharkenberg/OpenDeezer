@@ -226,11 +226,8 @@ func TestRebindFailureRetried(t *testing.T) {
 		_ = blockConn.Close()
 	}
 
-	// The supervisor must rebind onto the freed port. Poll for it — send a probe
-	// and briefly wait for a reply, retrying until the responder answers or a
-	// generous deadline passes. This absorbs scheduling jitter on a loaded CI
-	// runner (the freed port + rebind race); only a genuine never-rebinds
-	// regression leaves this failing for the whole window.
+	// The supervisor must rebind onto the freed port: probe and retry until the responder
+	// answers or a generous deadline passes, to absorb scheduling jitter on CI.
 	buf := make([]byte, maxPacket)
 	var n int
 	var lastErr error

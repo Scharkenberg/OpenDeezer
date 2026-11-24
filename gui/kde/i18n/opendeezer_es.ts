@@ -1309,7 +1309,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>Comportamiento</translation>
     </message>
     <message>
@@ -1424,18 +1424,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>Anuncios</translation>
+        <source>Play reporting</source>
+        <translation>Registro de reproducciones</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>Desactivar anuncios</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>No informar de mis reproducciones</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>Deezer Free se financia con publicidad. Informar de tus reproducciones —como hace la aplicación oficial— acredita a los artistas e impulsa los anuncios. Desactivar esta opción elimina los anuncios, pero deja de informar de tus reproducciones, lo que priva a los artistas de su recuento de reproducciones e infringe las condiciones de uso de Deezer. Úsalo bajo tu propia responsabilidad.</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>OpenDeezer no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad.</translation>
     </message>
 </context>
 </TS>

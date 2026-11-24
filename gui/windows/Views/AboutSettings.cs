@@ -1,4 +1,4 @@
-// The About group: version, licence and source, and the update check.
+// The About group: version, license and source, and the update check.
 
 using System;
 using CommunityToolkit.WinUI.Controls;
@@ -51,10 +51,5 @@ internal sealed class AboutSettings
         else _update.Description = info.Latest.Length == 0 ? Loc.S("Settings_UpdateFail") : Loc.Format("Settings_UpToDateFormat", info.Current);
     }
 
-    private static async void Launch(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
-        try { await Launcher.LaunchUriAsync(uri); }
-        catch (Exception ex) { AppLog.Write("launch: " + ex.Message); }
-    }
+    private static async void Launch(string url) => await Launcher.LaunchUriAsync(new Uri(url));
 }

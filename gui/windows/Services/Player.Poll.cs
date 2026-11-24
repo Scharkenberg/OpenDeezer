@@ -9,14 +9,20 @@ using System.Threading.Tasks;
 
 namespace OpenDeezer;
 
-// Slow: the fields after it were read on this tick, else they repeat the last read. NowTrack is the
-// last now-playing track read (null when none plays). QueueOpGen is the mirror's OpGen, PlayOkGen the last play that
-// started, PlaysInFlight the plays then resolving and DispatchGen the last play dispatched, all read
-// before the engine's state.
+// Slow: the fields after it were read on this tick, else they repeat the last read.
+// NowTrack: the last now-playing track read, null when none plays.
+// LastErrorNetwork: the error's reason is a lost network.
+// QueueOpGen: the mirror's OpGen, read before the engine's state.
+// PlayOkGen: the last play that started, read before the engine's state.
+// PlaysInFlight: the plays then resolving, read before the engine's state.
+// DispatchGen: the last play dispatched, read before the engine's state.
+// StopsInFlight: the stops then queued whose DZStop had not run, read before the engine's state.
+// SessionExpired: Deezer refused the account's login since it signed in (DZSessionExpired).
 internal readonly record struct EngineSnap(
     int State, long Pos, long Dur, int Finished, string NowId, Track? NowTrack, int QueueIndex, long QueueVersion, string LastError,
     bool Slow, string Format, bool Preview, RepeatMode Repeat, bool Shuffle, double Volume, string Connected,
-    int QueueOpGen, long ReadTick, int PlayOkGen = -1, int PlaysInFlight = 0, int DispatchGen = 0)
+    int QueueOpGen, long ReadTick, int PlayOkGen = -1, int PlaysInFlight = 0, int DispatchGen = 0, Elsewhere? Elsewhere = null,
+    bool SessionExpired = false, bool LastErrorNetwork = false, int StopsInFlight = 0)
 {
     // Nothing for the UI thread to do after `sent`: equal but for the position while both play
     // (the UI clock carries it; slow snapshots bring the engine's to compare). An error snapshot
@@ -39,7 +45,7 @@ internal interface IEngineReads
     long DurationMs();
     int QueueIndex();
     long QueueVersion();
-    string LastError();
+    LastErrorReply LastError();
     long NowPlayingVersion();
     byte[] NowPlayingUtf8();
     string Format();
@@ -48,6 +54,9 @@ internal interface IEngineReads
     bool Shuffle();
     double Volume();
     string Connected();
+    long ElsewhereVersion();
+    Elsewhere Elsewhere();
+    bool SessionExpired();
 }
 
 internal sealed class NativeEngineReads : IEngineReads
@@ -58,7 +67,7 @@ internal sealed class NativeEngineReads : IEngineReads
     public long DurationMs() => DeezerCore.DZDurationMS();
     public int QueueIndex() => DeezerCore.DZQueueIndex();
     public long QueueVersion() => DeezerCore.DZQueueVersion();
-    public string LastError() => DeezerCore.LastError();
+    public LastErrorReply LastError() => DeezerCore.LastError();
     public long NowPlayingVersion() => DeezerCore.DZNowPlayingVersion();
     public byte[] NowPlayingUtf8() => DeezerCore.NowPlayingUtf8();
     public string Format() => DeezerCore.Format();
@@ -67,6 +76,9 @@ internal sealed class NativeEngineReads : IEngineReads
     public bool Shuffle() => DeezerCore.GetShuffle();
     public double Volume() => DeezerCore.DZVolume();
     public string Connected() => DeezerCore.ConnectedDevice();
+    public long ElsewhereVersion() => DeezerCore.DZElsewhereVersion();
+    public Elsewhere Elsewhere() => DeezerCore.Elsewhere();
+    public bool SessionExpired() => DeezerCore.DZSessionExpired() == 1;
 }
 
 // Reads and parses the now-playing JSON only when its version moved. Poller thread only.
@@ -75,10 +87,13 @@ internal sealed class EngineSnapReader(IEngineReads engine)
     private long _nowVersion = -1;
     private string _nowId = "";
     private Track? _nowTrack;
+    private long _elsewhereVersion = -1;
+    private Elsewhere? _elsewhere;
     private EngineSnap _last = new() { NowId = "", LastError = "", Format = "", Connected = "" };
 
-    // `slow`: also read volume, repeat, shuffle, format, preview and the Connect device.
-    public EngineSnap Read(int queueOpGen, int playOkGen, int playsInFlight, int dispatchGen, bool slow)
+    // `slow`: also read volume, repeat, shuffle, format, preview, the Connect device, whether the
+    // session ended and, when its version moved, the track another session of the account plays.
+    public EngineSnap Read(int queueOpGen, int playOkGen, int playsInFlight, int dispatchGen, bool slow, int stopsInFlight = 0)
     {
         // Finished before State: a finish between the two reads must not look like a gapless swap.
         int finished = engine.FinishedCount();
@@ -89,7 +104,8 @@ internal sealed class EngineSnapReader(IEngineReads engine)
         int queueIndex = engine.QueueIndex();
         long queueVersion = engine.QueueVersion();
         // Read once when the error state begins.
-        string lastError = state != (int)PlayState.Error ? "" : _last.State == state ? _last.LastError : engine.LastError();
+        var lastError = state != (int)PlayState.Error ? new LastErrorReply()
+            : _last.State == state ? new LastErrorReply { Error = _last.LastError, Network = _last.LastErrorNetwork } : engine.LastError();
         // The version moves exactly when the now-playing JSON does, a Connect device's included.
         long nowVersion = engine.NowPlayingVersion();
         if (nowVersion != _nowVersion)
@@ -102,9 +118,9 @@ internal sealed class EngineSnapReader(IEngineReads engine)
         var s = _last with
         {
             State = state, Pos = pos, Dur = dur, Finished = finished, NowId = _nowId, NowTrack = _nowTrack,
-            QueueIndex = queueIndex, QueueVersion = queueVersion, LastError = lastError,
+            QueueIndex = queueIndex, QueueVersion = queueVersion, LastError = lastError.Error, LastErrorNetwork = lastError.Network,
             Slow = slow, QueueOpGen = queueOpGen, ReadTick = readTick, PlayOkGen = playOkGen,
-            PlaysInFlight = playsInFlight, DispatchGen = dispatchGen,
+            PlaysInFlight = playsInFlight, DispatchGen = dispatchGen, StopsInFlight = stopsInFlight,
         };
         if (slow)
         {
@@ -116,7 +132,15 @@ internal sealed class EngineSnapReader(IEngineReads engine)
                 Shuffle = engine.Shuffle(),
                 Volume = engine.Volume(),
                 Connected = engine.Connected(),
+                SessionExpired = engine.SessionExpired(),
             };
+            long elsewhereVersion = engine.ElsewhereVersion();
+            if (elsewhereVersion != _elsewhereVersion)
+            {
+                _elsewhereVersion = elsewhereVersion;
+                _elsewhere = engine.Elsewhere();
+            }
+            s = s with { Elsewhere = _elsewhere };
         }
         _last = s;
         return s;
@@ -134,7 +158,7 @@ internal sealed partial class Player
     internal string _engineNowId = "";
     private long _posBase, _posBaseTick;
 
-    private void StartPolling()
+    internal void StartPolling()
     {
         if (_pollCts != null) return;
         var cts = new CancellationTokenSource();
@@ -173,7 +197,7 @@ internal sealed partial class Player
             if (pending) continue;
             EngineSnap s;
             bool slow = ReadsSlow(delay, tick++);
-            try { s = reader.Read(_mirror.OpGen, Volatile.Read(ref _playOkGen), Volatile.Read(ref _playsInFlight), Volatile.Read(ref _playDispatchGen), slow); }
+            try { s = reader.Read(_mirror.OpGen, Volatile.Read(ref _playOkGen), Volatile.Read(ref _playsInFlight), Volatile.Read(ref _playDispatchGen), slow, Volatile.Read(ref _stopsInFlight)); }
             catch (Exception ex)
             {
                 if (++failures == Timing.PollFailuresBeforeBackoff)
@@ -288,8 +312,15 @@ internal sealed partial class Player
             }
         }
 
+        // The engine plays what it started by itself (a remote, the control API): the kept resume
+        // point is no longer the next play's. Not while a stop was queued at the read: that is the stopped track.
+        if (!inFlight && s.StopsInFlight == 0 && engineState is PlayState.Playing or PlayState.Paused)
+        {
+            _resumeTrack = null;
+            _resumeMs = 0;
+        }
         // Position and length belong to the title shown only when the engine plays that title.
-        bool otherTrack = inFlight || (s.NowId.Length > 0 && s.NowId != Current?.Id);
+        bool otherTrack = inFlight || (s.NowId.Length > 0 && s.NowId != Current?.Id) || _resumeTrack != null;
         var state = inFlight ? PlayState.Loading : engineState;
         if (state != State)
         {
@@ -328,7 +359,7 @@ internal sealed partial class Player
             _errHandledGen = _playDispatchGen;
             if (_queueSynced && queueFresh && s.QueueIndex >= 0 && s.QueueIndex < _queue.Count && s.QueueIndex != _queueIndex)
                 MoveCursor(s.QueueIndex);
-            OnPlayFailed(_playDispatchGen, s.LastError);
+            OnPlayFailed(_playDispatchGen, s.LastError, s.LastErrorNetwork);
         }
 
         if (s.Slow) stateChanged |= ApplySlow(s);
@@ -368,6 +399,16 @@ internal sealed partial class Player
         }
 
         if (s.Connected != CastAddress) SetCast(s.Connected, "");
+        if (s.Elsewhere is { } away && away != Elsewhere)
+        {
+            Elsewhere = away;
+            ElsewhereChanged?.Invoke();
+        }
+        if (s.SessionExpired != _sessionExpired)
+        {
+            _sessionExpired = s.SessionExpired;
+            if (_sessionExpired) SessionExpired?.Invoke();
+        }
         return changed;
     }
 }

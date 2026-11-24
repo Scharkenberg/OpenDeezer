@@ -110,9 +110,9 @@ func TestMediaCacheZeroPurgesUnopenedFolder(t *testing.T) {
 	}
 }
 
-// oldTrackInFolder leaves in dir a cache holding "old.MP3_128", last used 40
-// days ago, and "new.MP3_128", used now, as an earlier session would. Its
-// index is gone, so the last use comes from the files' mtimes.
+// oldTrackInFolder leaves in dir a cache holding "old.MP3_128", last used 40 days ago,
+// and "new.MP3_128", just used. Its index is gone, so the last use comes from the
+// files' mtimes.
 func oldTrackInFolder(t *testing.T, dir string) {
 	t.Helper()
 	earlier, err := mediacache.New(dir, 1<<20)

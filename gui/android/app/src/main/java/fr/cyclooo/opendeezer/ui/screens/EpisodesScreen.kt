@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.Engine
 import fr.cyclooo.opendeezer.engine.Episode
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.player.PlayerController
 import fr.cyclooo.opendeezer.ui.components.Artwork
 import fr.cyclooo.opendeezer.ui.components.CenteredMessage
@@ -77,7 +78,7 @@ fun EpisodesScreen(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clickable { player.playQueue(asTracks, index) }
+                                    .clickable { player.playQueue(asTracks, index, ListenContext("show_page", podcastId)) }
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {

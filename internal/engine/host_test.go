@@ -20,10 +20,8 @@ func closeControlServer() {
 	ctrlMu.Unlock()
 }
 
-// TestCycleRepeatAndToggleShuffleWired proves the legacy verbs
-// (CycleRepeat/ToggleShuffle) are wired alongside the SET variants and drive
-// the engine queue (off->all->one->off; shuffle flip), visible through
-// engineState.
+// TestCycleRepeatAndToggleShuffleWired checks that CycleRepeat and ToggleShuffle drive
+// the engine queue (off->all->one->off; shuffle flip), as seen in engineState.
 func TestCycleRepeatAndToggleShuffleWired(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	resetEngineQueue()
@@ -55,10 +53,8 @@ func TestCycleRepeatAndToggleShuffleWired(t *testing.T) {
 	}
 }
 
-// TestLogoutClearsRemoteRouting: Logout tears down the Connect controller
-// routing (remoteCli/remoteSt/remoteAddr/remoteStop) before wiping the
-// session, so commands can't keep routing to the old device under a new
-// account.
+// TestLogoutClearsRemoteRouting: Logout clears the Connect routing before wiping the
+// session, so commands never reach the old device under a new account.
 func TestLogoutClearsRemoteRouting(t *testing.T) {
 	t.Cleanup(clearRoutedRemote)
 	t.Cleanup(closeControlServer)
@@ -212,48 +208,6 @@ func TestRebuildControlServerNoDeadPublish(t *testing.T) {
 	mu.Unlock()
 	if published != nil {
 		t.Fatal("a server that failed to Start must NOT be published to ctrlSrv")
-	}
-}
-
-// TestIsErroredFinish proves the gate of the onFinish callback and
-// noteTrackFinished: an errored finish (Errored state, or a stored LastError)
-// with ~0 played is skipped (no history, no advance), while a clean finish, a
-// gapless promote (Playing) and an error after real playback are genuine
-// finishes.
-func TestIsErroredFinish(t *testing.T) {
-	cases := []struct {
-		name    string
-		state   audio.State
-		lastErr string
-		posMS   int64
-		want    bool
-	}{
-		{"clean stopped finish", audio.Stopped, "", 0, false},
-		{"gapless promote (playing, no error)", audio.Playing, "", 0, false},
-		{"errored finish, nothing played", audio.Stopped, "decode failed", 0, true},
-		{"device-loss Errored, nothing played", audio.Errored, "device lost", 0, true},
-		{"errored state, nothing played, empty msg", audio.Errored, "", 0, true},
-		{"error after real playback", audio.Stopped, "late decode error", 65000, false},
-		{"errored state but played a lot", audio.Errored, "", 65000, false},
-	}
-	for _, c := range cases {
-		if got := isErroredFinish(c.state, c.lastErr, c.posMS); got != c.want {
-			t.Errorf("%s: isErroredFinish(%v,%q,%d) = %v, want %v",
-				c.name, c.state, c.lastErr, c.posMS, got, c.want)
-		}
-	}
-	// Without a player (before Init) a finish is never errored.
-	mu.Lock()
-	prev := player
-	player = nil
-	mu.Unlock()
-	defer func() {
-		mu.Lock()
-		player = prev
-		mu.Unlock()
-	}()
-	if erroredFinish() {
-		t.Fatal("erroredFinish without a player must be false")
 	}
 }
 

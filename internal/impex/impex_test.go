@@ -332,10 +332,8 @@ func TestImportPlaylistContextCancel(t *testing.T) {
 }
 
 func TestImportPlaylistBroadFallbackAfterNearMiss(t *testing.T) {
-	// The targeted artist+title search returns candidates, but none passes
-	// bestMatch (wrong artist on a same-base-title live cut); the broad
-	// full-text fallback has the real track. Previously the fallback only ran
-	// when the targeted search came back empty, so this row failed to resolve.
+	// The targeted artist+title search returns only candidates bestMatch rejects; the
+	// broad full-text fallback has the real track and must be tried.
 	res := &fakeResolver{
 		bySearch: map[string][]deezer.Track{
 			"Daft Punk|Around the World": {track("41", "Around the World (Live 2007)", "Somebody Else", "")},

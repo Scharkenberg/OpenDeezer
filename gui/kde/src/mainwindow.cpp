@@ -89,10 +89,8 @@ extern "C" int   DZAddFavorite(char *trackID);
 extern "C" int   DZRemoveFavorite(char *trackID);
 extern "C" int   DZAddToPlaylist(char *playlistID, char *trackID);
 extern "C" int   DZRemoveFromPlaylist(char *playlistID, char *trackID);
-extern "C" char *DZCreatePlaylist(char *title);            // {"id":"..."}
 extern "C" int   DZRenamePlaylist(char *playlistID, char *title);
 extern "C" int   DZDeletePlaylist(char *playlistID);
-extern "C" char *DZFlowJSON(void);                         // {tracks:[...]}
 extern "C" char *DZSearchPodcastsJSON(char *q);            // {podcasts:[...]}
 extern "C" char *DZPodcastEpisodesJSON(char *podcastID);   // {episodes:[...]}
 extern "C" int   DZPlayEpisode(char *episodeID, long long durationMs);
@@ -704,7 +702,7 @@ void MainWindow::openSettings() {
 // Phone Remote: a modal dialog with an enable toggle. When on, shows a 512×512
 // QR PNG (from DZWebRemoteQRPNG — rendered via QPixmap::loadFromData, the same
 // path used for cover-art bytes), the 6-digit pairing code (large, monospace,
-// accent colour) and the URL (selectable text). All values come from
+// accent color) and the URL (selectable text). All values come from
 // DZWebRemoteInfoJSON, which is re-read on every toggle so the display is always
 // current. Disabled by default; LAN-only; no data leaves the local network.
 void MainWindow::openPhoneRemote() {
@@ -951,7 +949,7 @@ void MainWindow::quitApp() {
     close();
 }
 
-// Honour the close-to-tray setting: hide to the tray and keep the engine
+// Honor the close-to-tray setting: hide to the tray and keep the engine
 // playing, unless the user explicitly chose Quit.
 void MainWindow::closeEvent(QCloseEvent *event) {
     if (!m_forceQuit && m_closeToTray && m_tray) {
@@ -1849,7 +1847,7 @@ void MainWindow::showNoInternet() {
         body->setAlignment(Qt::AlignCenter);
         body->setWordWrap(true);
         body->setMaximumWidth(560);
-        // Centre the constrained body within the page.
+        // Center the constrained body within the page.
         auto *bodyRow = new QHBoxLayout;
         bodyRow->addStretch(1);
         bodyRow->addWidget(body);
@@ -1891,10 +1889,14 @@ void MainWindow::seedFavorites() {
         const QByteArray j = takeJson(DZFavoriteIDsJSON());
         const QByteArray off = takeJson(DZOfflineIDsJSON());
         QMetaObject::invokeMethod(this, [this, j, off] {
-            m_likedIds.clear();
-            for (const QJsonValue &v : QJsonDocument::fromJson(j).array())
-                m_likedIds.insert(v.toString());
-            refreshLikeButton();
+            // An {"error"} reply keeps the liked set.
+            const QJsonDocument liked = QJsonDocument::fromJson(j);
+            if (liked.isArray()) {
+                m_likedIds.clear();
+                for (const QJsonValue &v : liked.array())
+                    m_likedIds.insert(v.toString());
+                refreshLikeButton();
+            }
             // Offline tracks are per account: replaced by this account's.
             m_offlineIds.clear();
             for (const QJsonValue &v : QJsonDocument::fromJson(off).object().value("ids").toArray())
@@ -1930,7 +1932,7 @@ void MainWindow::loadFavorites() {
     });
 }
 
-// Flow: the user's personalised stream. Loads into the shared track table (like
+// Flow: the user's personalized stream. Loads into the shared track table (like
 // Liked Songs) and starts playing from the top.
 void MainWindow::loadFlow() {
     if (!m_loggedIn)
@@ -1941,7 +1943,7 @@ void MainWindow::loadFlow() {
     updateListDownloadButton();          // Flow isn't a downloadable unit
     statusBar()->showMessage(tr("Loading…"));
     QtConcurrent::run([this] {
-        const QVector<Track> tracks = parseTracks(takeJson(DZFlowJSON()));
+        const QVector<Track> tracks = parseTracks(takeJson(DZFlowJSON(cstr(QByteArray()))));
         QMetaObject::invokeMethod(this, [this, tracks] {
             const int gen = ++m_artGen;
             m_tableTracks = tracks;
@@ -2207,7 +2209,7 @@ void MainWindow::runSearch() {
     });
 }
 
-// ---- favourites (like / unlike) -------------------------------------------
+// ---- favorites (like / unlike) -------------------------------------------
 
 // Paint the like button for the given liked state.
 void MainWindow::setLikeButton(bool liked) {
@@ -2505,7 +2507,7 @@ void MainWindow::showAddToPlaylistPicker(const Track &t, const QVector<Playlist>
         const QByteArray nb = name.toUtf8();
         const QByteArray tid = t.id.toUtf8();
         QtConcurrent::run([this, nb, tid, name] {
-            const QByteArray j = takeJson(DZCreatePlaylist(cstr(nb)));
+            const QByteArray j = takeJson(DZCreatePlaylist(cstr(nb), cstr(QByteArray())));
             const QString pid = QJsonDocument::fromJson(j).object().value("id").toString();
             int added = 0;
             if (!pid.isEmpty()) {
@@ -2579,7 +2581,7 @@ void MainWindow::createPlaylist() {
         return;
     const QByteArray nb = name.toUtf8();
     QtConcurrent::run([this, nb, name] {
-        const QByteArray j = takeJson(DZCreatePlaylist(cstr(nb)));
+        const QByteArray j = takeJson(DZCreatePlaylist(cstr(nb), cstr(QByteArray())));
         const QString id = QJsonDocument::fromJson(j).object().value("id").toString();
         QMetaObject::invokeMethod(this, [this, name, id] {
             if (id.isEmpty()) {
@@ -3930,6 +3932,13 @@ void MainWindow::next() {
 void MainWindow::prev() {
     if (m_queue.isEmpty())
         return;
+    // From 5 s in, restart the track instead, as the engine does.
+    if (DZPositionMS() >= 5000) {
+        QtConcurrent::run([] { DZSeek(0); });
+        if (m_mpris)
+            m_mpris->notifySeeked(0);
+        return;
+    }
     if (m_queueIndex > 0)
         m_queueIndex--;
     playCurrent();

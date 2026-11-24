@@ -41,12 +41,9 @@ type ImportResult struct {
 	Unmatched  []Row          // rows that resolved to nothing
 }
 
-// ImportPlaylist resolves rows against Deezer (ISRC first, then a fuzzy
-// artist+title search) and creates a playlist with everything that matched.
-// progress, when non-nil, is called after each row with i = rows processed so
-// far (1..total). Unmatched rows are collected, not fatal; only zero matches
-// (or a creation failure) is an error: the partial result is still returned
-// so the caller can show what went wrong.
+// ImportPlaylist resolves rows against Deezer and creates a playlist of the matches,
+// calling progress (if set) after each row. Only zero matches or a creation failure is
+// an error; the partial result is returned either way.
 func ImportPlaylist(ctx context.Context, r Resolver, pc PlaylistCreator, title string,
 	rows []Row, progress func(i, total int, matched bool)) (*ImportResult, error) {
 	res := &ImportResult{}
@@ -114,11 +111,8 @@ func resolveRow(r Resolver, row Row) (deezer.Track, bool, error) {
 	if t, ok := bestMatch(cands, row.Artist, row.Title); ok {
 		return t, true, nil
 	}
-	// The targeted artist+title query can be too strict (e.g. artist name
-	// spelled differently) or return only near-misses that bestMatch rejects;
-	// retry once as a plain full-text search before giving up. bestMatch keeps
-	// the same acceptance criteria, so this only widens the candidate pool,
-	// never what counts as a match.
+	// The targeted artist+title query can be too strict or find only near misses, so
+	// retry once as a full-text search. bestMatch's criteria are unchanged.
 	if strings.TrimSpace(row.Artist) == "" {
 		return deezer.Track{}, false, nil
 	}
@@ -129,10 +123,9 @@ func resolveRow(r Resolver, row Row) (deezer.Track, bool, error) {
 	return t, ok, nil
 }
 
-// bestMatch picks the first candidate whose normalized title+artist agree with
-// the row: pass 1 requires an exact normalized title, pass 2 relaxes the title
-// to its base form (parentheticals and feat. credits stripped). An empty input
-// artist matches any candidate artist.
+// bestMatch picks the first candidate whose normalized title and artist match the row:
+// first an exact title, then the base title (parentheticals and feat. credits
+// stripped). An empty artist matches any.
 func bestMatch(cands []deezer.Track, artist, title string) (deezer.Track, bool) {
 	wantTitle := normalize(title)
 	wantBase := normalizeBase(title)
@@ -174,10 +167,9 @@ func artistsMatch(t deezer.Track, wantArtist string) bool {
 	return line != "" && (strings.Contains(line, wantArtist) || strings.Contains(wantArtist, line))
 }
 
-// normalize lowercases, folds common accents to ASCII, unifies "&"/"and",
-// drops feat./ft./featuring credits, strips punctuation (letters and digits of
-// any script stay) and collapses spaces, so "Beyoncé feat. JAY-Z" and
-// "beyonce" compare equal.
+// normalize lowercases, folds accents to ASCII, unifies "&"/"and", drops feat.
+// credits, strips punctuation and collapses spaces, so "Beyoncé feat. JAY-Z" equals
+// "beyonce".
 func normalize(s string) string {
 	s = foldAccents(strings.ToLower(s))
 	s = stripFeat(s)

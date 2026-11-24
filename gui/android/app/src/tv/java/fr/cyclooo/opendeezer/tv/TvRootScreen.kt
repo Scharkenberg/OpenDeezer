@@ -72,6 +72,7 @@ import fr.cyclooo.opendeezer.engine.Engine
 import fr.cyclooo.opendeezer.engine.HistoryEntry
 import fr.cyclooo.opendeezer.engine.HistoryStats
 import fr.cyclooo.opendeezer.engine.HomeData
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.engine.SearchResults
 import fr.cyclooo.opendeezer.engine.Track
@@ -92,7 +93,16 @@ private data class TvDetailData(
     val albumId: String? = null,
     val playlistId: String? = null,
     val radioArtistId: String? = null,
-)
+) {
+    // The list as Deezer's listen log names it.
+    val listen: ListenContext
+        get() = when {
+            albumId != null -> ListenContext("album_page", albumId)
+            playlistId != null -> ListenContext("playlist_page", playlistId)
+            radioArtistId != null -> ListenContext("artist_top", radioArtistId)
+            else -> ListenContext.NONE
+        }
+}
 
 @Composable
 fun TvRootScreen(vm: AppViewModel) {
@@ -120,7 +130,7 @@ fun TvRootScreen(vm: AppViewModel) {
         val tracks = Engine.playlistTracks(p.id)
         if (tracks.isNotEmpty()) detail = TvDetailData(p.name, p.owner, p.artworkUrl, tracks, playlistId = p.id)
     }
-    val playTracks = { list: List<Track>, i: Int -> player.playQueue(list, i) }
+    val playTracks = { list: List<Track>, i: Int, listen: ListenContext -> player.playQueue(list, i, listen) }
 
     // Album/playlist downloads report via the shared download-events flow; on TV
     // (no snackbar) surface the outcome as a Toast.
@@ -141,12 +151,9 @@ fun TvRootScreen(vm: AppViewModel) {
                     event.failed > 0 -> context.getString(R.string.download_batch_partial, event.saved, event.failed)
                     else -> context.getString(R.string.download_batch_saved, event.saved)
                 }
-                is DownloadEvent.OfflineReady ->
-                    if (event.alreadyCached) context.getString(R.string.offline_already, event.trackName)
-                    else context.getString(R.string.offline_ready, event.trackName)
+                is DownloadEvent.OfflineReady -> context.getString(R.string.offline_ready, event.trackName)
                 is DownloadEvent.OfflineFailed ->
-                    if (event.needsCache) context.getString(R.string.offline_needs_cache)
-                    else if (event.error.isBlank()) context.getString(R.string.download_failed_generic)
+                    if (event.error.isBlank()) context.getString(R.string.download_failed_generic)
                     else context.getString(R.string.download_failed, event.error)
             }
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -187,7 +194,7 @@ fun TvRootScreen(vm: AppViewModel) {
                             onPlayTracks = playTracks,
                             onOpenPlaylist = { openPlaylist(it) },
                         )
-                        TvNav.History -> TvHistory(onPlay = { track -> player.playQueue(listOf(track), 0) })
+                        TvNav.History -> TvHistory(onPlay = { track -> player.playQueue(listOf(track), 0, ListenContext("history_song", "")) })
                         TvNav.Queue -> TvQueue(player)
                         TvNav.Settings -> TvSettingsScreen(account = vm.account, onLogout = { vm.logout() })
                     }
@@ -202,8 +209,8 @@ fun TvRootScreen(vm: AppViewModel) {
                             tracks = d.tracks,
                             premium = player.premium,
                             onBack = { detail = null },
-                            onPlayAll = { player.playQueue(d.tracks, 0) },
-                            onPlay = { i -> player.playQueue(d.tracks, i) },
+                            onPlayAll = { player.playQueue(d.tracks, 0, d.listen) },
+                            onPlay = { i -> player.playQueue(d.tracks, i, d.listen) },
                             // Radio: seed from the artist when known, else the first track.
                             onRadio = d.radioArtistId?.let { id -> ({ player.startArtistRadio(id) }) }
                                 ?: d.tracks.firstOrNull()?.let { t -> ({ player.startTrackRadio(t) }) },
@@ -247,7 +254,7 @@ private fun TvLoadError(onRetry: () -> Unit) {
 @Composable
 private fun TvBrowse(
     onOpenSearch: () -> Unit,
-    onPlayTracks: (List<Track>, Int) -> Unit,
+    onPlayTracks: (List<Track>, Int, ListenContext) -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
 ) {
@@ -300,7 +307,7 @@ private fun TvBrowse(
                     title = feat.name,
                     subtitle = feat.artistLine,
                     artworkUrl = feat.artworkUrl,
-                    onPlay = { onPlayTracks(h.topTracks, 0) },
+                    onPlay = { onPlayTracks(h.topTracks, 0, ListenContext("tops_track", "0")) },
                     onSearch = onOpenSearch,
                     playFocus = playFocus,
                     playIcon = Icons.Filled.PlayArrow,
@@ -310,19 +317,19 @@ private fun TvBrowse(
         if (flow.isNotEmpty()) {
             item {
                 TvRow(stringResource(R.string.tv_flow_mix), flow) { i, t ->
-                    TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(flow, i) })
+                    TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(flow, i, ListenContext("dynamic_page_user_radio", Engine.userId())) })
                 }
             }
         }
         item {
             TvRow(stringResource(R.string.tv_made_for_you), h.topTracks) { i, t ->
-                TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(h.topTracks, i) })
+                TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(h.topTracks, i, ListenContext("tops_track", "0")) })
             }
         }
         charts?.let { c ->
             item {
                 TvRow(stringResource(R.string.charts_title), c.tracks) { i, t ->
-                    TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(c.tracks, i) })
+                    TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(c.tracks, i, ListenContext("tops_track", "0")) })
                 }
             }
         }
@@ -341,7 +348,7 @@ private fun TvBrowse(
 
 @Composable
 private fun TvSearch(
-    onPlayTracks: (List<Track>, Int) -> Unit,
+    onPlayTracks: (List<Track>, Int, ListenContext) -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenArtist: (ArtistInfo) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
@@ -430,7 +437,7 @@ private fun TvSearch(
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(30.dp)) {
                     if (r.tracks.isNotEmpty()) item {
                         TvRow(stringResource(R.string.section_tracks), r.tracks) { i, t ->
-                            TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(r.tracks, i) })
+                            TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(r.tracks, i, ListenContext("search_track", query.trim())) })
                         }
                     }
                     if (r.albums.isNotEmpty()) item {
@@ -465,7 +472,7 @@ private fun TvSearch(
 
 @Composable
 private fun TvLibrary(
-    onPlayTracks: (List<Track>, Int) -> Unit,
+    onPlayTracks: (List<Track>, Int, ListenContext) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
 ) {
     var liked by remember { mutableStateOf<List<Track>?>(null) }
@@ -504,7 +511,7 @@ private fun TvLibrary(
         }
         item {
             TvRow(stringResource(R.string.tv_liked_songs), likedList) { i, t ->
-                TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(likedList, i) })
+                TvCard(t.name, t.artistLine, t.artworkUrl, onClick = { onPlayTracks(likedList, i, ListenContext("profile_loved", Engine.userId())) })
             }
         }
         item {

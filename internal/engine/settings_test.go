@@ -1,10 +1,14 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
 
 // usePlayer makes p the engine's player for the test.
@@ -30,12 +34,14 @@ func TestPlaybackSettingsSaved(t *testing.T) {
 	SetGapless(false)
 	SetCrossfadeMS(4000)
 	SetReplayGain(true)
-	want := config.Playback{Quality: 2, Gapless: false, CrossfadeMS: 4000, ReplayGain: true}
+	t.Cleanup(func() { playAlongside.Store(false) })
+	SetSingleDevice(false)
+	want := config.Playback{Quality: 2, Gapless: false, CrossfadeMS: 4000, ReplayGain: true, PlayAlongside: true}
 	if pb, ok := config.LoadPlayback(); !ok || pb != want {
 		t.Fatalf("playback.json %+v %v, want %+v", pb, ok, want)
 	}
-	if Quality() != 2 || Gapless() || CrossfadeMS() != 4000 || !ReplayGain() {
-		t.Fatalf("getters %d %v %d %v", Quality(), Gapless(), CrossfadeMS(), ReplayGain())
+	if Quality() != 2 || Gapless() || CrossfadeMS() != 4000 || !ReplayGain() || SingleDevice() {
+		t.Fatalf("getters %d %v %d %v %v", Quality(), Gapless(), CrossfadeMS(), ReplayGain(), SingleDevice())
 	}
 }
 
@@ -85,17 +91,66 @@ func TestPlaybackLoadMigratesTUIFiles(t *testing.T) {
 func TestPlaybackFileApplied(t *testing.T) {
 	fd := offlineEngine(t, "1001")
 	_ = fd
-	if err := config.SavePlayback(config.Playback{Quality: 2, Gapless: false, CrossfadeMS: 5000, ReplayGain: true}); err != nil {
+	if err := config.SavePlayback(config.Playback{Quality: 2, Gapless: false, CrossfadeMS: 5000, ReplayGain: true, PlayAlongside: true}); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { playAlongside.Store(false) })
 	p := &audio.Player{}
 	p.SetGapless(true)
 	applyPlayback(p, nil)
-	if p.Gapless() || p.CrossfadeMS() != 5000 || !p.ReplayGain() {
-		t.Fatalf("player %v %d %v", p.Gapless(), p.CrossfadeMS(), p.ReplayGain())
+	if p.Gapless() || p.CrossfadeMS() != 5000 || !p.ReplayGain() || SingleDevice() {
+		t.Fatalf("player %v %d %v, single device %v", p.Gapless(), p.CrossfadeMS(), p.ReplayGain(), SingleDevice())
 	}
 	t.Cleanup(Logout)
 	if !Init("1001") || Client().Quality() != 2 || Quality() != 2 {
 		t.Fatalf("client quality %d, engine %d after a login", Client().Quality(), Quality())
+	}
+}
+
+// A login hands the account's target loudness (GAIN.TARGET) to the player and,
+// once playback.json exists, keeps it there, so a start without a login
+// (offline) applies it.
+func TestLoginAppliesGainTarget(t *testing.T) {
+	offlineEngine(t, "1001")
+	p := &audio.Player{}
+	usePlayer(t, p)
+	t.Cleanup(Logout)
+	SetCrossfadeMS(0)
+	if !Init("1001") {
+		t.Fatal("login failed")
+	}
+	if got := p.ReplayGainTarget(); got != -15 {
+		t.Fatalf("player target %v after a login, want -15", got)
+	}
+	if pb, ok := config.LoadPlayback(); !ok || pb.GainTarget != -15 {
+		t.Fatalf("playback.json %+v %v, want gainTarget -15", pb, ok)
+	}
+	q := &audio.Player{}
+	applyPlayback(q, nil)
+	if got := q.ReplayGainTarget(); got != -15 {
+		t.Fatalf("a new player's target %v, want the saved -15", got)
+	}
+}
+
+// A login applies the account's target loudness without creating playback.json
+// (a host sends its defaults while the file is missing), and an unchanged
+// target writes nothing.
+func TestLoginKeepsPlaybackFileAsIs(t *testing.T) {
+	cacheProfile(t)
+	usePlayer(t, &audio.Player{})
+	applyPlayback(nil, deezer.New("arl"))
+	if _, ok := config.LoadPlayback(); ok {
+		t.Fatal("a login created playback.json")
+	}
+	SetCrossfadeMS(3000)
+	dir, _ := config.Dir()
+	path := filepath.Join(dir, "playback.json")
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	applyPlayback(nil, deezer.New("arl"))
+	if fi, err := os.Stat(path); err != nil || !fi.ModTime().Equal(old) {
+		t.Fatalf("a login with the same target rewrote playback.json (%v)", err)
 	}
 }

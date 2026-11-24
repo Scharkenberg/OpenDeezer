@@ -2,10 +2,10 @@ import Foundation
 import AppKit
 
 // TrayController gives OpenDeezer a menu-bar (NSStatusItem) presence and the
-// "close to tray / keep playing in background" behaviour. When close-to-tray is
+// "close to tray / keep playing in background" behavior. When close-to-tray is
 // on, hitting the window's close button hides the window (orderOut) and drops
 // the Dock icon instead of terminating, so the Go engine keeps playing. The
-// tray menu restores the window and quits. It honours the persisted setting.
+// tray menu restores the window and quits. It honors the persisted setting.
 @MainActor
 final class TrayController: NSObject, NSWindowDelegate {
     private var statusItem: NSStatusItem?

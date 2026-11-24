@@ -1,8 +1,6 @@
-// Package impex imports and exports playlists as local files (CSV in the
-// common Exportify style, extended M3U, JSON) and resolves imported rows back
-// to Deezer tracks (ISRC-first, then a fuzzy artist+title search). All file
-// handling is local; only resolution/creation touches the Deezer API, through
-// narrow interfaces so it stays fully testable offline.
+// Package impex imports and exports playlists as local files (Exportify-style CSV,
+// extended M3U, JSON) and resolves imported rows to Deezer tracks (ISRC first, then
+// artist and title search) through narrow interfaces.
 package impex
 
 import (
@@ -14,9 +12,8 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 )
 
-// csvHeader matches Exportify's column names for the fields this app has.
-// deezer.Track carries no ISRC, so that column is emitted empty — kept in the
-// header so re-imports and third-party tools see the familiar shape.
+// csvHeader matches Exportify's column names for the fields this app has. The ISRC
+// column is always empty (deezer.Track has none) but kept for familiar tooling.
 var csvHeader = []string{"Track Name", "Artist Name(s)", "Album Name", "ISRC"}
 
 // ExportCSV writes tracks as an Exportify-style CSV. The playlist name is not
@@ -84,7 +81,7 @@ type jsonTrack struct {
 	Artists    []string `json:"artists"`
 	Album      string   `json:"album,omitempty"`
 	DurationMS int64    `json:"durationMs,omitempty"`
-	ISRC       string   `json:"isrc,omitempty"` // always empty today (Track carries no ISRC)
+	ISRC       string   `json:"isrc,omitempty"` // always empty (Track carries no ISRC)
 }
 
 // ExportJSON writes tracks as a self-describing JSON document.

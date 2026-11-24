@@ -7,18 +7,13 @@ import (
 	"time"
 )
 
-// Transport carries every request of the engine to Deezer: the gateway, the
-// REST API, media URLs, streams, downloads and pictures share its connections,
-// so a stream or a download reuses the connection a resolve opened. Dial and
-// TLS timeouts guard connection setup and ResponseHeaderTimeout the first
-// answer; a body may take as long as it lasts (a stalled body is closed by its
-// reader's stall timer, and the caller's context ends it). A client takes it
-// when made (HTTPClient, New). Tests replace it with SetTransport, also while
-// a stream of an earlier test still makes its client.
+// Transport carries every request of the engine to Deezer, so streams reuse the
+// connections resolves opened. Timeouts cover dialing, TLS and the response header, not
+// the body. Tests swap it with SetTransport.
 func Transport() http.RoundTripper { return transport.Load().(roundTripper).RoundTripper }
 
-// SetTransport makes rt the transport of every client made from now on and
-// returns the one before.
+// SetTransport makes rt the transport of every client made after the call and
+// returns the previous one.
 func SetTransport(rt http.RoundTripper) http.RoundTripper {
 	return transport.Swap(roundTripper{rt}).(roundTripper).RoundTripper
 }
@@ -37,6 +32,9 @@ var transport = func() *atomic.Value {
 		ResponseHeaderTimeout: 30 * time.Second,
 		ExpectContinueTimeout: time.Second,
 		IdleConnTimeout:       90 * time.Second,
+		// An HTTP/2 connection that received nothing for 15 s is pinged and dropped when the
+		// ping goes unanswered for 5 s, so one left dead by a sleep does not hang a request.
+		HTTP2: &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 5 * time.Second},
 	}})
 	return &v
 }()

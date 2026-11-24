@@ -39,7 +39,7 @@ func fetchCover(url string) (image.Image, error) {
 	return img, err
 }
 
-// sample returns the source pixel mapped onto a cols×rows grid (nearest).
+// sampleAt returns the source pixel mapped onto a cols×rows grid (nearest).
 func sampleAt(img image.Image, gx, gy, cols, rows int) (uint8, uint8, uint8) {
 	b := img.Bounds()
 	sx := b.Min.X + gx*b.Dx()/cols

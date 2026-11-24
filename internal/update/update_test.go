@@ -14,7 +14,7 @@ func TestNewer(t *testing.T) {
 		{"1.10.0", "1.9.0", true}, // numeric, not lexical
 		{"1.5.1", "1.5.0", true},
 		{"1.5.1-rc1", "1.5.0", true}, // pre-release suffix stripped
-		{"v1.5.1", "v1.5.0", true},   // (parts strips no 'v'; caller trims — test the numeric path)
+		{"v1.5.1", "v1.5.0", true},   // (parts strips no 'v'; caller trims; test the numeric path)
 		{"3.1.0", "3.1.0-rc1", true}, // the release is newer than its rc
 		{"3.1.0-rc1", "3.1.0", false},
 	}

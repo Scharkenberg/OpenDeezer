@@ -248,9 +248,9 @@
     <string name="favorite_update_failed">تعذّر تحديث الإعجاب — تحقّق من اتصالك.</string>
     <string name="preview_chip">معاينة</string>
     <string name="account_free_hint">حساب مجاني · جودة قياسية (128 kbps)</string>
-    <string name="settings_ads">الإعلانات</string>
-    <string name="setting_disable_ads_title">تعطيل الإعلانات</string>
-    <string name="setting_disable_ads_disclaimer">Deezer Free مدعوم بالإعلانات. الإبلاغ عن عمليات الاستماع — مثل التطبيق الرسمي — يكافئ الفنانين ويشغّل الإعلانات. تعطيل هذا الخيار يزيل الإعلانات لكنه يوقف الإبلاغ عن عمليات الاستماع، مما يحرم الفنانين من عدد مرات الاستماع ويخالف شروط استخدام Deezer. استخدمه على مسؤوليتك الخاصة.</string>
+    <string name="settings_ads">الإبلاغ عن الاستماع</string>
+    <string name="setting_disable_ads_title">لا تبلّغ عن استماعي</string>
+    <string name="setting_disable_ads_disclaimer">لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك.</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -288,8 +288,6 @@
     <string name="cd_downloaded">تم التنزيل</string>
     <string name="cd_reorder">إعادة الترتيب</string>
     <string name="offline_ready">%1$s متاح دون اتصال</string>
-    <string name="offline_already">%1$s متاح بالفعل دون اتصال</string>
-    <string name="offline_needs_cache">فعّل ذاكرة التخزين المؤقت للبث في الإعدادات للتنزيل دون اتصال</string>
     <string name="device_self_phone">OpenDeezer (Android)</string>
     <string name="device_self_tv">OpenDeezer (Android TV)</string>
     <string name="settings_connect">OpenDeezer Connect</string>

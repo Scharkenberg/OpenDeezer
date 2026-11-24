@@ -6,10 +6,9 @@ import (
 	"sync/atomic"
 )
 
-// playGate orders the plays: every play path (Play, PlayEpisode, the control
-// API's plays, /next, /prev, /queue/jump, auto-advance) claims a sequence
-// number on entry, and startPlay starts only the newest claim, so a slow
-// resolve can't clobber a track started after it.
+// playGate orders the plays: every play path claims a sequence number on entry and
+// startPlay starts only the newest claim, so a slow resolve never overrides a later
+// track.
 type playGate struct {
 	seq atomic.Uint64
 	// startMu makes the superseded check and the start one step, so two

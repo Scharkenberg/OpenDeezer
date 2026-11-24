@@ -182,30 +182,24 @@ struct ChartsResponse: Decodable {
     let playlists: [Playlist]
 }
 
-// ArtistProfile (raw ArtistPage — capitalized keys, no json tags in the engine).
+// ArtistProfile: {artist, top, albums, related}.
 struct ArtistProfilePage: Decodable {
     let artist: ArtistInfo
     let top: [Track]
     let albums: [Album]
     let related: [ArtistInfo]
-
-    enum CodingKeys: String, CodingKey {
-        case artist = "Artist", top = "Top", albums = "Albums", related = "Related"
-    }
 }
 
-// Lyrics (raw Lyrics struct — capitalized keys).
+// Lyrics: {plain, synced: [{timeMs, text}], isSynced}.
 struct LyricLine: Decodable, Hashable {
     let timeMs: Int64
     let text: String
-    enum CodingKeys: String, CodingKey { case timeMs = "TimeMS", text = "Text" }
 }
 
 struct Lyrics: Decodable {
     let plain: String
     let synced: [LyricLine]
     var isSynced: Bool { !synced.isEmpty }
-    enum CodingKeys: String, CodingKey { case plain = "Plain", synced = "Synced" }
 }
 
 // Podcasts (documented lowercase wire contract, same keys as odmobile/corelib).

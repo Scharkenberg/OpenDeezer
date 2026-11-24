@@ -214,8 +214,8 @@
 "Download failed." = "डाउनलोड विफल रहा।";
 "Preview" = "झलक";
 "Free account · standard quality (128 kbps)" = "निःशुल्क खाता · मानक गुणवत्ता (128 kbps)";
-"Disable ads" = "विज्ञापन बंद करें";
-"Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk." = "Deezer Free विज्ञापन-समर्थित है। आधिकारिक ऐप की तरह आपके प्ले की रिपोर्टिंग कलाकारों को श्रेय देती है और विज्ञापनों को सक्षम बनाती है। इसे बंद करने पर विज्ञापन हट जाते हैं, लेकिन आपके प्ले की रिपोर्टिंग भी रुक जाती है, जिससे कलाकारों को उनकी प्ले गिनती नहीं मिलती और Deezer की उपयोग शर्तों का उल्लंघन होता है। इसका उपयोग अपने जोखिम पर करें।";
+"Don't report my plays" = "मेरे प्ले रिपोर्ट न करें";
+"OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk." = "OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।";
 
 /* Up Next / offline downloads / history / radio (3.x) */
 "%@ Radio" = "%@ रेडियो";

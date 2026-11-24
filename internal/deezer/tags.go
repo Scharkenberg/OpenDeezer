@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bogem/id3v2/v2"
 	"github.com/go-flac/flacpicture"
@@ -41,6 +42,9 @@ func upgradeArtworkURL(u string) string {
 	return u
 }
 
+// artworkTimeout bounds a whole cover download, so a stalled one cannot hold up a save.
+var artworkTimeout = 30 * time.Second
+
 func defaultArtworkFetcher(ctx context.Context, url string) ([]byte, error) {
 	if url == "" {
 		return nil, nil
@@ -49,8 +53,8 @@ func defaultArtworkFetcher(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", downloadUserAgent)
-	resp, err := HTTPClient(0).Do(req)
+	req.Header.Set("User-Agent", UserAgent)
+	resp, err := HTTPClient(artworkTimeout).Do(req)
 	if err != nil {
 		return nil, classifyNet(err)
 	}
@@ -61,11 +65,9 @@ func defaultArtworkFetcher(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// tagFile attaches metadata (and optional cover) to a freshly written audio
-// file. On any error the audio bytes are left untouched (no partial tag
-// overwrite that would corrupt playback) and the error is returned for the
-// caller to log as non-fatal. ext is the format ("mp3" or "flac"): the path is
-// a temp name that does not carry it.
+// tagFile writes metadata (and an optional cover) into a downloaded audio file. On
+// error the audio is left untouched and the error returned. ext is "mp3" or "flac",
+// since the temp path has no extension.
 func tagFile(ctx context.Context, path, ext string, t Track, artworkURL string, trackNumber int, date string, fetch ArtworkFetcher) error {
 	if fetch == nil {
 		fetch = defaultArtworkFetcher
@@ -156,27 +158,16 @@ func tagFLAC(path string, t Track, art []byte, trackNumber int, date string) err
 		}
 	}
 
+	// Add only rejects malformed field names, and these are the library's own.
 	cmts := flacvorbis.New()
-	// flacvorbis.Add only rejects malformed field names, and ours are library
-	// constants, so this never fails in practice — but aggregate the errors
-	// rather than silently dropping a comment on the floor.
-	var addErr error
-	add := func(field, val string) {
-		if addErr == nil {
-			addErr = cmts.Add(field, val)
-		}
-	}
-	add(flacvorbis.FIELD_TITLE, t.Name)
-	add(flacvorbis.FIELD_ARTIST, t.ArtistLine())
-	add(flacvorbis.FIELD_ALBUM, t.AlbumName)
+	_ = cmts.Add(flacvorbis.FIELD_TITLE, t.Name)
+	_ = cmts.Add(flacvorbis.FIELD_ARTIST, t.ArtistLine())
+	_ = cmts.Add(flacvorbis.FIELD_ALBUM, t.AlbumName)
 	if trackNumber > 0 {
-		add(flacvorbis.FIELD_TRACKNUMBER, fmt.Sprintf("%d", trackNumber))
+		_ = cmts.Add(flacvorbis.FIELD_TRACKNUMBER, fmt.Sprintf("%d", trackNumber))
 	}
 	if date != "" {
-		add(flacvorbis.FIELD_DATE, date)
-	}
-	if addErr != nil {
-		return fmt.Errorf("flac vorbis comment: %w", addErr)
+		_ = cmts.Add(flacvorbis.FIELD_DATE, date)
 	}
 	cm := cmts.Marshal()
 	newMeta = append(newMeta, &cm)
@@ -189,10 +180,8 @@ func tagFLAC(path string, t Track, art []byte, trackNumber int, date string) err
 		}
 	}
 
-	// A short write (ENOSPC, crash) must not destroy the just-downloaded audio
-	// while tagging errors are treated as non-fatal by callers. Write the
-	// tagged copy next to the original and atomically rename it over path only
-	// on full success; on any error the original bytes are never touched.
+	// Write the tagged copy next to the original and rename it over path only on full
+	// success, so a short write never destroys the downloaded audio.
 	mode := os.FileMode(0o644)
 	if fi, serr := src.Stat(); serr == nil {
 		mode = fi.Mode().Perm()

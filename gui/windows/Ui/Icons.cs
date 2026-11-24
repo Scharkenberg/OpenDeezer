@@ -46,8 +46,8 @@ internal static class Icons
     public const string Update = "\uE895";
     public const string Phone = "\uE8EA";
     public const string Info = "\uE946";
+    public const string Share = "\uE72D";
     public const string Podcast = "\uE720";
-    public const string Album = "\uE93C";
     public const string Computer = "\uE7F8";
     public const string Error = "\uE783";
     public const string Quality = "\uE8D6";
@@ -56,11 +56,11 @@ internal static class Icons
     public const string Clock = "\uE916";
     public const string PlayNext = "\uE72A";
     public const string Terminal = "\uE756";
-    public const string Devices = "\uE977";
     public const string Preset = "\uE81E";
     public const string Gain = "\uE995";
     public const string Headphones = "\uE7F6";
     public const string Code = "\uE943";
+    public const string Devices = "\uE977";
     // A track or collection kept for offline use; the Offline page.
     public const string Pinned = "\uEC61";
     public const string Offline = "\uE709";

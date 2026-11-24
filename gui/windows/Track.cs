@@ -1,4 +1,4 @@
-// The track model, deserialised from the wire. gui/windows.tests links this file.
+// The track model, deserialized from the wire. gui/windows.tests links this file.
 
 using System.Text.Json.Serialization;
 

@@ -22,11 +22,9 @@ var (
 	cacheDirOverride string
 )
 
-// SetBaseDir overrides the directory Dir returns. Hosts whose platform
-// os.UserConfigDir is not a writable, persistent path — Android and iOS, where
-// it resolves outside the app sandbox — must call this once at startup with an
-// app-private directory, otherwise settings (media.json, tokens) and on-disk
-// caches can't be saved or don't survive a relaunch. "" restores the default.
+// SetBaseDir overrides the directory Dir returns ("" restores the default). Android
+// and iOS hosts must call it at startup with an app-private directory, since
+// os.UserConfigDir is outside their sandbox.
 func SetBaseDir(dir string) {
 	baseDirMu.Lock()
 	baseDirOverride = strings.TrimSpace(dir)
@@ -109,13 +107,9 @@ func LoadControl() Control {
 	}
 	switch {
 	case v == "":
-		// Control isn't explicitly enabled — leave Enabled=false, but still fall
-		// through to read a configured token below. Callers that start a LAN
-		// server regardless of this flag (the phone remote and the Connect host)
-		// must honor a configured token; returning here would hand them an empty
-		// token and silently downgrade them to same-account auth. Enable-gated
-		// callers (startServices) still key off c.Enabled, so this only
-		// populates a field they'd otherwise skip.
+		// Control is not enabled: keep Enabled false but still read the token below. The phone
+		// remote and the Connect host start a LAN server regardless and must honor a
+		// configured token.
 	case v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes"):
 		c.Enabled = true
 	case v == "0" || strings.EqualFold(v, "off") || strings.EqualFold(v, "false") || strings.EqualFold(v, "no"):
@@ -129,7 +123,7 @@ func LoadControl() Control {
 		c.Token = readFile("control-token.txt")
 	}
 	// LAN bind + no token => default to same-account auth.
-	if c.Enabled && c.Token == "" && !isLoopbackAddr(c.Addr) {
+	if c.Enabled && c.Token == "" && !IsLoopbackAddr(c.Addr) {
 		c.SameAccount = true
 	}
 	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_CONTROL_SAMEACCOUNT")); v != "" {
@@ -138,9 +132,8 @@ func LoadControl() Control {
 	return c
 }
 
-// WriteFile writes contents to a file under Dir(), creating the directory if
-// needed. Unlike readFile it only ever targets the primary (platform) config
-// dir — there's exactly one place a setting should be written to.
+// WriteFile writes contents to a file under Dir(), creating the directory if needed.
+// It writes only to the primary config dir.
 func WriteFile(name, contents string) error {
 	dir, err := Dir()
 	if err != nil {
@@ -149,10 +142,8 @@ func WriteFile(name, contents string) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	// Write atomically (temp file + rename) so a crash or a concurrent reader in
-	// another client never sees a truncated/torn file — an emptied
-	// control-token.txt would silently downgrade the LAN control API from bearer
-	// auth to same-account auth.
+	// Write atomically (temp file and rename) so no reader sees a torn file; an empty
+	// control-token.txt would drop the LAN control API to same-account auth.
 	tmp, err := os.CreateTemp(dir, name+".tmp*")
 	if err != nil {
 		return err
@@ -177,10 +168,8 @@ func WriteFile(name, contents string) error {
 	return os.Rename(tmpName, filepath.Join(dir, name))
 }
 
-// SaveControlEnabled persists whether the control API starts automatically, so
-// a Settings UI can flip it without editing env vars or config files by hand.
-// addr is the bind address to remember while enabled (typically the current
-// LoadControl().Addr); pass "" to disable.
+// SaveControlEnabled saves whether the control API starts automatically. addr is the
+// bind address to remember while enabled (usually LoadControl().Addr); "" disables it.
 func SaveControlEnabled(enabled bool, addr string) error {
 	v := ""
 	if enabled {
@@ -196,10 +185,7 @@ func SaveControlToken(token string) error {
 }
 
 // IsLoopbackAddr reports whether a host:port binds only the loopback interface.
-func IsLoopbackAddr(addr string) bool { return isLoopbackAddr(addr) }
-
-// isLoopbackAddr reports whether a host:port binds only the loopback interface.
-func isLoopbackAddr(addr string) bool {
+func IsLoopbackAddr(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		host = addr
@@ -216,11 +202,9 @@ func isLoopbackAddr(addr string) bool {
 	return false
 }
 
-// LoadPeers returns manually-configured Connect peer addresses (host[:port]),
-// from $OPENDEEZER_CONNECT_PEERS (comma-separated) and
-// ~/.config/opendeezer/connect-peers.txt (one per line). These are merged into
-// the device picker alongside LAN discovery, so Connect works over networks that
-// carry no multicast/broadcast (e.g. Tailscale/VPN — unicast-only meshes).
+// LoadPeers returns manually configured Connect peers (host[:port]) from
+// $OPENDEEZER_CONNECT_PEERS (comma-separated) and connect-peers.txt (one per line),
+// for networks without multicast (e.g. Tailscale).
 func LoadPeers() []string {
 	var out []string
 	seen := map[string]bool{}
@@ -264,9 +248,8 @@ func NormalizePeer(addr string) (base, hostport string) {
 		return "", ""
 	}
 	if _, _, err := net.SplitHostPort(addr); err != nil {
-		// No port present. Bracket bare IPv6 literals (which themselves contain
-		// colons) before appending the default port so the result stays a valid
-		// host:port — Tailscale/VPN peers are commonly IPv6.
+		// No port: bracket a bare IPv6 literal before appending the default port, so the result
+		// is a valid host:port.
 		if ip := net.ParseIP(addr); ip != nil && ip.To4() == nil {
 			addr = "[" + addr + "]"
 		}
@@ -308,6 +291,50 @@ func SaveEQ(eq EQ) error {
 	return WriteFile("eq.json", string(b))
 }
 
+// LoadWebRelease returns the web player's build number and the script it was
+// read from, as the last login left them (web-release.json); "" when none did.
+func LoadWebRelease() (bundle, release string) {
+	var r struct{ Bundle, Release string }
+	_ = json.Unmarshal([]byte(readFile("web-release.json")), &r)
+	return r.Bundle, r.Release
+}
+
+// SaveWebRelease keeps the web player's build number read from bundle.
+func SaveWebRelease(bundle, release string) error {
+	b, err := json.Marshal(struct{ Bundle, Release string }{bundle, release})
+	if err != nil {
+		return err
+	}
+	return WriteFile("web-release.json", string(b))
+}
+
+// maxListens bounds the listens kept for a later send (listens.json).
+const maxListens = 1000
+
+// LoadListens returns the listen log entries kept because they could not be
+// sent (listens.json), oldest first.
+func LoadListens() []json.RawMessage {
+	var l []json.RawMessage
+	_ = json.Unmarshal([]byte(readFile("listens.json")), &l)
+	return l
+}
+
+// SaveListens keeps l, the listen log entries to send later, the newest
+// maxListens of them.
+func SaveListens(l []json.RawMessage) error {
+	if len(l) > maxListens {
+		l = l[len(l)-maxListens:]
+	}
+	if len(l) == 0 {
+		l = []json.RawMessage{}
+	}
+	b, err := json.Marshal(l)
+	if err != nil {
+		return err
+	}
+	return WriteFile("listens.json", string(b))
+}
+
 // Playback is the persisted playback settings (playback.json in the config
 // dir), loaded and saved by the engine and the terminal UI alike, so every
 // client plays with the same ones.
@@ -316,14 +343,19 @@ type Playback struct {
 	Gapless     bool `json:"gapless"`
 	CrossfadeMS int  `json:"crossfadeMs"`
 	ReplayGain  bool `json:"replayGain"` // loudness normalization
+
+	// GainTarget is the loudness, in dB, normalization turns tracks down to:
+	// the account's GAIN.TARGET from its last login.
+	GainTarget float64 `json:"gainTarget,omitempty"`
+
+	// PlayAlongside turns single-device playback off: playback neither pauses
+	// when another session of the account starts nor announces its own starts.
+	PlayAlongside bool `json:"playAlongside,omitempty"`
 }
 
-// LoadPlayback reads playback.json. While it does not exist, the terminal
-// UI's older files (quality.txt, gapless.txt, crossfade.txt, replaygain.txt
-// in Dir) are written into it once, whichever client loads first. ok is false
-// when it is missing with none of those, or unparseable: the caller keeps its
-// own values (and a host that stored them itself writes them here with its
-// first setter).
+// LoadPlayback reads playback.json. When it is missing, the TUI's older files
+// (quality.txt, gapless.txt, crossfade.txt, replaygain.txt) are migrated into it once.
+// ok is false when there is nothing to read or it does not parse.
 func LoadPlayback() (pb Playback, ok bool) {
 	s := readFile("playback.json")
 	if s == "" {
@@ -401,9 +433,8 @@ func UpdatePlayback(current func() Playback, edit func(*Playback)) error {
 // config dir), shared across every client like EQ. Its zero value is the
 // default behavior: no on-disk stream cache.
 type Media struct {
-	// MediaCacheMB is the on-disk raw-stream cache budget in megabytes
-	// (see internal/mediacache). 0 — the default — disables the cache
-	// entirely; negative values are clamped to 0.
+	// MediaCacheMB is the on-disk raw-stream cache budget in megabytes (see
+	// internal/mediacache). 0, the default, disables the cache; negatives clamp to 0.
 	MediaCacheMB int `json:"mediaCacheMB"`
 	// MediaCacheDir is the folder the user picked for the cache; "" (the
 	// default) is CacheBaseDir. The cache lives in its subfolder
@@ -413,7 +444,7 @@ type Media struct {
 	// this many days; 0 (the default) keeps them. Negative values are
 	// clamped to 0.
 	MediaCacheMaxAgeDays int `json:"mediaCacheMaxAgeDays,omitempty"`
-	// OldCachesRemoved records that the caches older versions kept outside
+	// OldCachesRemoved records that the old-layout caches kept outside
 	// an opendeezer-cache folder were looked for and removed.
 	OldCachesRemoved bool `json:"oldCachesRemoved,omitempty"`
 }
@@ -481,10 +512,8 @@ func LoadDiscordAppID() string {
 	return readFile("discord-app-id.txt")
 }
 
-// LoadLanguage returns the persisted UI language code (e.g. "fr", "zh"), from
-// $OPENDEEZER_LANG or ~/.config/opendeezer/language.txt. An empty result means
-// "auto" — the caller should fall back to locale detection. Shared across every
-// client so the language chosen in one place (TUI, GUI) applies everywhere.
+// LoadLanguage returns the UI language code (e.g. "fr") from $OPENDEEZER_LANG or
+// language.txt, shared by every client. "" means auto: use locale detection.
 func LoadLanguage() string {
 	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_LANG")); v != "" {
 		return v
@@ -492,12 +521,8 @@ func LoadLanguage() string {
 	return readFile("language.txt")
 }
 
-// LanguageSetting returns ONLY the persisted language file (~/.config/opendeezer/
-// language.txt), ignoring $OPENDEEZER_LANG. LoadLanguage lets the env var win so a
-// forced locale applies everywhere at startup; the in-app Language menu, however,
-// edits and displays its own persisted selection, so it must read the file alone —
-// otherwise a set OPENDEEZER_LANG would freeze the menu on one entry and desync its
-// label from the locale actually applied.
+// LanguageSetting returns only the saved language.txt value, ignoring $OPENDEEZER_LANG,
+// so the in-app Language menu shows and edits its own selection.
 func LanguageSetting() string {
 	return readFile("language.txt")
 }
@@ -507,10 +532,8 @@ func SaveLanguage(code string) error {
 	return WriteFile("language.txt", strings.TrimSpace(code))
 }
 
-// DefaultDownloadDir is where downloaded tracks land when the user hasn't chosen
-// a folder: <home>/Music/OpenDeezer, falling back to <home>/Downloads/OpenDeezer
-// and finally "OpenDeezer" in the working directory. Shared across every client
-// so the default is identical everywhere.
+// DefaultDownloadDir is the download folder when none is chosen: <home>/Music/OpenDeezer,
+// else <home>/Downloads/OpenDeezer, else "OpenDeezer" in the working directory.
 func DefaultDownloadDir() string {
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		music := filepath.Join(home, "Music")
@@ -522,10 +545,8 @@ func DefaultDownloadDir() string {
 	return "OpenDeezer"
 }
 
-// LoadDownloadDir returns the folder downloaded tracks are saved to, from
-// $OPENDEEZER_DOWNLOAD_DIR, then ~/.config/opendeezer/download-dir.txt, then
-// [DefaultDownloadDir]. Shared by the TUI and every GUI so a folder chosen in
-// one client applies everywhere.
+// LoadDownloadDir returns the download folder from $OPENDEEZER_DOWNLOAD_DIR, then
+// download-dir.txt, then [DefaultDownloadDir]; shared by every client.
 func LoadDownloadDir() string {
 	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_DOWNLOAD_DIR")); v != "" {
 		return v
@@ -542,11 +563,9 @@ func SaveDownloadDir(path string) error {
 	return WriteFile("download-dir.txt", strings.TrimSpace(path))
 }
 
-// LoadAdsDisabled reports whether the user has opted out of Deezer Free's
-// play-reporting/ads, from $OPENDEEZER_DISABLE_ADS or
-// ~/.config/opendeezer/ads-disabled.txt. Default false (ads/reporting on). This
-// only affects free accounts; it is the user's explicit, at-own-risk choice
-// (see deezer.SetAdsDisabled for the tradeoff). Shared across every client.
+// LoadAdsDisabled reports whether the user opted out of free-tier play reporting, from
+// $OPENDEEZER_DISABLE_ADS or ads-disabled.txt (default false). It is the user's own
+// at-risk choice (see deezer.SetAdsDisabled).
 func LoadAdsDisabled() bool {
 	v := strings.TrimSpace(os.Getenv("OPENDEEZER_DISABLE_ADS"))
 	if v == "" {

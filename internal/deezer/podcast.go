@@ -3,8 +3,9 @@ package deezer
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
 
 	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
@@ -38,10 +39,8 @@ func (c *Client) SearchPodcasts(query string) ([]Podcast, error) {
 	return out, nil
 }
 
-// PodcastEpisodes lists a show's episodes (public REST). It pages with
-// index/limit (mirrors AlbumTracks) until a short page or absent "next",
-// bounded by maxTracks. Without pagination only the first 100 episodes would
-// be returned and the rest silently lost.
+// PodcastEpisodes lists a show's episodes (public REST), paging with index/limit until a
+// short page or no "next", bounded by maxTracks.
 func (c *Client) PodcastEpisodes(podcastID string) ([]Episode, error) {
 	var out []Episode
 	for index := 0; index < maxTracks; index += albumPageSize {
@@ -77,9 +76,8 @@ func (c *Client) PodcastEpisodes(podcastID string) ([]Episode, error) {
 	return out, nil
 }
 
-// EpisodeMeta fetches a single episode's metadata (title, podcast name, artwork)
-// via the public REST /episode/{id} endpoint. Used to enrich now-playing after
-// DZPlayEpisode (which only receives the id + duration from the caller).
+// EpisodeMeta fetches an episode's title, podcast name and artwork via REST
+// /episode/{id}, to fill in the playing track after DZPlayEpisode.
 func (c *Client) EpisodeMeta(id string) (Episode, error) {
 	b, err := c.restGet("/episode/" + id)
 	if err != nil {
@@ -124,18 +122,6 @@ func (c *Client) PodcastEpisodeStream(episodeID string) (*StreamPlan, error) {
 		return nil, err
 	}
 
-	// Diagnostics: log every key + a value preview so the real stream-url field can
-	// be identified from a single playback attempt ($OPENDEEZER_LOG=debug).
-	keys := make([]string, 0, len(r.Results))
-	for k := range r.Results {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	odlog.Debug("episode %s gw keys: %s", episodeID, strings.Join(keys, ","))
-	for _, k := range keys {
-		odlog.Debug("episode %s field %s = %s", episodeID, k, preview(r.Results[k]))
-	}
-
 	// Fast path: the direct (DRM-free) MP3 URL field name has varied across the
 	// API; try the known ones first.
 	for _, k := range []string{"EPISODE_DIRECT_STREAM_URL", "DIRECT_STREAM_URL", "EPISODE_STREAM_URL", "MEDIA_URL"} {
@@ -156,16 +142,8 @@ func (c *Client) PodcastEpisodeStream(episodeID string) (*StreamPlan, error) {
 		return &StreamPlan{CDNURL: u, TrackID: episodeID, Format: "MP3", Encrypted: false}, nil
 	}
 
+	keys := slices.Sorted(maps.Keys(r.Results))
 	return nil, fmt.Errorf("episode %s: no direct stream url (gw keys: %s)", episodeID, strings.Join(keys, ","))
-}
-
-// preview renders a raw JSON value as a short string for logging.
-func preview(raw json.RawMessage) string {
-	s := string(raw)
-	if len(s) > 200 {
-		s = s[:200] + "…"
-	}
-	return s
 }
 
 // findStreamURL scans gw results for the best http(s) URL that looks like an

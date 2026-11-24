@@ -1320,7 +1320,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>Поведение</translation>
     </message>
     <message>
@@ -1435,18 +1435,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>Реклама</translation>
+        <source>Play reporting</source>
+        <translation>Учёт прослушиваний</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>Отключить рекламу</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>Не сообщать о моих прослушиваниях</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>Deezer Free существует за счёт рекламы. Передача данных о ваших прослушиваниях — как в официальном приложении — приносит доход артистам и обеспечивает показ рекламы. Отключение этой опции убирает рекламу, но прекращает передачу данных о ваших прослушиваниях, что лишает артистов их счётчика прослушиваний и нарушает условия использования Deezer. Используйте на свой страх и риск.</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск.</translation>
     </message>
 </context>
 </TS>

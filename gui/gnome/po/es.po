@@ -312,7 +312,7 @@ msgid "Crossfade"
 msgstr "Crossfade"
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr "Comportamiento"
 
 #: src/main.c:1857
@@ -384,11 +384,11 @@ msgid "Removed from Liked Songs"
 msgstr "Quitado de Canciones favoritas"
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr "No se pudo añadir a favoritos"
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr "No se pudo quitar de favoritos"
 
 #: src/main.c:2238 src/main.c:3702
@@ -958,26 +958,16 @@ msgid "Preview only — a 30-second clip"
 msgstr "Solo muestra — un fragmento de 30 segundos"
 
 #: src/main.c:1836
-msgid "Ads"
-msgstr "Anuncios"
+msgid "Play reporting"
+msgstr "Registro de reproducciones"
 
 #: src/main.c:1839
-msgid "Disable ads"
-msgstr "Desactivar anuncios"
+msgid "Don't report my plays"
+msgstr "No informar de mis reproducciones"
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
-msgstr ""
-"Deezer Free se financia con anuncios. Informar de tus reproducciones —como "
-"hace la app oficial— da crédito a los artistas e impulsa los anuncios. Al "
-"desactivarlo se quitan los anuncios, pero también se deja de informar de tus "
-"reproducciones, lo que priva a los artistas de sus recuentos de reproducción "
-"e incumple las condiciones de uso de Deezer. Úsalo bajo tu propia "
-"responsabilidad."
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "OpenDeezer no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad."
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3
 msgid "OpenDeezer"

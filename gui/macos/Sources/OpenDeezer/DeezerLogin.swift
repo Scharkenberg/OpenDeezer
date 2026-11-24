@@ -64,7 +64,7 @@ struct DeezerWebView: NSViewRepresentable {
 // DeezerLoginSheet presents the embedded login webview. On capture it hands the
 // arl to AppState (which runs DZInit + persists it); a spinner covers the webview
 // while signing in, and a failure banner lets the user try again or fall back to
-// manual ARL entry by cancelling.
+// manual ARL entry by canceling.
 struct DeezerLoginSheet: View {
     @EnvironmentObject var app: AppState
     // Either /login or / works; /login lands straight on the form.

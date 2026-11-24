@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Resources only: the accent, text and surface styles and the icon button
-     templates the code-built UI picks by name (Ui.Styles). Colours come through
+     templates the code-built UI picks by name (Ui.Styles). Colors come through
      ThemeResource setters, so light, dark and high contrast follow the system. -->
 <Application
     x:Class="OpenDeezer.App"
@@ -27,6 +27,10 @@
             </ResourceDictionary.ThemeDictionaries>
             <Style x:Key="BackdropVeil" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource BackdropVeilBrush}" />
+            </Style>
+            <!-- A marquee label: a transparent fill, so the pointer is seen anywhere on it. -->
+            <Style x:Key="MarqueePanel" TargetType="Panel">
+                <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
             </Style>
 
             <!-- Deezer violet as the system accent: every themed control derives from it. -->
@@ -100,6 +104,9 @@
             <Style x:Key="Icon20" TargetType="FontIcon">
                 <Setter Property="FontSize" Value="20" />
             </Style>
+            <Style x:Key="AccentIcon12" TargetType="FontIcon" BasedOn="{StaticResource Icon12}">
+                <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            </Style>
             <Style x:Key="AccentIcon16" TargetType="FontIcon" BasedOn="{StaticResource Icon16}">
                 <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
             </Style>
@@ -165,8 +172,8 @@
                 <Setter Property="HorizontalAlignment" Value="Center" />
                 <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
             </Style>
-            <!-- The player bar's now-playing region: a card, so it reads as one place even when empty. -->
-            <!-- A card in the player bar: tighter, so the bar keeps its height. -->
+            <!-- The player bar's now-playing region: a card, so it reads as one place even when empty;
+                 tighter, so the bar keeps its height. -->
             <Style x:Key="NowPlayingCard" TargetType="Border" BasedOn="{StaticResource CardBorder}">
                 <Setter Property="Padding" Value="8,4" />
             </Style>
@@ -224,6 +231,10 @@
                 </Setter>
             </Style>
             <!-- Button and row sizes are set from Size in Ui/Tokens.cs (Ui.Square, Ui.PlayButton, TrackList), not here. -->
+            <!-- Subtle with no padding: its content is the hit area (the bar's art and title). -->
+            <Style x:Key="SubtleFlushButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="Padding" Value="0" />
+            </Style>
             <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -352,7 +363,7 @@
             <Thickness x:Key="SettingsCardPadding">12,8,12,8</Thickness>
             <x:Double x:Key="SettingsCardMinHeight">44</x:Double>
             <Thickness x:Key="SettingsCardHeaderIconMargin">2,0,12,0</Thickness>
-            <Thickness x:Key="SettingsCardVerticalHeaderContentSpacing">0,4,0,0</Thickness>
+            <Thickness x:Key="SettingsCardVerticalHeaderContentSpacing">0,6,0,0</Thickness>
             <Thickness x:Key="SettingsExpanderHeaderPadding">12,8,4,8</Thickness>
             <Thickness x:Key="SettingsExpanderItemPadding">48,4,40,4</Thickness>
             <x:Double x:Key="SettingsExpanderContentMinHeight">40</x:Double>
@@ -375,7 +386,7 @@
                 <Setter Property="MinHeight" Value="28" />
                 <Setter Property="Padding" Value="10,3,6,4" />
             </Style>
-            <!-- A link among plain values: the values' colour, no border offset. -->
+            <!-- A link among plain values: the values' color, no border offset. -->
             <Style x:Key="ValueLinkStyle" TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}">
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="BorderThickness" Value="0" />

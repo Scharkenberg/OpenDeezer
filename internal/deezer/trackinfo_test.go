@@ -43,10 +43,9 @@ const (
 		`"label":"Parlophone (France)","nb_tracks":14,"duration":3660,"release_date":"2001-03-07","record_type":"album","type":"album"}`
 )
 
-// trackInfoServer serves gw, REST track and REST album fixtures from one
-// loopback httptest server; an empty body answers HTTP 500. The returned
-// counters record how often each source was hit. delay holds every answer;
-// hangAlbum leaves /album unanswered until the request is cancelled.
+// trackInfoServer serves gw, REST track and album fixtures from one loopback server (an
+// empty body answers 500) and counts hits per source. delay holds every answer;
+// hangAlbum holds /album until the request is canceled.
 type trackInfoServer struct {
 	gw, track, album       string
 	gwHits, trackHits, alb atomic.Int32

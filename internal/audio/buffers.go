@@ -2,15 +2,9 @@ package audio
 
 import "sync"
 
-// pcmRing is a fixed-capacity circular FIFO of decoded interleaved s16 PCM. The
-// decode goroutine writes (blocking while full, which paces decoding); the audio
-// callback reads (non-blocking — a short read is an underrun the caller pads
-// with silence). It is a true ring buffer: read/write touch only the bytes moved
-// (no full-buffer memmove), so the lock the realtime audio callback contends for
-// is held only briefly — the earlier slice-shift implementation held the lock
-// for an O(buffer) copy on every callback and starved the producer, causing
-// choppy playback. flush() drops buffered PCM and bumps a sequence so an
-// in-flight write for the pre-seek position is discarded.
+// pcmRing is a fixed-size circular FIFO of interleaved s16 PCM: the decoder writes
+// (blocking while full), the audio callback reads without blocking (a short read is an
+// underrun padded with silence). flush() drops the PCM and bumps a sequence.
 type pcmRing struct {
 	mu       sync.Mutex
 	cond     *sync.Cond
@@ -27,9 +21,8 @@ func newPCMRing(capacity int) *pcmRing {
 	return r
 }
 
-// write copies p into the ring, blocking until it all fits (or the ring is
-// closed/flushed). Returns false if closed or flushed (seq changed) — caller
-// stops/refreshes. Large p is written in capacity-sized waves as room frees.
+// write copies p into the ring, blocking until it all fits, in capacity-sized waves.
+// It returns false when the ring is closed or flushed (seq changed).
 func (r *pcmRing) write(p []byte, seq uint64) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()

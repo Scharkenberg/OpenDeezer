@@ -1,6 +1,7 @@
 package fr.cyclooo.opendeezer.player
 
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,18 +64,12 @@ sealed interface DownloadEvent {
         val error: String,
     ) : DownloadEvent
 
-    // Offline-cache population outcome for a single track (Download for offline).
-    // [alreadyCached] distinguishes "was already available" from a fresh fetch.
-    data class OfflineReady(override val trackName: String, val alreadyCached: Boolean) : DownloadEvent
+    // A single track was pinned for offline playback (Download for offline).
+    data class OfflineReady(override val trackName: String) : DownloadEvent
 
-    // Offline-cache population failed. [needsCache] is true when the raw-stream
-    // cache is disabled (the user must enable it in Settings), so the UI can show
-    // an actionable hint instead of a bare error.
-    data class OfflineFailed(
-        override val trackName: String,
-        val needsCache: Boolean,
-        val error: String,
-    ) : DownloadEvent
+    // The engine refused the pin; [error] is its reason, blank when the reply
+    // could not be read.
+    data class OfflineFailed(override val trackName: String, val error: String) : DownloadEvent
 }
 
 /**
@@ -166,22 +161,31 @@ class PlayerController(private val scope: CoroutineScope) {
 
     // ---- queue control ----
 
-    fun playQueue(tracks: List<Track>, startIndex: Int) {
+    // The list each track was queued from, for Deezer's listen log. A track
+    // without one (the engine added it, e.g. to keep Flow going) takes the
+    // list the queue was played from.
+    private val trackContexts = java.util.WeakHashMap<Track, ListenContext>()
+    private var queueContext = ListenContext.NONE
+
+    fun playQueue(tracks: List<Track>, startIndex: Int, context: ListenContext) {
         if (tracks.isEmpty()) return
+        queueContext = context
+        tracks.forEach { trackContexts[it] = context }
         queue = tracks
         index = startIndex.coerceIn(0, tracks.lastIndex)
         startCurrent()
     }
 
-    fun playSingle(track: Track) = playQueue(listOf(track), 0)
+    fun playSingle(track: Track, context: ListenContext) = playQueue(listOf(track), 0, context)
 
     /** Plays [track], appending it after the current item if a queue exists. */
-    fun playNow(track: Track) {
+    fun playNow(track: Track, context: ListenContext) {
         if (queue.isEmpty()) {
-            playSingle(track)
+            playSingle(track, context)
         } else {
             val mutable = queue.toMutableList()
             val at = (index + 1).coerceIn(0, mutable.size)
+            trackContexts[track] = context
             mutable.add(at, track)
             queue = mutable
             index = at
@@ -212,12 +216,11 @@ class PlayerController(private val scope: CoroutineScope) {
         }.getOrDefault(DownloadEvent.Failed(trackName, ""))
 
     /**
-     * Populates the offline media cache for [track] (raw ciphertext + plan meta)
-     * so it can later play with zero network, reporting the outcome via
-     * [downloadEvents] and, on success, marking the id in [offlineIds]. Premium-
-     * only and requires the raw-stream cache enabled in Settings — the engine
-     * rejects otherwise, surfaced as [DownloadEvent.OfflineFailed]. Episodes
-     * resolve through a different path and aren't cacheable here.
+     * Pins [track] for offline playback on this account; the engine fetches it
+     * in the background. Reports the outcome via [downloadEvents] and, on
+     * success, marks the id in [offlineIds]. Premium-only: the engine refuses
+     * otherwise, surfaced as [DownloadEvent.OfflineFailed]. Episodes can't be
+     * pinned.
      */
     fun downloadForOffline(track: Track) {
         if (track.isEpisode) return
@@ -234,12 +237,9 @@ class PlayerController(private val scope: CoroutineScope) {
         runCatching {
             val o = JSONObject(json)
             val err = o.optString("error")
-            if (err.isNotBlank()) {
-                DownloadEvent.OfflineFailed(trackName, needsCache = err.contains("cache"), error = err)
-            } else {
-                DownloadEvent.OfflineReady(trackName, alreadyCached = o.optString("status") == "already_cached")
-            }
-        }.getOrDefault(DownloadEvent.OfflineFailed(trackName, needsCache = false, error = ""))
+            if (err.isNotBlank()) DownloadEvent.OfflineFailed(trackName, err)
+            else DownloadEvent.OfflineReady(trackName)
+        }.getOrDefault(DownloadEvent.OfflineFailed(trackName, ""))
 
     /** Downloads a whole album to the shared folder; reports a batch summary. */
     fun downloadAlbum(id: String, name: String) = downloadBatch(name) { Engine.downloadAlbum(id) }
@@ -267,7 +267,7 @@ class PlayerController(private val scope: CoroutineScope) {
     fun startTrackRadio(track: Track) {
         scope.launch {
             val tracks = Engine.trackMix(track.id)
-            if (tracks.isNotEmpty()) playQueue(tracks, 0)
+            if (tracks.isNotEmpty()) playQueue(tracks, 0, ListenContext("track_mix_contextual", track.id))
         }
     }
 
@@ -275,7 +275,7 @@ class PlayerController(private val scope: CoroutineScope) {
     fun startArtistRadio(artistId: String) {
         scope.launch {
             val tracks = Engine.artistMix(artistId)
-            if (tracks.isNotEmpty()) playQueue(tracks, 0)
+            if (tracks.isNotEmpty()) playQueue(tracks, 0, ListenContext("artist_smartradio", artistId))
         }
     }
 
@@ -309,10 +309,11 @@ class PlayerController(private val scope: CoroutineScope) {
     }
 
     fun prev() {
-        // Past a few seconds, "prev" restarts the current track (matches every
-        // music player); otherwise step back honoring shuffle/repeat, and at the
-        // very start with no wrap, restart instead.
-        if (Engine.positionMs() > 3000L) {
+        // From 5 s in, "prev" restarts the current track (as Deezer's Android
+        // app does); otherwise step back honoring shuffle/repeat, and at the
+        // very start with no wrap, restart instead. While a start is in flight
+        // the position is the outgoing track's: step back.
+        if (!startInFlight && Engine.positionMs() >= 5000L) {
             control { Engine.seek(0) }
             return
         }
@@ -351,7 +352,8 @@ class PlayerController(private val scope: CoroutineScope) {
     }
 
     /** Inserts [track] immediately after the current row (keeps playing). */
-    fun playNext(track: Track) {
+    fun playNext(track: Track, context: ListenContext) {
+        trackContexts[track] = context
         val json = queueJson(listOf(track))
         scope.launch { Engine.queueInsertNext(json) }
     }
@@ -362,11 +364,12 @@ class PlayerController(private val scope: CoroutineScope) {
      * push mirror the full list into the engine. Starts playback when the queue
      * is empty.
      */
-    fun addToQueue(track: Track) {
+    fun addToQueue(track: Track, context: ListenContext) {
         if (queue.isEmpty()) {
-            playSingle(track)
+            playSingle(track, context)
             return
         }
+        trackContexts[track] = context
         queue = queue + track
         pushImmediate()
     }
@@ -421,17 +424,17 @@ class PlayerController(private val scope: CoroutineScope) {
         }
     }
 
-    // ---- truthful favourites ----
+    // ---- truthful favorites ----
 
     /** Refresh the cached liked-id set from engine truth (login + after a toggle). */
     fun refreshLikedIds() {
-        scope.launch { _likedIds.value = Engine.favoriteIds() }
+        scope.launch { Engine.favoriteIds()?.let { _likedIds.value = it } }
     }
 
     /**
      * Optimistically flips the heart, then reconciles: on success re-pulls the
      * authoritative id set; on failure reverts the cache and signals a snackbar
-     * revert via [favoriteFailures]. Episodes aren't favouritable.
+     * revert via [favoriteFailures]. Episodes aren't favoritable.
      */
     fun toggleFavorite(track: Track) {
         if (track.isEpisode) return
@@ -441,7 +444,7 @@ class PlayerController(private val scope: CoroutineScope) {
         scope.launch {
             val ok = if (wasLiked) Engine.removeFavorite(id) else Engine.addFavorite(id)
             if (ok) {
-                _likedIds.value = Engine.favoriteIds()
+                Engine.favoriteIds()?.let { _likedIds.value = it }
             } else {
                 _likedIds.value = if (wasLiked) _likedIds.value + id else _likedIds.value - id
                 _favoriteFailures.emit(Unit)
@@ -465,7 +468,9 @@ class PlayerController(private val scope: CoroutineScope) {
         // A full play discards any armed preload engine-side; forget ours too so
         // armPreload() re-arms (or clears) from scratch after the start lands.
         preloadedId = null
+        val context = trackContexts[t] ?: queueContext
         scope.launch {
+            Engine.setListenContext(context)
             if (t.isEpisode) Engine.playEpisode(t.id, t.durationMs) else Engine.play(t.id, t.durationMs)
             if (gen == startGen) {
                 // Baseline after the new track actually replaced the old one, so a
@@ -697,7 +702,7 @@ class PlayerController(private val scope: CoroutineScope) {
         }
     }
 
-    // Serialises the queue into the engine's list wire shape (only id is strictly
+    // Serializes the queue into the engine's list wire shape (only id is strictly
     // required, but durationMs feeds remote end-of-track detection).
     private fun queueJson(tracks: List<Track>): String {
         val arr = JSONArray()

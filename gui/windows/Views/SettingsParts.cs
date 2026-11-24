@@ -19,12 +19,25 @@ internal sealed class DeviceSetting
 
     public DeviceSetting()
     {
+        var dq = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _combo = Ui.Combo([], -1, i =>
         {
             string id = _devices[i].Id;
-            App.Session.Settings.AudioDevice = id;
-            Engine.Post(() => DeezerCore.DZSetAudioDevice(id));
-            App.Session.SaveSettingsSoon();
+            // Saved only once the engine took it: a refused device is said, and not kept.
+            Engine.Post(() =>
+            {
+                bool ok = DeezerCore.DZSetAudioDevice(id) != 0;
+                dq.TryEnqueue(() =>
+                {
+                    if (!ok)
+                    {
+                        Toast.Error(Loc.S("Settings_DeviceRefused"), "");
+                        return;
+                    }
+                    App.Session.Settings.AudioDevice = id;
+                    App.Session.SaveSettingsSoon();
+                });
+            });
         });
         _combo.MaxWidth = Size.FieldMax;
         Root = Ui.Setting("Settings_OutputDevice", null, Icons.Speakers, _combo);
@@ -103,10 +116,10 @@ internal sealed class StorageGroup
 
 // A folder typed or picked: the download folder and the stream cache's folder. `apply` runs off
 // the UI thread and answers "" or the reason the folder was refused (the box then goes back).
-// With `confirmKey`, a change is confirmed first.
+// With `confirmKey`, a change is confirmed first. The box and Browse go under the title (Ui.Setting).
 internal sealed class FolderSetting
 {
-    private readonly TextBox _box = new() { MinWidth = Size.FieldMin };
+    private readonly TextBox _box = new();
     private readonly string _headerKey;
     private readonly string? _confirmKey;
     private readonly Func<string, string> _apply;
@@ -129,6 +142,7 @@ internal sealed class FolderSetting
         {
             if (e.Key == VirtualKey.Enter) Apply(_box.Text);
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_box, Loc.S(headerKey));
         Root = Ui.Setting(headerKey, null, glyph, Ui.Grid("* auto", Space.S, _box, Ui.Button(Loc.S("Btn_Browse"), Browse)));
         group.Add(Root);
     }
@@ -158,7 +172,8 @@ internal sealed class FolderSetting
     {
         _asking = true;
         var answer = new TaskCompletionSource<bool>();
-        var flyout = StorageGroup.Confirm(_confirmKey!, ("Btn_Change", () => answer.TrySetResult(true)), ("Btn_Cancel", () => answer.TrySetResult(false)));
+        // Closing it answers no, as for Clear cache.
+        var flyout = StorageGroup.Confirm(_confirmKey!, ("Btn_Change", () => answer.TrySetResult(true)));
         flyout.Closed += (_, _) => answer.TrySetResult(false);
         flyout.ShowAt(_box);
         bool ok = await answer.Task;

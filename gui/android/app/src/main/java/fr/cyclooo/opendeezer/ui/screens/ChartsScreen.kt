@@ -22,6 +22,7 @@ import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.Album
 import fr.cyclooo.opendeezer.engine.ArtistInfo
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.engine.SearchResults
 import fr.cyclooo.opendeezer.player.PlayerController
@@ -60,6 +61,7 @@ fun ChartsScreen(
                     SearchResultsList(
                         results = c,
                         player = player,
+                        context = ListenContext("tops_track", "0"),
                         onAlbum = onAlbum,
                         onArtist = onArtist,
                         onPlaylist = onPlaylist,

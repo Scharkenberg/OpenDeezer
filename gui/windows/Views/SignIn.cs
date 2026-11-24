@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Networking.Connectivity;
 
 namespace OpenDeezer;
 
@@ -18,7 +17,6 @@ internal sealed class SignInView : View
     private readonly StackPanel _arlEntry;
     private readonly InfoBar _error = new() { IsOpen = false, IsClosable = true, Severity = InfoBarSeverity.Error };
     private readonly ProgressBar _progress = new() { IsIndeterminate = true, Visibility = Visibility.Collapsed };
-    private NetworkStatusChangedEventHandler? _online;
 
     public override FrameworkElement Root => _state.Root;
 
@@ -55,7 +53,7 @@ internal sealed class SignInView : View
         if (!isBack && Session.StartupPending) _ = Run(Session.ResumeAsync);
     }
 
-    public override void Hide() => StopNetworkWatch();
+    public override void Hide() => Session.StopNetworkWatch();
 
     private void ContinueWithDeezer() =>
         Nav.Push<WebSignInView>(new Func<string, Task>(arl => Run(() => Session.SignInAsync(arl))));
@@ -73,7 +71,7 @@ internal sealed class SignInView : View
 
     private async Task Run(Func<Task<SignInResult>> attempt)
     {
-        StopNetworkWatch();
+        Session.StopNetworkWatch();
         _error.IsOpen = false;
         _state.ShowContent();
         SetBusy(true);
@@ -86,7 +84,7 @@ internal sealed class SignInView : View
                 break;
             case SignInResult.Offline:
                 _state.ShowError(Loc.S("NoInternet_Title") + "\n" + Loc.S("NoInternet_Body"), Retry);
-                StartNetworkWatch();
+                Session.WatchNetwork(Retry);
                 break;
             case SignInResult.Failed:
             case SignInResult.NoAudio:
@@ -113,23 +111,5 @@ internal sealed class SignInView : View
     {
         _error.Message = text;
         _error.IsOpen = true;
-    }
-
-    // Retries by itself once Windows reports Internet access again.
-    private void StartNetworkWatch()
-    {
-        var dq = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        _online = _ => dq.TryEnqueue(() =>
-        {
-            if (_online != null && NetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess) Retry();
-        });
-        NetworkInformation.NetworkStatusChanged += _online;
-    }
-
-    private void StopNetworkWatch()
-    {
-        if (_online == null) return;
-        NetworkInformation.NetworkStatusChanged -= _online;
-        _online = null;
     }
 }

@@ -47,7 +47,7 @@ func TestSleepTimerDurationArmAndCancel(t *testing.T) {
 	if p.SleepActive() {
 		t.Fatal("CancelSleepTimer should disarm")
 	}
-	// Cancelling must restore full sleep gain so playback isn't left silenced.
+	// Canceling must restore full sleep gain so playback isn't left silenced.
 	if sg := math.Float64frombits(p.sleepGain.Load()); sg != 1 {
 		t.Errorf("sleepGain after cancel = %v, want 1", sg)
 	}

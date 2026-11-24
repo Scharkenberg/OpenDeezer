@@ -17,8 +17,8 @@ func TestNewRemoteClient(t *testing.T) {
 	}
 }
 
-// TestHostStartStop verifies the inbound side: a Host binds a control endpoint
-// and starts advertising, then shuts down cleanly.
+// TestHostStartStop checks the inbound side: a Host binds a control endpoint
+// and starts advertising, then shuts down.
 func TestHostStartStop(t *testing.T) {
 	h := connect.NewHost(
 		connect.HostConfig{
@@ -57,7 +57,7 @@ func TestRemoteClientRoundTrip(t *testing.T) {
 		cycled, toggled bool
 		sleepMin        int
 		sleepEOT        bool
-		sleepCancelled  bool
+		sleepCanceled   bool
 	)
 	eq := connect.EQState{Preset: "flat", GainsDB: make([]float64, 10),
 		Presets: []string{"flat", "rock"}}
@@ -74,7 +74,7 @@ func TestRemoteClientRoundTrip(t *testing.T) {
 			CycleRepeat:      func() { cycled = true },
 			ToggleShuffle:    func() { toggled = true },
 			SetSleepTimer:    func(min int, eot bool) { sleepMin, sleepEOT = min, eot },
-			CancelSleepTimer: func() { sleepCancelled = true },
+			CancelSleepTimer: func() { sleepCanceled = true },
 		},
 		nil, // browse endpoints disabled → Search/Playlists must error
 	)
@@ -84,8 +84,8 @@ func TestRemoteClientRoundTrip(t *testing.T) {
 		SetEnabled: func(on bool) { eq.Enabled = on },
 		SetPreset:  func(name string) error { eq.Preset = name; return nil },
 	})
-	// Tolerate an advertising failure (multicast-less CI network): the control
-	// endpoint is still serving and that is all this test drives.
+	// An advertising failure (no multicast on CI) is accepted: the control endpoint still
+	// serves, and that is all this test drives.
 	if err := h.Start(); err != nil && !errors.Is(err, connect.ErrAdvertise) {
 		t.Fatal("Start:", err)
 	}
@@ -108,8 +108,8 @@ func TestRemoteClientRoundTrip(t *testing.T) {
 	if _, err := rc.SetSleepTimer(0, true); err != nil || !sleepEOT {
 		t.Errorf("SetSleepTimer: err=%v min=%d eot=%v", err, sleepMin, sleepEOT)
 	}
-	if _, err := rc.CancelSleepTimer(); err != nil || !sleepCancelled {
-		t.Errorf("CancelSleepTimer: err=%v cancelled=%v", err, sleepCancelled)
+	if _, err := rc.CancelSleepTimer(); err != nil || !sleepCanceled {
+		t.Errorf("CancelSleepTimer: err=%v canceled=%v", err, sleepCanceled)
 	}
 
 	st, err := rc.SetEQ(url.Values{"on": {"1"}, "preset": {"rock"}})
@@ -130,10 +130,9 @@ func TestRemoteClientRoundTrip(t *testing.T) {
 	}
 }
 
-// TestRemoteClientQueueAndEvents drives a Host through the queue/album methods
-// and smoke-tests the SSE state stream: the initial snapshot must arrive over
-// the (LAN-capable) control endpoint, and cancelling the context must close
-// the channel.
+// TestRemoteClientQueueAndEvents drives a Host through the queue and album methods and
+// checks that the SSE stream delivers an initial snapshot and closes when the context
+// is canceled.
 func TestRemoteClientQueueAndEvents(t *testing.T) {
 	var (
 		addID   string
@@ -196,7 +195,7 @@ func TestRemoteClientQueueAndEvents(t *testing.T) {
 		select {
 		case _, ok := <-states:
 			if !ok {
-				return // channel closed on cancel — done
+				return // channel closed on cancel: done
 			}
 		case <-deadline:
 			t.Fatal("channel not closed after context cancel")

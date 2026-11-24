@@ -43,6 +43,13 @@ object Engine {
         Json.account(runCatching { Odmobile.account() }.getOrNull())
     }
 
+    fun userId(): String = runCatching { Odmobile.userID() }.getOrDefault("")
+
+    // Names the list the next plays come from (see [ListenContext]).
+    fun setListenContext(context: ListenContext) {
+        runCatching { Odmobile.setListenContext(context.type, context.id) }
+    }
+
     fun setClientInfo(client: String, device: String) {
         runCatching { Odmobile.setClientInfo(client, device) }
     }
@@ -60,20 +67,15 @@ object Engine {
 
     suspend fun favorites(): List<Track> = io { Json.tracks(Odmobile.favorites()) }
 
-    // Client-side favourite check: the engine has no dedicated lookup, so we
-    // reconcile against the loaded favourites list. Best-effort — false on error.
-    suspend fun isFavorite(id: String): Boolean =
-        runCatching { favorites().any { it.id == id } }.getOrDefault(false)
-
-    // The account's liked track ids in a single call (reuses the same favourites
+    // The account's liked track ids in a single call (reuses the same favorites
     // fetch the library view uses), so hearts render truthfully across lists
-    // without a per-track lookup. Empty on error / not logged in.
-    suspend fun favoriteIds(): Set<String> =
+    // without a per-track lookup. Null on error / not logged in / offline.
+    suspend fun favoriteIds(): Set<String>? =
         io { Json.favoriteIds(runCatching { Odmobile.favoriteIDsJSON() }.getOrNull()) }
     suspend fun playlists(): List<Playlist> = io { Json.playlists(Odmobile.playlists()) }
     suspend fun playlistTracks(id: String): List<Track> = io { Json.tracks(Odmobile.playlistTracks(id)) }
     suspend fun albumTracks(id: String): List<Track> = io { Json.tracks(Odmobile.albumTracks(id)) }
-    suspend fun flow(): List<Track> = io { Json.tracks(Odmobile.flow()) }
+    suspend fun flow(): List<Track> = io { Json.tracks(Odmobile.flow("")) }
     suspend fun artistTop(id: String): List<Track> = io { Json.tracks(Odmobile.artistTop(id)) }
 
     // Full artist profile (top tracks + albums + related artists) in one call.
@@ -97,7 +99,7 @@ object Engine {
     suspend fun chartsOrNull(): SearchResults? =
         io { raw(runCatching { Odmobile.charts() }.getOrNull())?.let(Json::search) }
     suspend fun flowOrNull(): List<Track>? =
-        io { raw(runCatching { Odmobile.flow() }.getOrNull())?.let(Json::tracks) }
+        io { raw(runCatching { Odmobile.flow("") }.getOrNull())?.let(Json::tracks) }
     suspend fun favoritesOrNull(): List<Track>? =
         io { raw(runCatching { Odmobile.favorites() }.getOrNull())?.let(Json::tracks) }
     suspend fun playlistsOrNull(): List<Playlist>? =
@@ -184,14 +186,12 @@ object Engine {
     suspend fun queueInsertNext(trackJson: String) =
         io { runCatching { Odmobile.queueInsertNext(trackJson) }.let {} }
 
-    // ---- offline download (premium-only; requires the stream cache enabled) ----
-    // Populates the on-disk media cache with the raw ciphertext for [id] so it
-    // can later play with zero network. Returns the engine's raw JSON:
-    // {"status":"cached|already_cached|cache_only","key":"...","trackID":"..."}
-    // or {"error":"..."} (e.g. "media cache disabled" when the stream cache is
-    // off). Blocking / network-bound — pinned to Dispatchers.IO.
+    // ---- offline pin ----
+    // Pins track [id] for offline play; the engine fetches it in the background.
+    // Returns the engine's raw JSON: {"error":""} when the pin is accepted or
+    // {"error":"reason"} when it is refused. Kept on Dispatchers.IO.
     suspend fun downloadForOffline(id: String): String =
-        io { runCatching { Odmobile.downloadForOffline(id) }.getOrDefault("""{"error":"failed"}""") }
+        io { runCatching { Odmobile.pinOffline("track", id) }.getOrDefault("""{"error":"failed"}""") }
 
     // ---- downloads (premium-only; the engine rejects the request otherwise) ----
     // Returns the engine's raw JSON: {"path":"..."} on success or {"error":"..."}.
@@ -292,7 +292,7 @@ object Engine {
         io { runCatching { Odmobile.addToPlaylist(playlistId, trackId) }.getOrDefault(false) }
     suspend fun removeFromPlaylist(playlistId: String, trackId: String): Boolean =
         io { runCatching { Odmobile.removeFromPlaylist(playlistId, trackId) }.getOrDefault(false) }
-    suspend fun createPlaylist(title: String): String? = io { Json.playlistId(Odmobile.createPlaylist(title)) }
+    suspend fun createPlaylist(title: String): String? = io { Json.playlistId(Odmobile.createPlaylist(title, "")) }
     suspend fun renamePlaylist(id: String, title: String): Boolean =
         io { runCatching { Odmobile.renamePlaylist(id, title) }.getOrDefault(false) }
     suspend fun deletePlaylist(id: String): Boolean = io { runCatching { Odmobile.deletePlaylist(id) }.getOrDefault(false) }

@@ -13,7 +13,7 @@ import (
 // mobile binding and the terminal UI): media.json's size, age and folder
 // applied at once, and the cache in use handed to Attach whenever it changes.
 type Host struct {
-	// Attach receives the cache to use from now on, nil when it closes.
+	// Attach receives the cache to use from this point on, nil when it closes.
 	Attach func(*Cache)
 	// Pinned reports whether anything is pinned for offline use: the cache
 	// then stays open at a size of 0. nil: nothing is ever pinned.
@@ -64,10 +64,9 @@ func (h *Host) SetMB(mb int) error {
 	return nil
 }
 
-// applyLocked makes the cache match a size of mb megabytes: it opens one (in
-// media.json's folder, with its age) when needed, applies the limit to an
-// open one, and with 0 removes its unpinned entries, and closes and detaches
-// it when nothing is pinned.
+// applyLocked matches the cache to mb megabytes: opens one when needed (in
+// media.json's folder, with its age), applies the limit, and at 0 removes unpinned
+// entries and closes it when nothing is pinned.
 func (h *Host) applyLocked(mb int) error {
 	c := h.cur.Load()
 	want := mb > 0 || h.pinned()
@@ -156,12 +155,9 @@ func (h *Host) Stats() Stats {
 	return st
 }
 
-// SetDir moves the cache to the subfolder opendeezer-cache of dir, an
-// absolute path ("" = the default folder). The pinned entries are copied
-// there; then the old cache is cleared, so the new one holds only them. A
-// relative path or a file is refused; on any error (a copy too) the old
-// folder stays in use. The copy runs without holding the other settings:
-// Stats, Clear, SetMB and the pins' Open answer meanwhile, on the old folder.
+// SetDir moves the cache to dir\opendeezer-cache (dir absolute, "" = default), copying
+// the pinned entries and then clearing the old cache. On any error the old folder stays
+// in use. Other calls are served by the old folder during the copy.
 func (h *Host) SetDir(dir string) error {
 	h.moveMu.Lock()
 	defer h.moveMu.Unlock()
@@ -208,7 +204,7 @@ func (h *Host) SetDir(dir string) error {
 	if err == nil && h.cur.Load() != prev {
 		err = errors.New("mediacache: the cache closed during the move")
 	}
-	m := config.LoadMedia() // the size and age as set now, also during the copy
+	m := config.LoadMedia() // the size and age as currently set, also during the copy
 	m.MediaCacheDir = dir
 	if err == nil {
 		err = config.SaveMedia(m)

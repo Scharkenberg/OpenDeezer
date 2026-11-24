@@ -216,12 +216,9 @@ func TestYearFromDate(t *testing.T) {
 	}
 }
 
-// TestSaveTrack_EmitsAlbumTrackNumberAndYear proves the album track number and
-// release year flow all the way through the *production* download path: the
-// Track is built by the real restTrackDTO decode (AlbumTracks), and saveTrack
-// tags the file with t.TrackNumber / t.Year — not the literal 0/"" that only
-// the unit tests used to pass. A single httptest server plays both the REST
-// album-tracks listing and the CDN audio source.
+// TestSaveTrack_EmitsAlbumTrackNumberAndYear checks that the track number and year from
+// the real restTrackDTO decode reach the tags through saveTrack. One httptest server
+// serves both the REST listing and the CDN audio.
 func TestSaveTrack_EmitsAlbumTrackNumberAndYear(t *testing.T) {
 	tmp := t.TempDir()
 

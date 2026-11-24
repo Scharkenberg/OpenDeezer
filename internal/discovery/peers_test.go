@@ -13,6 +13,9 @@ import (
 // instead of holding the list for the control client's 15 s.
 func TestProbePeersListsConfiguredPeers(t *testing.T) {
 	answering := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-OpenDeezer-Account") != "" {
+			t.Errorf("%s sent the account id to an unauthenticated peer", r.URL.Path)
+		}
 		_, _ = w.Write([]byte(`{"name":"Den","auth":"account","client":"tui","version":"9"}`))
 	}))
 	defer answering.Close()
@@ -27,7 +30,7 @@ func TestProbePeersListsConfiguredPeers(t *testing.T) {
 	t.Setenv("OPENDEEZER_CONNECT_PEERS", a+","+s+","+answering.URL)
 
 	start := time.Now()
-	devs, _ := ProbePeers(500*time.Millisecond, 0, "acct")
+	devs, _ := ProbePeers(500*time.Millisecond, 0)
 	if took := time.Since(start); took > 3*time.Second {
 		t.Fatalf("ProbePeers took %v with a silent peer, want about the timeout", took)
 	}

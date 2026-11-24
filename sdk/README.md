@@ -328,7 +328,7 @@ c.QueueRemove(3)            // drop entry 3
 Instead of polling `Status`, subscribe to the server's `GET /events` stream
 (Server-Sent Events) with `Events`. The first `State` snapshot arrives
 immediately, then one on every wire-visible change. The returned channel is
-**closed when the context is cancelled or the connection drops** (no automatic
+**closed when the context is canceled or the connection drops** (no automatic
 reconnect — call `Events` again). Snapshots are coalesced for slow consumers:
 you may skip intermediate states but always see the newest one. It works over
 LAN like every other method, and `connect.RemoteClient` exposes the identical

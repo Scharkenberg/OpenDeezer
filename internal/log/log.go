@@ -142,7 +142,11 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 		}
 	}
 	n, err := r.f.Write(p)
-	r.size += int64(n)
+	if err != nil {
+		r.size += int64(len(p)) // a closed file writes nothing: count it, so the reopen is tried again
+	} else {
+		r.size += int64(n)
+	}
 	return n, err
 }
 

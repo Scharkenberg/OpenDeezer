@@ -160,10 +160,8 @@ func TestReadPCMShortReadTailSilent(t *testing.T) {
 	}
 }
 
-// TestSeekPastDecodableEndFinishesTrack: the duration (whole seconds) exceeds
-// the decoded length; a seek into the difference while the decoder is still
-// mid-track ends the track instead of decoding on from the old position. The
-// decoder of either format may panic on such a seek; that is a seek error too.
+// TestSeekPastDecodableEndFinishesTrack: a seek beyond the decoded length (the duration
+// is rounded up) ends the track. A decoder panic on such a seek counts as a seek error.
 func TestSeekPastDecodableEndFinishesTrack(t *testing.T) {
 	for _, tc := range []struct {
 		format string
@@ -447,5 +445,22 @@ func TestConcurrentPlayKeepsMetadata(t *testing.T) {
 			t.Fatalf("iteration %d: cur %s/%d, published %s/%d", i, cur.plan().Format, cur.durMS, p.Format(), p.totalMS.Load())
 		}
 		p.Stop()
+	}
+}
+
+// A timed sleep timer while nothing plays costs no ticks, and still clears at its time.
+func TestIdleSleepTimerDoesNotTick(t *testing.T) {
+	p := newPlayer(&mockOutput{})
+	go p.manage()
+	defer p.Close()
+	p.SetSleepTimer(time.Hour, false)
+	time.Sleep(400 * time.Millisecond)
+	if n := p.ticks.Load(); n != 0 {
+		t.Fatalf("%d ticks in 400 ms while stopped with a timer armed", n)
+	}
+	p.SetSleepTimer(200*time.Millisecond, false)
+	waitFor(t, "the idle timer to clear", func() bool { return !p.SleepActive() })
+	if n := p.ticks.Load(); n != 0 {
+		t.Fatalf("%d ticks while the idle timer ran", n)
 	}
 }

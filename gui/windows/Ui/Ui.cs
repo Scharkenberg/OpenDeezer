@@ -38,6 +38,7 @@ internal static class Ui
         public static Style TrackListItem => Get("TrackListItemStyle");
         public static Style IconToggle => Get("IconToggleButtonStyle");
         public static Style Subtle => Get("SubtleButtonStyle");
+        public static Style SubtleFlush => Get("SubtleFlushButtonStyle");
         public static Style Accent => Get("AccentButtonStyle");
         public static Style Play => Get("PlayButtonStyle");
         public static Style PlayRing => Get("PlayRingStyle");
@@ -110,7 +111,7 @@ internal static class Ui
         return b;
     }
 
-    // A track's heart; ShowLiked fills it in the accent colour.
+    // A track's heart; ShowLiked fills it in the accent color.
     public static Button LikeButton(double size, Action onClick) => IconButton(Icons.Heart, "Menu_Like", onClick, side: size);
 
     public static void ShowLiked(Button like, bool liked)
@@ -156,7 +157,7 @@ internal static class Ui
         return b;
     }
 
-    // `value`: a link among plain values, in their colour and alignment.
+    // `value`: a link among plain values, in their color and alignment.
     public static HyperlinkButton Link(string text, Action onClick, bool value = false)
     {
         var b = new HyperlinkButton { Content = text, Style = value ? Styles.Get("ValueLinkStyle") : Styles.Link };
@@ -237,11 +238,11 @@ internal static class Ui
 
     public static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 
-    // The presenter brings the padding.
-    public static Flyout Flyout(string? titleKey, UIElement content, double minWidth = Size.FlyoutWidth)
+    // A flyout of a fixed width: what it shows (an opened list, a longer name) never resizes it.
+    public static Flyout Flyout(string? titleKey, UIElement content)
     {
         var panel = Stack(Space.S, titleKey == null ? null : Text(Loc.S(titleKey), TextKind.Strong), content);
-        panel.MinWidth = minWidth;
+        panel.Width = Size.FlyoutWidth;
         panel.FlowDirection = Loc.FlowDirection;
         return new Flyout { Content = panel };
     }
@@ -264,14 +265,26 @@ internal static class Ui
         return b;
     }
 
-    // A settings row. The toolkit's properties are non-nullable but accept null.
-    public static SettingsCard Setting(string headerKey, string? descKey, string? glyph, FrameworkElement? control) => Compact(new SettingsCard
+    // A settings row.
+    public static SettingsCard Setting(string headerKey, string? descKey, string? glyph, FrameworkElement? control)
     {
-        Header = Loc.S(headerKey),
-        Description = descKey == null ? null! : Loc.S(descKey),
-        HeaderIcon = glyph == null ? null! : new FontIcon { Glyph = glyph },
-        Content = control,
-    });
+        var card = Compact(new SettingsCard
+        {
+            Header = Loc.S(headerKey),
+            // The toolkit's properties are non-nullable but accept null.
+            Description = descKey == null ? null! : Loc.S(descKey),
+            HeaderIcon = glyph == null ? null! : new FontIcon { Glyph = glyph },
+            Content = control,
+        });
+        // A control that stretches (a field row: a Grid with a star column) goes under the title, the
+        // card's whole width: beside it, a long value squeezes the title to a few letters a line.
+        if (control is Grid g && System.Linq.Enumerable.Any(g.ColumnDefinitions, c => c.Width.IsStar))
+        {
+            card.ContentAlignment = ContentAlignment.Vertical;
+            card.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        }
+        return card;
+    }
 
     // The toolkit's templates read their sizes from the toolkit's own dictionary first, so the
     // app's values (App.xaml, keys starting with "Settings") only apply from the card's own resources.
@@ -334,6 +347,14 @@ internal static class Ui
         return sw;
     }
 
+    // A switch with its name before it, both centered on the line; `more` follows them.
+    public static StackPanel LabeledSwitch(ToggleSwitch sw, string nameKey, params FrameworkElement[] more)
+    {
+        var row = Row(Space.S, [Text(Loc.S(nameKey), TextKind.SecondaryBody), sw, .. more]);
+        foreach (var e in row.Children) ((FrameworkElement)e).VerticalAlignment = VerticalAlignment.Center;
+        return row;
+    }
+
     public static Slider Slider(double min, double max, double value, string nameKey, Action<double> changed)
     {
         var s = new Slider { Minimum = min, Maximum = max, Value = value, VerticalAlignment = VerticalAlignment.Center };
@@ -349,12 +370,45 @@ internal static class Ui
     {
         var c = new ComboBox { MinWidth = Size.FieldMin };
         foreach (var i in items) c.Items.Add(i);
+        FitWidest(c);
         c.SelectedIndex = selected;
         c.SelectionChanged += (_, _) =>
         {
             if (!s_quiet.Contains(c) && c.SelectedIndex >= 0) changed(c.SelectedIndex);
         };
         return c;
+    }
+
+    // A ComboBox measures only its selected item until its list has been open, then its widest
+    // item: sized up front to the widest (and again, once, after the items change), opening it never
+    // changes its width, or that of the surface around it.
+    private static void FitWidest(ComboBox c)
+    {
+        double floor = c.MinWidth;
+        void Fit()
+        {
+            var probe = new TextBlock { FontSize = c.FontSize, FontFamily = c.FontFamily };
+            double widest = 0;
+            foreach (var item in c.Items)
+            {
+                probe.Text = item as string ?? (item as ContentControl)?.Content as string ?? "";
+                probe.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+                widest = Math.Max(widest, probe.DesiredSize.Width);
+            }
+            c.MinWidth = Math.Max(floor, Math.Ceiling(widest) + Size.ComboChrome);
+        }
+        // A list filled one item at a time is measured once, after the fill.
+        bool queued = false;
+        c.Items.VectorChanged += (_, _) =>
+        {
+            if (queued) return;
+            queued = c.DispatcherQueue.TryEnqueue(() =>
+            {
+                queued = false;
+                Fit();
+            });
+        };
+        Fit();
     }
 
     // A programmatic update that the control's own change handler ignores.
@@ -388,7 +442,7 @@ internal static class Ui
     {
         var column = Stack(0, children);
         column.MaxWidth = maxWidth;
-        // A grid between scroller and column, so a capped column is centred in the viewport.
+        // A grid between scroller and column, so a capped column is centered in the viewport.
         var host = new Grid();
         host.Children.Add(column);
         var scroller = Scroller(host);
@@ -419,6 +473,9 @@ internal static class Ui
     // before its content loads, then followed through its XamlRoot. Pictures decode at shown
     // size times this.
     public static double Scale { get; set; } = 1;
+
+    // A window's display scale: its DPI over the 96 of 100 %.
+    public static double DpiScale(IntPtr hwnd) => NativeMethods.GetDpiForWindow(hwnd) is var dpi and > 0 ? dpi / 96.0 : 1;
 
     public static void FollowScale(XamlRoot root)
     {

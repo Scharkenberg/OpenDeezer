@@ -214,8 +214,8 @@
 "Download failed." = "Error al descargar.";
 "Preview" = "Vista previa";
 "Free account · standard quality (128 kbps)" = "Cuenta gratuita · calidad estándar (128 kbps)";
-"Disable ads" = "Desactivar anuncios";
-"Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk." = "Deezer Free se financia con anuncios. Informar de tus reproducciones —como hace la app oficial— acredita a los artistas e impulsa los anuncios. Desactivar esto elimina los anuncios, pero deja de informar de tus reproducciones, lo que priva a los artistas de su recuento de reproducciones e incumple las condiciones de uso de Deezer. Úsalo bajo tu propia responsabilidad.";
+"Don't report my plays" = "No informar de mis reproducciones";
+"OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk." = "OpenDeezer no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad.";
 
 /* Up Next / offline downloads / history / radio (3.x) */
 "%@ Radio" = "Radio de %@";

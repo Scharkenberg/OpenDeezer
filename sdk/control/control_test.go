@@ -45,7 +45,7 @@ func TestNewServerStartStop(t *testing.T) {
 }
 
 func TestNewServerNilDeezer(t *testing.T) {
-	// Passing nil for the Deezer client is valid — browse endpoints return 503.
+	// Passing nil for the Deezer client is valid: browse endpoints return 503.
 	srv := control.NewServer(
 		control.Config{Addr: "127.0.0.1:0"},
 		func() control.State { return control.State{State: "stopped"} },
@@ -115,7 +115,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 		t.Errorf("SetSleepTimer: err=%v min=%d eot=%v", err, sleepMin, sleepEOT)
 	}
 	if _, err := c.CancelSleepTimer(); err != nil || !sleepXCncl {
-		t.Errorf("CancelSleepTimer: err=%v cancelled=%v", err, sleepXCncl)
+		t.Errorf("CancelSleepTimer: err=%v canceled=%v", err, sleepXCncl)
 	}
 
 	st, err := c.SetEQ(url.Values{"on": {"1"}, "preset": {"rock"}})
@@ -204,8 +204,8 @@ func TestClientServerQueueRoundTrip(t *testing.T) {
 	}
 }
 
-// TestClientEvents smoke-tests the SSE stream: the initial snapshot must
-// arrive, and cancelling the context must close the channel.
+// TestClientEvents checks the SSE stream: the initial snapshot arrives, and
+// canceling the context closes the channel.
 func TestClientEvents(t *testing.T) {
 	srv := control.NewServer(
 		control.Config{Addr: "127.0.0.1:0"},
@@ -244,7 +244,7 @@ func TestClientEvents(t *testing.T) {
 		select {
 		case _, ok := <-states:
 			if !ok {
-				return // channel closed on cancel — done
+				return // channel closed on cancel: done
 			}
 		case <-deadline:
 			t.Fatal("channel not closed after context cancel")

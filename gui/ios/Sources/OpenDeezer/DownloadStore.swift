@@ -23,9 +23,9 @@ final class DownloadStore: ObservableObject {
     /// Whether `id` has been cached for offline playback this session.
     func isOffline(_ id: String) -> Bool { offlineTrackIDs.contains(id) }
 
-    /// Cache `track`'s stream for offline playback (premium-only, and needs the
-    /// stream cache enabled — the engine surfaces both gates as an error). On
-    /// success the track id is remembered so its row shows a downloaded check.
+    /// Pin `track` for offline playback (premium-only; the engine fetches it in
+    /// the background and reports a refusal as an error). On success the track
+    /// id is remembered so its row shows a downloaded check.
     func downloadForOffline(_ track: Track, isPremium: Bool) {
         guard isPremium else {
             setStatus(String(localized: "Requires a paid Deezer plan"))
@@ -45,7 +45,6 @@ final class DownloadStore: ObservableObject {
                 return
             }
             offlineTrackIDs.insert(id)
-            if let cached = result.cachedTrackID { offlineTrackIDs.insert(cached) }
             setStatus(String(localized: "“\(name)” is available offline"))
         }
     }

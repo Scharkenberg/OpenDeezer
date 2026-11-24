@@ -1,4 +1,4 @@
-// Engine JSON responses (internal/bridge/dto.go), each deserialised once through WireJson.
+// Engine JSON responses (internal/bridge/dto.go), each deserialized once through WireJson.
 
 using System;
 using System.Collections.Generic;
@@ -12,6 +12,12 @@ namespace OpenDeezer;
 internal record Reply
 {
     public string Error { get; init; } = "";
+}
+
+// DZLastErrorJSON: Network is set when the reason is a lost network, not the track.
+internal sealed record LastErrorReply : Reply
+{
+    public bool Network { get; init; }
 }
 
 internal sealed record ArtistRef
@@ -38,6 +44,7 @@ internal sealed record Playlist
     public string Owner { get; init; } = "";
     public int TrackCount { get; init; }
     public string ArtworkUrl { get; init; } = "";
+    public string OwnerId { get; init; } = "";
 }
 
 internal sealed record ArtistInfo
@@ -51,10 +58,8 @@ internal sealed record ArtistInfo
 // DZMediaCacheStatsJSON: what the stream cache holds; pinned (offline) bytes are outside the limit.
 internal sealed record MediaCacheStats
 {
-    public int Entries { get; init; }
     public long Bytes { get; init; }
     public long PinnedBytes { get; init; }
-    public long MaxBytes { get; init; }
     public string Dir { get; init; } = "";
 }
 
@@ -71,7 +76,6 @@ internal sealed record TrackInfo : Reply
     public long DurationMs { get; init; }
     public string ReleaseDate { get; init; } = "";
     public double Bpm { get; init; }
-    public double Gain { get; init; }
     public string Isrc { get; init; } = "";
     public bool Explicit { get; init; }
     public string Copyright { get; init; } = "";
@@ -83,7 +87,6 @@ internal sealed record TrackArtist
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";
     public string Role { get; init; } = "";
-    public string PictureUrl { get; init; } = "";
 }
 
 internal sealed record TrackAlbum
@@ -100,7 +103,6 @@ internal sealed record TrackAlbum
 internal sealed record Contributor
 {
     public string RoleKey { get; init; } = "";
-    public string Role { get; init; } = "";
     public IReadOnlyList<string> Names { get; init; } = [];
 }
 
@@ -121,7 +123,13 @@ internal sealed record Episode
     public string ArtworkUrl { get; init; } = "";
     public long DurationMs { get; init; }
     public string ReleaseDate { get; init; } = "";
-    public string PodcastName { get; init; } = "";
+}
+
+// Where the account stopped in an episode (seconds) and whether it heard it (DZEpisodeBookmarksJSON).
+internal sealed record EpisodeBookmark
+{
+    public int Offset { get; init; }
+    public bool Heard { get; init; }
 }
 
 internal sealed record TracksReply : Reply
@@ -174,6 +182,56 @@ internal sealed record LyricLine
 {
     public long TimeMs { get; init; }
     public string Text { get; init; } = "";
+    // The line in the reader's language, where Deezer has it.
+    public string Translated { get; init; } = "";
+}
+
+// DZLibraryJSON: the account's favorite albums, artists or podcasts (one of them per reply).
+internal sealed record LibraryReply : Reply
+{
+    public IReadOnlyList<Album> Albums { get; init; } = [];
+    public IReadOnlyList<ArtistInfo> Artists { get; init; } = [];
+    public IReadOnlyList<Podcast> Podcasts { get; init; } = [];
+}
+
+// A search history entry or a search's best result: Type is Deezer's ("Track", "Album", "Artist",
+// "Playlist", "Podcast", "PodcastEpisode", "Livestream").
+internal sealed record SearchItem : Reply
+{
+    public string Type { get; init; } = "";
+    public string Id { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string Subtitle { get; init; } = "";
+    public string Picture { get; init; } = "";
+}
+
+// DZPinnedJSON: what the account pinned to Home, in its order.
+internal sealed record PinnedReply : Reply
+{
+    public IReadOnlyList<SearchItem> Items { get; init; } = [];
+}
+
+internal sealed record ExplicitContent : Reply
+{
+    public string Level { get; init; } = "";
+    public IReadOnlyList<string> Available { get; init; } = [];
+    public bool CanEdit { get; init; }
+}
+
+internal sealed record FlowMood
+{
+    public string Id { get; init; } = "";
+    public string Title { get; init; } = "";
+}
+
+internal sealed record PlaylistDetails : Reply
+{
+    public string Id { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string Description { get; init; } = "";
+    public bool IsPrivate { get; init; }
+    public bool IsCollaborative { get; init; }
+    public string OwnerId { get; init; } = "";
 }
 
 internal sealed record Lyrics : Reply
@@ -222,6 +280,7 @@ internal sealed record HistoryEntry
     public string Album { get; init; } = "";
     public string Kind { get; init; } = "";
     public string ArtworkUrl { get; init; } = "";
+    public long DurationMs { get; init; }
 
     public Track ToTrack() => new()
     {
@@ -230,6 +289,7 @@ internal sealed record HistoryEntry
         ArtistLine = Artist,
         AlbumName = Album,
         ArtworkUrl = ArtworkUrl,
+        DurationMs = DurationMs,
         IsEpisode = Kind == "episode",
     };
 }
@@ -240,14 +300,12 @@ internal sealed record TrackStat
     public string Title { get; init; } = "";
     public string Artist { get; init; } = "";
     public int Plays { get; init; }
-    public long TotalSec { get; init; }
 }
 
 internal sealed record ArtistStat
 {
     public string Artist { get; init; } = "";
     public int Plays { get; init; }
-    public long TotalSec { get; init; }
 }
 
 internal sealed record HistoryStats : Reply
@@ -263,7 +321,6 @@ internal sealed record UpdateInfo : Reply
     public string Latest { get; init; } = "";
     public bool HasUpdate { get; init; }
     public string Url { get; init; } = "";
-    public string Notes { get; init; } = "";
 
     // The engine compares the release with its own version; the app uses its assembly version.
     public UpdateInfo ForApp(string appVersion)
@@ -329,7 +386,6 @@ internal sealed record OfflineCollection
     public int TrackCount { get; init; }
     // Tracks whose body is stored.
     public int Fetched { get; init; }
-    public long PinnedAt { get; init; }
 }
 
 internal sealed record OfflineCollectionsReply : Reply
@@ -365,7 +421,6 @@ internal sealed record ControlConfig : Reply
     public string Addr { get; init; } = "";
     public string Token { get; init; } = "";
     public bool Lan { get; init; }
-    public bool Running { get; init; }
 }
 
 internal sealed record WebRemoteInfo : Reply
@@ -373,11 +428,22 @@ internal sealed record WebRemoteInfo : Reply
     public bool Enabled { get; init; }
     public string Code { get; init; } = "";
     public string Url { get; init; } = "";
-    public int Port { get; init; }
+}
+
+// DZElsewhereJSON: what another session of the account plays. Deezer announces no pause, so it
+// counts as playing there until UntilMs (Unix ms). Track is null when that session went on to a
+// track it did not name.
+internal sealed record Elsewhere
+{
+    public Track? Track { get; init; }
+    public long UntilMs { get; init; }
+
+    public bool PlayingAt(long unixMs) => unixMs < UntilMs;
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(Reply))]
+[JsonSerializable(typeof(LastErrorReply))]
 [JsonSerializable(typeof(MediaCacheStats))]
 [JsonSerializable(typeof(Track))]
 [JsonSerializable(typeof(TracksReply))]
@@ -407,6 +473,17 @@ internal sealed record WebRemoteInfo : Reply
 [JsonSerializable(typeof(ControlConfig))]
 [JsonSerializable(typeof(WebRemoteInfo))]
 [JsonSerializable(typeof(Settings))]
+[JsonSerializable(typeof(SavedQueue))]
+[JsonSerializable(typeof(LibraryReply))]
+[JsonSerializable(typeof(PinnedReply))]
+[JsonSerializable(typeof(SearchItem))]
+[JsonSerializable(typeof(SearchItem[]))]
+[JsonSerializable(typeof(ExplicitContent))]
+[JsonSerializable(typeof(FlowMood[]))]
+[JsonSerializable(typeof(PlaylistDetails))]
+[JsonSerializable(typeof(IReadOnlyList<string>))]
+[JsonSerializable(typeof(Dictionary<string, EpisodeBookmark>))]
+[JsonSerializable(typeof(Elsewhere))]
 internal sealed partial class WireJson : JsonSerializerContext;
 
 internal static class Dto

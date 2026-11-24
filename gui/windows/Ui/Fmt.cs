@@ -26,6 +26,10 @@ internal static class Fmt
                          : Loc.Format("Size_GbFormat", (mb / 1024).ToString("0.#", Loc.Culture));
     }
 
+    // An engine date ("2026-11-20", "2026-11-20 10:00:00") in the reader's short form.
+    public static string Date(string date) =>
+        System.DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d.ToString("d", Loc.Culture) : date;
+
     public static string Fans(long n) => n <= 0 ? "" : Loc.Plural("Fans", n);
 
     public static string Band(double hz) =>

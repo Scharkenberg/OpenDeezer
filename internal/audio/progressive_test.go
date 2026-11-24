@@ -32,9 +32,8 @@ func throttledServer(body []byte, chunk int, delay time.Duration) *httptest.Serv
 	}))
 }
 
-// TestProgressiveStartMP3 confirms MP3 decoding begins (PCM lands in the ring)
-// before the full download completes, against a throttled server. Previously the
-// decoder waited for the whole file (waitDone) before emitting any audio.
+// TestProgressiveStartMP3 checks that MP3 PCM reaches the ring before a throttled
+// download completes.
 func TestProgressiveStartMP3(t *testing.T) {
 	mp3 := makeMP3(1400) // ~584KB, comfortably above the 256KB watermark floor
 	srv := throttledServer(mp3, 32*1024, 10*time.Millisecond)

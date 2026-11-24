@@ -5,18 +5,12 @@ import (
 	"testing"
 )
 
-// Fuzz the custom BF_CBC_STRIPE decryptor (decrypt.go). Deezer's CDN streams
-// arrive as untrusted bytes, so the decrypt path must never panic and must
-// preserve some structural invariants on ANY input. Run locally with e.g.:
-//
-//	go test -run=^$ -fuzz=FuzzDecryptTrack -fuzztime=30s ./internal/deezer
-//
-// These are also the seeds OSS-Fuzz / ClusterFuzzLite continuously fuzzes.
+// Fuzz the BF_CBC_STRIPE decryptor: CDN bytes are untrusted, so decrypting must never
+// panic on any input. Run locally with
+// go test -run=^$ -fuzz=FuzzDecryptTrack -fuzztime=30s ./internal/deezer
 
-// FuzzDecryptTrack feeds arbitrary track ids + ciphertext and asserts the
-// length-preserving invariant: the stripe scheme decrypts every full 2048-byte
-// chunk in place and passes the trailing partial chunk through, so the output
-// length always equals the input length.
+// FuzzDecryptTrack checks that output length equals input length: full 2048-byte
+// chunks decrypt in place and the trailing partial chunk passes through.
 func FuzzDecryptTrack(f *testing.F) {
 	f.Add("3135556", []byte("the quick brown fox jumps over the lazy dog 0123456789"))
 	f.Add("0", []byte{})
@@ -32,10 +26,8 @@ func FuzzDecryptTrack(f *testing.F) {
 	})
 }
 
-// FuzzStripeChunking asserts the decryptor is independent of how the input is
-// chopped into Feed() calls: feeding the whole buffer at once must produce the
-// exact same bytes as feeding it as two arbitrary slices. This catches any
-// off-by-one or buffering bug in the chunk accumulator.
+// FuzzStripeChunking checks that feeding the buffer at once and as two arbitrary
+// slices gives the same bytes.
 func FuzzStripeChunking(f *testing.F) {
 	f.Add("3135556", []byte("streaming in two halves should equal one whole feed"), uint16(7))
 	f.Add("42", make([]byte, 2048*2), uint16(2048))

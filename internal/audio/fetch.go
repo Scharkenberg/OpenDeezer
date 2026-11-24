@@ -13,14 +13,13 @@ import (
 // (a full disk).
 var ErrWrite = errors.New("the stream could not be written")
 
-// Fetch downloads plan's stream into c the way a play does (into a cache
-// temp file, resuming a torn transfer, refreshing an expired URL, adopted only
-// at its declared size), without decoding it, and returns once the body is
-// c's entry or the fetch failed. Cancelling ctx stops it. A write failure is
-// ErrWrite with the reason.
+// Fetch downloads plan's stream into c as a play does (temp file, resume, URL refresh,
+// adopted only at its declared size) without decoding it, and returns when the body is
+// c's entry or the fetch failed. Canceling ctx stops it; a write failure is ErrWrite,
+// one that ended on a lost network satisfies deezer.IsNoNetwork.
 func Fetch(ctx context.Context, plan *deezer.StreamPlan, c StreamCache) error {
 	s := &source{ring: newPCMRing(0), cache: c}
-	s.pl.Store(newPlayPlan(plan))
+	s.pl.Store(plan)
 	s.sb = newStreamFile(nil) // nothing reads it back: no decryptor
 	s.cond = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -39,6 +38,9 @@ func Fetch(ctx context.Context, plan *deezer.StreamPlan, c StreamCache) error {
 		return fmt.Errorf("%w: %s", ErrWrite, s.lastErr())
 	}
 	if e := s.lastErr(); e != "" {
+		if s.errNet.Load() {
+			return fmt.Errorf("%w: %s", deezer.ErrNoNetwork, e)
+		}
 		return errors.New(e)
 	}
 	f, _, ok := c.Get(s.cacheKey(s.plan()))

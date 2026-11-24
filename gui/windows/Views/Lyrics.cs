@@ -1,8 +1,10 @@
-// Lyrics of the playing track. Synced lines follow playback and seek on click; scrolling by
-// hand pauses the follow for a few seconds.
+// Lyrics of the playing track. Synced lines follow playback and seek on click or Enter (each line
+// is a tab stop); scrolling by hand pauses the follow for a few seconds. Where Deezer has a
+// translation, a switch shows it under each line.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -16,12 +18,13 @@ internal sealed class LyricsView : View
     private readonly Art _art = new(ArtShape.Small, Size.RowArt);
     private readonly TextBlock _title = Ui.Text("", TextKind.Strong);
     private readonly TextBlock _artist = Ui.Text("", TextKind.SecondaryCaption);
-    private readonly StackPanel _lines = Ui.Stack(Space.M);
-    private readonly ScrollViewer _scroller;
+    internal readonly StackPanel _lines = Ui.Stack(Space.M);
+    internal readonly ScrollViewer _scroller;
     private readonly StateView _state;
-    private readonly List<TextBlock> _blocks = new();
+    private readonly List<TextBlock> _blocks = new(), _translations = new();
+    private readonly ToggleSwitch _translate;
     private Lyrics _lyrics = new();
-    private string _trackId = "";
+    private string _shownId = ""; // the track whose lyrics are on screen, "" while none are
     private int _active = -1;
     private long _userScrollTick;
 
@@ -30,7 +33,13 @@ internal sealed class LyricsView : View
 
     public LyricsView()
     {
-        var header = Ui.Grid("auto *", Space.M, _art.Root, Ui.Stack(0, _title, _artist));
+        _translate = Ui.Switch(false, "Lyrics_Translation", on =>
+        {
+            foreach (var t in _translations) t.Visibility = Ui.Show(on && t.Text.Length > 0);
+        });
+        _translate.OnContent = Loc.S("Lyrics_Translation");
+        _translate.OffContent = Loc.S("Lyrics_Translation");
+        var header = Ui.Grid("auto * auto", Space.M, _art.Root, Ui.Stack(0, _title, _artist), _translate);
         header.Margin = Pad.Header;
         _scroller = Ui.Page(Size.ReadingMax, header, _lines);
         void User() => _userScrollTick = Environment.TickCount64;
@@ -61,8 +70,8 @@ internal sealed class LyricsView : View
         _artist.Text = t?.ArtistLine ?? "";
         _art.Set(t?.ArtworkUrl ?? "");
         string id = t?.Id ?? "";
-        if (id.Length > 0 && id == _trackId) return;
-        _trackId = id;
+        if (id.Length > 0 && id == _shownId) return;
+        _shownId = "";
         // Episode ids are another namespace, and episodes have no lyrics.
         if (t == null || id.Length == 0 || (t.IsEpisode && !Player.IsCasting))
         {
@@ -74,8 +83,15 @@ internal sealed class LyricsView : View
             _state.ShowEmpty(Icons.Lyrics, Loc.S("Lyrics_PaidOnly"));
             return;
         }
-        if (await LoadAsync<Lyrics>(Library.Key("lyrics", t.Id), _state) is not { } ly || t.Id != _trackId) return;
+        // Null when the view was left meanwhile: the next visit loads again.
+        if (await LoadAsync<Lyrics>(Library.Key("lyrics", id), _state) is not { } ly || Player.Current?.Id != id) return;
+        if (ly.Error.Length > 0)
+        {
+            _state.ShowFailed(ly.Error, OnTrack);
+            return;
+        }
         Render(ly);
+        _shownId = id;
     }
 
     private void Render(Lyrics lyrics)
@@ -83,18 +99,32 @@ internal sealed class LyricsView : View
         _lyrics = lyrics;
         _lines.Children.Clear();
         _blocks.Clear();
+        _translations.Clear();
         _active = -1;
         _userScrollTick = 0;
+        _translate.Visibility = Ui.Show(_lyrics.IsSynced && _lyrics.Synced.Any(l => l.Translated.Length > 0));
         if (_lyrics.IsSynced && _lyrics.Synced.Count > 0)
         {
             foreach (var l in _lyrics.Synced)
             {
                 var tb = Ui.Text(l.Text.Length == 0 ? Icons.NoteText : l.Text, TextKind.Body, wrap: true);
                 tb.Style = Ui.Styles.LyricsLineInactive;
+                var translated = Ui.Text(l.Translated, TextKind.SecondaryBody, wrap: true);
+                translated.Visibility = Ui.Show(_translate.IsOn && l.Translated.Length > 0);
                 long at = l.TimeMs;
-                tb.Tapped += (_, _) => Seek(at);
-                _lines.Children.Add(tb);
+                // A tab stop: Enter or Space seeks there, as a click does.
+                var line = new ContentControl { Content = Ui.Stack(0, tb, translated), IsTabStop = true, UseSystemFocusVisuals = true, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                AutomationProperties.SetName(line, l.Text);
+                line.Tapped += (_, _) => Seek(at);
+                line.KeyDown += (_, e) =>
+                {
+                    if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+                    e.Handled = true;
+                    Seek(at);
+                };
+                _lines.Children.Add(line);
                 _blocks.Add(tb);
+                _translations.Add(translated);
             }
             OnPosition();
         }
@@ -144,7 +174,7 @@ internal sealed class LyricsView : View
         AutomationProperties.SetLiveSetting(line, AutomationLiveSetting.Polite);
         FrameworkElementAutomationPeer.FromElement(line)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         if (Environment.TickCount64 - _userScrollTick < Timing.LyricsFollowPauseMs) return;
-        var at = line.TransformToVisual(_lines).TransformPoint(new Windows.Foundation.Point(0, 0));
+        var at = ((FrameworkElement)_lines.Children[active]).TransformToVisual(_lines).TransformPoint(new Windows.Foundation.Point(0, 0));
         double header = _lines.ActualOffset.Y;
         _scroller.ChangeView(null, Math.Max(0, header + at.Y - _scroller.ViewportHeight * Size.LyricsLineAt), null);
     }

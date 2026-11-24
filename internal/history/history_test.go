@@ -208,11 +208,9 @@ func TestRotationKeepsOtherWritersEntries(t *testing.T) {
 	}
 }
 
-// TestKindRoundTripsAndExcludesEpisodesFromMusicStats proves an entry's media
-// Kind survives a write + reload from disk, that a legacy line with no "kind"
-// field decodes as a song (Kind==""), and that podcast episodes are kept out of
-// the music-only TopTracks/TopArtists charts while still counting toward the
-// overall TotalListenedSec.
+// TestKindRoundTripsAndExcludesEpisodesFromMusicStats checks that Kind survives a
+// reload, a line without "kind" decodes as a song, and episodes count only in
+// TotalListenedSec.
 func TestKindRoundTripsAndExcludesEpisodesFromMusicStats(t *testing.T) {
 	s := testStore(t)
 	now := time.Now().Unix()
@@ -436,5 +434,49 @@ func TestConcurrentWriterAndReaders(t *testing.T) {
 	got, err := s.Recent(0)
 	if err != nil || len(got) != 200 {
 		t.Fatalf("got %d entries err %v, want 200", len(got), err)
+	}
+}
+
+// Entries the other program appends are seen by the next Recent.
+func TestRecentSeesOtherWriter(t *testing.T) {
+	s := testStore(t)
+	if err := s.Record(entry("1", "A", "X", 100, 30)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Recent(5); len(got) != 1 {
+		t.Fatalf("got %d entries, want 1", len(got))
+	}
+	if err := New(s.Path()).Record(entry("2", "B", "Y", 200, 30)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Recent(5); len(got) != 2 || got[0].TrackID != "2" {
+		t.Fatalf("after the other writer: %+v", got)
+	}
+}
+
+// After a torn last line the next entry is written on a line of its own and read back.
+func TestRecordAfterTornLine(t *testing.T) {
+	s := testStore(t)
+	if err := s.Record(entry("1", "A", "X", 100, 30)); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(s.Path(), os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"trackId":"2","tit`); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	s2 := New(s.Path())
+	if err := s2.Record(entry("3", "C", "Z", 300, 30)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := New(s.Path()).Recent(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].TrackID != "3" {
+		t.Fatalf("got %+v, want 3 then 1", got)
 	}
 }

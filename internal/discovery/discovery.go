@@ -1,18 +1,6 @@
-// Package discovery provides LAN discovery of OpenDeezer instances so a client
-// can offer a "play on another device" picker (OpenDeezer Connect). Each
-// instance with the control API enabled runs a small UDP responder advertising
-// its display name + control port; a client multicasts a probe and collects
-// replies.
-//
-// Transport: IPv4 UDP multicast (group 239.255.42.99, port 7655) with a limited
-// broadcast as a fallback for networks that filter multicast. The responder
-// binds with SO_REUSEADDR/SO_REUSEPORT so several instances on ONE machine can
-// all listen + answer.
-//
-// Security: the responder answers only the exact probe magic, only to
-// private/loopback/link-local sources (no internet reflection), with a tiny
-// fixed payload (no amplification), and never carries the same-account
-// credential (the Deezer user id) — only the display name + client + version.
+// Package discovery finds OpenDeezer instances on the LAN (Connect): each instance with
+// the control API answers a UDP probe (multicast 239.255.42.99:7655, broadcast fallback)
+// with its name, client and version, only to private sources, never the user id.
 package discovery
 
 import (
@@ -84,10 +72,9 @@ var bindHost = ""
 // port the OS picked, so a running OpenDeezer does not answer them.
 var listenPort = Port
 
-// Advertise starts the discovery responder on UDP :Port (reuse-port so multiple
+// Advertise starts the discovery responder on UDP :Port (reuse-port, so several
 // instances on one host coexist) and joins the multicast group on every capable
-// interface. info supplies the current identity; controlPort is the control API
-// TCP port controllers should connect to.
+// interface. controlPort is the control API port to advertise.
 func Advertise(info func() Info, controlPort int) (*Responder, error) {
 	r := &Responder{
 		info:        info,
@@ -97,11 +84,8 @@ func Advertise(info func() Info, controlPort int) (*Responder, error) {
 	if err := r.rebind(); err != nil {
 		return nil, err
 	}
-	// Capture the IP baseline synchronously, before launching the supervisor.
-	// Reading it inside the goroutine instead would race goroutine scheduling: on
-	// a loaded host the supervisor can be scheduled after the local IPs have
-	// already changed, capture the post-change set as its baseline, and never
-	// detect the change (so it never rebinds).
+	// Capture the IP baseline before starting the supervisor; read inside the goroutine,
+	// it could already include a change and never trigger a rebind.
 	r.baseIPs = getLocalIPsList()
 	r.wg.Add(1)
 	go func() {
@@ -201,12 +185,9 @@ func (r *Responder) Close() {
 	r.wg.Wait()
 }
 
-// Discover multicasts a probe (with a broadcast fallback) and collects replies
-// for the given timeout. selfPort is this instance's own control port (0 if
-// none): replies from a local address with that port are our own responder and
-// are filtered out, so we never list ourselves. Other instances on the same host
-// use a different control port and are kept. Any optional staticPeers are probed
-// directly via unicast.
+// Discover multicasts a probe (broadcast fallback), unicasts staticPeers, and collects
+// replies until timeout. Replies from a local address on selfPort (our own responder)
+// are dropped.
 func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Device, error) {
 	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error { return setBroadcast(c) }}
 	pc, err := lc.ListenPacket(context.Background(), "udp4", bindHost+":0") // ephemeral
@@ -220,8 +201,8 @@ func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Dev
 	group := &net.UDPAddr{IP: groupIP, Port: Port}
 
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	// Probes go out from a goroutine, now and every 2 s: resolving a hostname
-	// peer must not delay the collection below, which the deadline bounds.
+	// Probes go out from a goroutine at once and every 2 s, so resolving a hostname peer
+	// never delays the collection below, which the deadline bounds.
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -287,9 +268,8 @@ func sendProbes(conn *net.UDPConn, probe []byte, group *net.UDPAddr, staticPeers
 	if len(ifaces) == 0 {
 		_, _ = conn.WriteToUDP(probe, group)
 	}
-	// Fallbacks for networks that filter multicast: per-interface directed
-	// broadcast (e.g. 192.168.1.255 — crosses WiFi/Ethernet within a subnet far
-	// more reliably than limited broadcast) plus limited broadcast.
+	// Fallbacks for networks that filter multicast: per-interface directed broadcast
+	// (e.g. 192.168.1.255), which crosses a subnet more reliably, plus limited broadcast.
 	for _, bc := range broadcastAddrs() {
 		_, _ = conn.WriteToUDP(probe, &net.UDPAddr{IP: bc, Port: Port})
 	}

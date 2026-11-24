@@ -16,7 +16,7 @@ public class EngineQueueMirrorTests
     public EngineQueueMirrorTests()
     {
         _mirror = new EngineQueueMirror(_engine, m => { lock (_log) _log.Add(m); });
-        _mirror.SetKnownVersion(_engine.Version()); // as Login does at startup
+        _mirror.SetKnownVersion(_engine.Version()); // as Player.StartAsync does at startup
     }
 
     private static List<Track> Q(params string[] ids) => ids.Select(id => new Track { Id = id, Name = id }).ToList();
@@ -118,6 +118,19 @@ public class EngineQueueMirrorTests
         Assert.Equal(new[] { "a", "b", "c" }, _engine.Ids);
         Assert.Equal(1, _engine.Index());
         Assert.Equal(v + 1, _engine.Version());
+    }
+
+    [Fact]
+    public async Task Edit_FallbackFindsCursorFromAppCursor_WhenTrackQueuedTwice()
+    {
+        await SetSynced(Q("a", "b", "c", "b"), 2);
+        _engine.AutoAdvance(); // the engine is on the last b before the poll saw it
+
+        _mirror.Edit(e => e.Remove(0), Q("b", "c", "b"), 1, 2);
+        await DrainAsync();
+
+        Assert.Equal(new[] { "b", "c", "b" }, _engine.Ids);
+        Assert.Equal(2, _engine.Index());
     }
 
     [Fact]

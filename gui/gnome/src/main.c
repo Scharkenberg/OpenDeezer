@@ -770,7 +770,7 @@ static void load_worker(GTask *task, gpointer src, gpointer data, GCancellable *
     case LOAD_ALBUM:     j = DZAlbumTracksJSON(ctx->arg); break;
     case LOAD_SEARCH:    j = DZSearchJSON(ctx->arg); break;
     case LOAD_CHARTS:    j = DZChartsJSON(); break;
-    case LOAD_FLOW:      j = DZFlowJSON(); break;
+    case LOAD_FLOW:      j = DZFlowJSON(""); break;
     case LOAD_TRACK_MIX: j = DZTrackMixJSON(ctx->arg); break;  /* song radio ({tracks:[...]}) */
     case LOAD_ARTIST_MIX:j = DZArtistMixJSON(ctx->arg); break; /* artist radio ({tracks:[...]}) */
   }
@@ -1344,6 +1344,11 @@ static void play_index(App *a, int idx) {
 }
 
 static void play_relative(App *a, int delta) {
+  /* Previous from 5 s in restarts the track instead, as the engine does. */
+  if (delta < 0 && DZPositionMS() >= 5000) {
+    transport_call(TR_SEEK, 0);
+    return;
+  }
   int base = a->current_index < 0 ? (delta > 0 ? -1 : 0) : a->current_index;
   play_index(a, base + delta);
 }
@@ -2194,10 +2199,10 @@ static AdwPreferencesGroup *build_downloads_group(void) {
   return grp;
 }
 
-/* ---- Ads group (Free accounts only) ----
- * Free plans are ad-supported; disabling ads also disables play reporting, so
- * the switch carries a plain-language disclaimer. Only added to the page for
- * Free accounts (premium has no ads). State is persisted engine-side. */
+/* ---- Play reporting group (Free accounts only) ----
+ * OpenDeezer plays no ads; turning play reporting off denies artists their
+ * play count, so the switch carries a plain-language disclaimer. Only added to
+ * the page for Free accounts. State is persisted engine-side. */
 static void on_ads_disabled_toggled(GObject *row, GParamSpec *ps, gpointer data) {
   (void)ps; (void)data;
   DZSetAdsDisabled(adw_switch_row_get_active(ADW_SWITCH_ROW(row)) ? 1 : 0);
@@ -2205,16 +2210,16 @@ static void on_ads_disabled_toggled(GObject *row, GParamSpec *ps, gpointer data)
 
 static AdwPreferencesGroup *build_ads_group(void) {
   AdwPreferencesGroup *grp = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
-  adw_preferences_group_set_title(grp, _("Ads"));
+  adw_preferences_group_set_title(grp, _("Play reporting"));
 
   GtkWidget *row = adw_switch_row_new();
-  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), _("Disable ads"));
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), _("Don't report my plays"));
   adw_action_row_set_subtitle(
       ADW_ACTION_ROW(row),
-      _("Deezer Free is ad-supported. Reporting your plays — like the official "
-        "app — credits artists and drives the ads. Disabling this removes ads "
-        "but stops reporting your plays, which denies artists their play count "
-        "and breaks Deezer's terms of use. Use at your own risk."));
+      _("OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own "
+        "player does, which credits the artists. Turning this on stops that: "
+        "artists get no credit for those plays, and it breaks Deezer's terms of "
+        "use. Use at your own risk."));
   adw_action_row_set_subtitle_lines(ADW_ACTION_ROW(row), 0); /* wrap the full disclaimer */
 
   /* seed from engine state before wiring the signal, to avoid a write-back */
@@ -2321,9 +2326,9 @@ static void on_settings(GSimpleAction *action, GVariant *param, gpointer data) {
   /* ---- Equalizer (10-band EQ + mono downmix, all state engine-side) ---- */
   adw_preferences_page_add(page, build_equalizer_group());
 
-  /* ---- Behaviour ---- */
+  /* ---- Behavior ---- */
   AdwPreferencesGroup *behave = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
-  adw_preferences_group_set_title(behave, _("Behaviour"));
+  adw_preferences_group_set_title(behave, _("Behavior"));
 
   GtkWidget *bg = adw_switch_row_new();
   adw_preferences_row_set_title(ADW_PREFERENCES_ROW(bg), _("Keep playing in background"));
@@ -2476,7 +2481,7 @@ static void on_phone_remote(GSimpleAction *action, GVariant *param, gpointer dat
   (void)action; (void)param; (void)data;
   App *a = APP;
 
-  /* read current enabled state so the switch initialises correctly */
+  /* read current enabled state so the switch initializes correctly */
   gboolean cur_enabled = FALSE;
   char *j0 = DZWebRemoteInfoJSON();
   if (j0) {
@@ -2508,7 +2513,7 @@ static void on_phone_remote(GSimpleAction *action, GVariant *param, gpointer dat
   gtk_widget_set_margin_start(outer, 16);
   gtk_widget_set_margin_end(outer, 16);
 
-  /* ---- enable toggle (boxed list, matching Audio / Behaviour groups) ---- */
+  /* ---- enable toggle (boxed list, matching Audio / Behavior groups) ---- */
   GtkWidget *lb = gtk_list_box_new();
   gtk_list_box_set_selection_mode(GTK_LIST_BOX(lb), GTK_SELECTION_NONE);
   gtk_widget_add_css_class(lb, "boxed-list");
@@ -2520,7 +2525,7 @@ static void on_phone_remote(GSimpleAction *action, GVariant *param, gpointer dat
   gtk_list_box_append(GTK_LIST_BOX(lb), sw_row);
   gtk_box_append(GTK_BOX(outer), lb);
 
-  /* ---- QR section (centred; hidden when disabled) ---- */
+  /* ---- QR section (centered; hidden when disabled) ---- */
   WrWidgets *w = g_new0(WrWidgets, 1);
 
   GtkWidget *qr_sect = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
@@ -2690,7 +2695,7 @@ static void like_done(GObject *src, GAsyncResult *res, gpointer data) {
   LikeCtx *l = g_task_get_task_data(G_TASK(res));
   gboolean ok = g_task_propagate_boolean(G_TASK(res), NULL);
   if (ok) toast(APP, l->like ? _("Added to Liked Songs") : _("Removed from Liked Songs"));
-  else    toast(APP, l->like ? _("Couldn't add to favourites") : _("Couldn't remove from favourites"));
+  else    toast(APP, l->like ? _("Couldn't add to favorites") : _("Couldn't remove from favorites"));
 }
 static void start_like(App *a, const char *id, gboolean like) {
   (void)a;
@@ -2705,7 +2710,7 @@ static void start_like(App *a, const char *id, gboolean like) {
 }
 
 /* ---- truthful liked-track set (seeds the heart across track changes) ----
- * The engine has no is-liked query, so we mirror the account's favourites into a
+ * The engine has no is-liked query, so we mirror the account's favorites into a
  * set at login (like KDE/macOS keep their m_likedIds). update_now_playing_ui
  * reads it to set the heart per track; the like/unlike toggles keep it in step. */
 static gboolean liked_contains(App *a, const char *id) {
@@ -2718,9 +2723,9 @@ static void liked_set(App *a, const char *id, gboolean liked) {
 }
 
 /* Seed the liked-ids set from DZFavoriteIDsJSON and the offline-ids set from
- * DZOfflineIDsJSON. The favourites fetch BLOCKS, so both run on a worker; the
+ * DZOfflineIDsJSON. The favorites fetch BLOCKS, so both run on a worker; the
  * JSON is parsed into the sets on the main loop (an {"error":...} object in
- * place of the liked array is a non-array node and is simply skipped). */
+ * place of the liked array is a non-array node: the liked set stays as it is). */
 typedef struct { char *liked; char *offline; } SeedIds;
 static void seed_ids_free(gpointer p) { SeedIds *s = p; g_free(s->liked); g_free(s->offline); g_free(s); }
 static char *take_dup(char *j, const char *fallback) {
@@ -2740,7 +2745,6 @@ static void liked_seed_done(GObject *src, GAsyncResult *res, gpointer data) {
   SeedIds *s = g_task_propagate_pointer(G_TASK(res), NULL);
   if (!s) return;
   const char *json = s->liked;
-  if (APP->liked_ids) g_hash_table_remove_all(APP->liked_ids); /* replace on account switch */
   /* the offline set is per-account too: replaced by this account's */
   if (APP->offline_ids) g_hash_table_remove_all(APP->offline_ids);
   JsonParser *op = json_parser_new();
@@ -2757,6 +2761,8 @@ static void liked_seed_done(GObject *src, GAsyncResult *res, gpointer data) {
   if (json_parser_load_from_data(p, json, -1, NULL)) {
     JsonNode *root = json_parser_get_root(p);
     if (root && JSON_NODE_HOLDS_ARRAY(root)) {
+      /* replaced on an account switch; an {"error"} reply keeps the set */
+      if (APP->liked_ids) g_hash_table_remove_all(APP->liked_ids);
       JsonArray *arr = json_node_get_array(root);
       guint n = json_array_get_length(arr);
       for (guint i = 0; i < n; i++) {
@@ -3192,7 +3198,7 @@ static void create_ctx_free(gpointer p) {
 static void create_worker(GTask *task, gpointer src, gpointer data, GCancellable *c) {
   (void)src; (void)c;
   CreateCtx *x = data;
-  char *j = DZCreatePlaylist(x->title);
+  char *j = DZCreatePlaylist(x->title, "");
   if (j) {
     JsonParser *p = json_parser_new();
     if (json_parser_load_from_data(p, j, -1, NULL)) {
@@ -3746,7 +3752,7 @@ static void show_window(App *a) {
 static gboolean on_window_close(GtkWindow *win, gpointer data) {
   App *a = data;
   if (!a->background)
-    return FALSE; /* honour the setting: let the window (and app) close */
+    return FALSE; /* honor the setting: let the window (and app) close */
 
   /* keep the engine + main loop alive, hide the window */
   if (!a->held) {
@@ -4057,7 +4063,7 @@ static void lyrics_load(App *a, const char *track_id) {
 }
 
 /* advance the highlighted synced line to match the playback position and keep
- * it centred. Called every tick while the dialog is open. */
+ * it centered. Called every tick while the dialog is open. */
 static void lyrics_highlight(App *a) {
   if (!a->lyrics_dialog || !a->lyrics_synced || !a->lyrics_lines || !a->lyrics_times) return;
   guint n = a->lyrics_times->len;
@@ -4077,7 +4083,7 @@ static void lyrics_highlight(App *a) {
   GtkWidget *lab = GTK_WIDGET(g_ptr_array_index(a->lyrics_lines, active));
   gtk_widget_add_css_class(lab, "lyrics-active");
 
-  /* centre the active line in the viewport */
+  /* center the active line in the viewport */
   if (a->lyrics_scroll) {
     graphene_rect_t b;
     if (gtk_widget_compute_bounds(lab, a->lyrics_box, &b)) {
@@ -4128,7 +4134,7 @@ static void open_lyrics(App *a) {
   gtk_widget_set_vexpand(a->lyrics_scroll, TRUE);
   a->lyrics_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
   gtk_widget_set_margin_top(a->lyrics_box, 16);
-  gtk_widget_set_margin_bottom(a->lyrics_box, 200); /* slack so the last lines can centre */
+  gtk_widget_set_margin_bottom(a->lyrics_box, 200); /* slack so the last lines can center */
   gtk_widget_set_margin_start(a->lyrics_box, 16);
   gtk_widget_set_margin_end(a->lyrics_box, 16);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(a->lyrics_scroll), a->lyrics_box);
@@ -6466,7 +6472,7 @@ static void init_done(GObject *src, GAsyncResult *res, gpointer data) {
     /* refresh (not just append) so switching accounts replaces the previous
      * account's playlists instead of stacking the new ones underneath */
     sidebar_refresh_playlists(APP);
-    load_liked_ids_async(APP); /* seed truthful heart state from the account's favourites */
+    load_liked_ids_async(APP); /* seed truthful heart state from the account's favorites */
     /* select Home (row 0) → triggers the home discovery page load. Unselect
      * first so the selection actually CHANGES and on_sidebar_selected re-fires
      * even if row 0 was already selected before login (else: empty Home). */
@@ -7164,7 +7170,7 @@ static void on_activate(GApplication *app, gpointer data) {
   a->win = ADW_APPLICATION_WINDOW(adw_application_window_new(GTK_APPLICATION(app)));
   gtk_window_set_title(GTK_WINDOW(a->win), "OpenDeezer");
   gtk_window_set_default_size(GTK_WINDOW(a->win), 1100, 720);
-  /* honour close-to-tray / background playback */
+  /* honor close-to-tray / background playback */
   g_signal_connect(a->win, "close-request", G_CALLBACK(on_window_close), a);
 
   /* window actions + menu */
@@ -7298,7 +7304,7 @@ static void on_activate(GApplication *app, gpointer data) {
  * opendeezer-gnome executable wraps it with a trivial main (standalone.c). */
 __attribute__((visibility("default")))
 int opendeezer_run(int argc, char **argv) {
-  /* Localization: honour the user's locale and load our message catalogs from
+  /* Localization: honor the user's locale and load our message catalogs from
    * LOCALEDIR (set by meson to <prefix>/<localedir>). Must run before any
    * translatable string is fetched, i.e. before the application is built. */
   setlocale(LC_ALL, "");

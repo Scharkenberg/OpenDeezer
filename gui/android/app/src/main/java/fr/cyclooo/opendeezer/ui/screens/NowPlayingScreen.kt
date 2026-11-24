@@ -296,7 +296,7 @@ private fun PlayerControls(
     Spacer(Modifier.height(8.dp))
 
     // B4: Shuffle and Repeat controls. Clicking them updates local queue
-    //     behaviour and forwards the new mode to any connected remote device
+    //     behavior and forwards the new mode to any connected remote device
     //     via Engine.setRepeat / Engine.setShuffle.
     Row(
         Modifier.fillMaxWidth(),

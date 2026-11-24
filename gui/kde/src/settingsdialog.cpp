@@ -308,17 +308,16 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
     // persisted (DZAdsDisabled / DZSetAdsDisabled), applied on OK. Premium
     // accounts have no ads, so the whole group is omitted for them.
     if (!premium) {
-        auto *adsBox = new QGroupBox(tr("Ads"));
+        auto *adsBox = new QGroupBox(tr("Play reporting"));
         auto *adsLay = new QVBoxLayout(adsBox);
-        m_disableAds = new QCheckBox(tr("Disable ads"));
+        m_disableAds = new QCheckBox(tr("Don't report my plays"));
         m_disableAds->setChecked(DZAdsDisabled() != 0);
         adsLay->addWidget(m_disableAds);
         auto *adsHint = new QLabel(tr(
-            "Deezer Free is ad-supported. Reporting your plays — like the "
-            "official app — credits artists and drives the ads. Disabling this "
-            "removes ads but stops reporting your plays, which denies artists "
-            "their play count and breaks Deezer's terms of use. Use at your own "
-            "risk."));
+            "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's "
+            "own player does, which credits the artists. Turning this on stops "
+            "that: artists get no credit for those plays, and it breaks Deezer's "
+            "terms of use. Use at your own risk."));
         adsHint->setWordWrap(true);
         QFont ahf = adsHint->font();
         ahf.setPointSize(qMax(1, ahf.pointSize() - 1));
@@ -343,7 +342,7 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
     eqPresetRow->addWidget(m_eqPreset, 1);
     eqLay->addLayout(eqPresetRow);
 
-    // Ten vertical band sliders with the centre frequency underneath. Slider
+    // Ten vertical band sliders with the center frequency underneath. Slider
     // units are dB × 10 so preset gains like 2.5 dB land exactly; band labels
     // come from the core's "bands" table rather than being hardcoded here.
     const QJsonArray eqBandHz =
@@ -431,8 +430,8 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
             m_eqFlush->start();
     });
 
-    // ---- Behaviour ----
-    auto *behBox  = new QGroupBox(tr("Behaviour"));
+    // ---- Behavior ----
+    auto *behBox  = new QGroupBox(tr("Behavior"));
     auto *behLay  = new QVBoxLayout(behBox);
     m_tray = new QCheckBox(tr("Keep playing in the background "
                                           "(close to tray)"));

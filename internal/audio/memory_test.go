@@ -120,11 +120,9 @@ func TestHeapAfterThreeFullPlays(t *testing.T) {
 	t.Logf("live mid-track %.1f MB, HeapSys after third play %.1f MB (%.2fx), TotalAlloc %.0f MB, NumGC %d",
 		float64(live)/1e6, float64(ms.HeapSys)/1e6, float64(ms.HeapSys)/float64(live),
 		float64(ms.TotalAlloc)/1e6, ms.NumGC)
-	// The stream is read from a file through one 64 KB window, so the live heap
-	// is about 1.5 MB and HeapSys (8-12 MB) is mostly the runtime's own floor:
-	// the ratio says little below 16 MB, where the bound is absolute. The
-	// live heap itself stays under 8 MB: a stream held in memory (30 MB) would
-	// pass the ratio, as HeapSys grows with it.
+	// The stream is read through one 64 KB window, so the live heap is about 1.5 MB and
+	// HeapSys (8-12 MB) is mostly the runtime's floor. The live heap must stay under 8 MB,
+	// which a stream held in memory (30 MB) would exceed.
 	if live > 8<<20 {
 		t.Fatalf("live heap mid-track %d > 8 MB", live)
 	}

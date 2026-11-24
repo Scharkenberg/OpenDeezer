@@ -54,6 +54,7 @@ import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.Routes
 import fr.cyclooo.opendeezer.engine.Engine
 import fr.cyclooo.opendeezer.engine.HomeData
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.player.PlayerController
 import fr.cyclooo.opendeezer.ui.components.MediaCard
@@ -240,7 +241,8 @@ fun HomeScreen(
                                     TrackRow(
                                         track = track,
                                         player = player,
-                                        onClick = { player.playQueue(data.topTracks, index) },
+                                        context = ListenContext("tops_track", "0"),
+                                        onClick = { player.playQueue(data.topTracks, index, ListenContext("tops_track", "0")) },
                                     )
                                 }
                             }

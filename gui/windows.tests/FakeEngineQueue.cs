@@ -7,7 +7,7 @@ using System.Threading;
 namespace OpenDeezer.Tests;
 
 /// <summary>An in-memory engine queue following the Go engine's rules
-/// (corelib/services.go engineQueue*, internal/queue/queue.go):
+/// (internal/engine/services.go engineQueue*, internal/queue/queue.go):
 ///  * Set: replace contents, cursor -> 0 (-1 when empty), version++ (also for the same contents).
 ///  * Append: add at the end, cursor unchanged, version++ when anything was added.
 ///  * SetIndex (AlignIndex): out of range or same index = no-op; never bumps.

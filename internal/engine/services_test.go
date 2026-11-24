@@ -36,13 +36,9 @@ func clearRoutedRemote() {
 	mu.Unlock()
 }
 
-// waitServing blocks until the server at addr returns an HTTP response, which
-// proves http.Server.Serve has run past trackListener — so a subsequent Close
-// reliably reclaims the port for the same-port rebind. A bare TCP dial isn't
-// enough: the kernel completes the handshake from net.Listen's accept queue
-// before Serve's goroutine registers the listener. Production never hits this —
-// the control server has served for a long time before an account switch closes
-// it — but the test opens and closes back-to-back.
+// waitServing blocks until the server at addr answers HTTP, proving Serve runs, so a
+// later Close frees the port for the same-port rebind. A TCP dial is not enough: the
+// kernel accepts before Serve registers the listener.
 func waitServing(t *testing.T, addr string) {
 	t.Helper()
 	cl := &http.Client{Timeout: 200 * time.Millisecond}
@@ -58,10 +54,8 @@ func waitServing(t *testing.T, addr string) {
 	t.Fatalf("control server at %s never started serving", addr)
 }
 
-// TestEngineQueueAutoAdvance proves a loaded playlist walks every track on
-// successive natural finishes (the engine-side auto-advance), then stops at the
-// end under the default RepeatOff. This is the core remote/control deliverable:
-// playlist playback advances through ALL tracks instead of stopping after one.
+// TestEngineQueueAutoAdvance checks that a loaded playlist walks every track on
+// successive natural finishes and stops at the end under RepeatOff.
 func TestEngineQueueAutoAdvance(t *testing.T) {
 	ts := []deezer.Track{{ID: "1"}, {ID: "2"}, {ID: "3"}}
 
@@ -78,7 +72,7 @@ func TestEngineQueueAutoAdvance(t *testing.T) {
 			break
 		}
 		played = append(played, next.ID)
-		setCurrentTrack(next) // the player is now on `next`
+		setCurrentTrack(next) // the player is on `next`
 	}
 
 	want := []string{"2", "3"}
@@ -142,9 +136,8 @@ func resetEngineQueue() {
 	queueMu.Unlock()
 }
 
-// TestQueueSyncReflectsInEngineState proves a GUI queue synced via the
-// DZQueueSet/DZQueueSetIndex path shows up on /status (State.Queue) with the
-// cursor where the GUI put it — previously engineState never reported a queue.
+// TestQueueSyncReflectsInEngineState checks that a queue synced via
+// DZQueueSet/DZQueueSetIndex shows up on /status (State.Queue) with the GUI's cursor.
 func TestQueueSyncReflectsInEngineState(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 
@@ -366,9 +359,8 @@ func TestRefreshControlServerSwapsStaleClient(t *testing.T) {
 	ctrlSrvUserID = old.Account().UserID
 	mu.Unlock()
 
-	// Same account: no-op (must not tear down / rebuild). Staleness now keys on
-	// the account UserID, not the *deezer.Client pointer, so a fresh client for
-	// the same account stays a no-op.
+	// Same account: no-op (no rebuild). Staleness keys on the account UserID, not the
+	// *deezer.Client pointer, so a fresh client for the same account stays a no-op.
 	refreshControlServer(old)
 	mu.Lock()
 	unchanged := ctrlSrv == srv && ctrlSrvUserID == old.Account().UserID
@@ -393,7 +385,7 @@ func TestRefreshControlServerSwapsStaleClient(t *testing.T) {
 	}
 }
 
-// TestEngineCommandsWiresExtendedHooks proves the v2.2 extended-control hooks
+// TestEngineCommandsWiresExtendedHooks proves the extended-control hooks
 // are all wired (a nil hook makes the control server answer 501/404 for its
 // endpoint, silently disabling the feature for every remote).
 func TestEngineCommandsWiresExtendedHooks(t *testing.T) {
@@ -412,10 +404,8 @@ func TestEngineCommandsWiresExtendedHooks(t *testing.T) {
 	}
 }
 
-// TestEngineQueueInsertNextAndAppend proves the QueueAdd plumbing: "play next"
-// splices right after the cursor, plain add appends, and both show up in
-// engineState (what /status reports) and bump the queue content version (what
-// DZQueueVersion exposes for GUI resync).
+// TestEngineQueueInsertNextAndAppend checks that "play next" inserts after the cursor,
+// add appends, and both show in engineState and bump the queue version.
 func TestEngineQueueInsertNextAndAppend(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 
@@ -447,11 +437,9 @@ func TestEngineQueueInsertNextAndAppend(t *testing.T) {
 	}
 }
 
-// TestEngineQueueSelectMovesCursor proves the pure QueueJump plumbing: a valid
-// index moves the cursor (recording history so Prev retraces) and returns the
-// selected track; out-of-range indices error without disturbing the queue.
-// engineQueueSelect uses queue.SetIndex, so every jump — including the first
-// after a replace — records the outgoing row.
+// TestEngineQueueSelectMovesCursor checks that a valid index moves the cursor (with
+// history) and returns the track, and that out-of-range indices error without changing
+// the queue. Every jump records the outgoing row.
 func TestEngineQueueSelectMovesCursor(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 
@@ -487,7 +475,7 @@ func TestEngineQueueSetIndexAlignsWithoutHistory(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 
 	engineQueueSet([]deezer.Track{{ID: "a"}, {ID: "b"}, {ID: "c"}})
-	QueueSetIndex(2) // GUI says "I'm playing row 2" — pure alignment
+	QueueSetIndex(2) // GUI says "I'm playing row 2": pure alignment
 	if QueueIndex() != 2 {
 		t.Fatalf("cursor = %d after alignment, want 2", QueueIndex())
 	}
@@ -592,9 +580,8 @@ func TestEnginePlayFetchedRejectsEmpty(t *testing.T) {
 	}
 }
 
-// TestEngineHistoryRecentReturnsJSON proves /history/recent's backing hook
-// returns valid JSON (newest first) from the history store, and [] — not
-// null — for an empty log.
+// TestEngineHistoryRecentReturnsJSON checks that /history/recent's hook returns valid
+// JSON (newest first) from the history store, and [] (not null) for an empty log.
 func TestEngineHistoryRecentReturnsJSON(t *testing.T) {
 	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
 
@@ -630,10 +617,8 @@ func TestEngineHistoryRecentReturnsJSON(t *testing.T) {
 	}
 }
 
-// TestEpisodeListenRecordsKind proves the episode play path stamps
-// Kind="episode" on the recorded history entry (so a native history screen
-// replays it via DZPlayEpisode), a song stays Kind="", and the kind reaches the
-// /history/recent JSON wire — the exact shape DZHistoryRecentJSON serves.
+// TestEpisodeListenRecordsKind checks that an episode play records Kind="episode", a
+// song Kind="", and that the kind reaches the /history/recent JSON.
 func TestEpisodeListenRecordsKind(t *testing.T) {
 	t.Cleanup(func() { setCurrentTrack(deezer.Track{}) })
 	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
@@ -730,12 +715,9 @@ func waitHistory(t *testing.T, n int) []history.Entry {
 	}
 }
 
-// TestGaplessPromoteUnsyncedQueueUsesArmedPreload proves the fix for the
-// shipped-GUI flow (DZPreload WITHOUT a DZQueueSet sync): after the player
-// gaplessly promotes the armed preload, now-playing moves onto the preloaded
-// track, the outgoing track lands in history exactly once, and the promoted
-// track is recorded on its own later finish (previously /status stayed on the
-// old track, which was then recorded twice while the new one never was).
+// TestGaplessPromoteUnsyncedQueueUsesArmedPreload: DZPreload without DZQueueSet. After
+// a gapless promote, now-playing moves to the preloaded track, the outgoing track is
+// recorded once, and the promoted track on its own finish.
 func TestGaplessPromoteUnsyncedQueueUsesArmedPreload(t *testing.T) {
 	resetEngineQueue() // this test depends on an EMPTY (unsynced) engine queue
 	t.Cleanup(resetEngineQueue)
@@ -765,7 +747,7 @@ func TestGaplessPromoteUnsyncedQueueUsesArmedPreload(t *testing.T) {
 		t.Fatalf("promote finish recorded %q, want the outgoing track A", got[0].TrackID)
 	}
 
-	// B finishes naturally later: its own listen is recorded — NOT A again.
+	// B finishes naturally later: its own listen is recorded, not A again.
 	noteTrackFinished()
 
 	entries := waitHistory(t, 2)
@@ -778,10 +760,8 @@ func TestGaplessPromoteUnsyncedQueueUsesArmedPreload(t *testing.T) {
 	}
 }
 
-// TestGaplessPromoteSyncedQueueStillWalks proves the pre-existing happy path
-// is unchanged: with the engine queue synced and aligned, a gapless promote
-// walks the cursor + now-playing along the queue and reports the finish as
-// engine-owned (so the GUI's finished counter is not bumped as well).
+// TestGaplessPromoteSyncedQueueStillWalks: with the engine queue synced and aligned, a
+// gapless promote walks cursor and now-playing and reports the finish as engine-owned.
 func TestGaplessPromoteSyncedQueueStillWalks(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	t.Cleanup(func() { setCurrentTrack(deezer.Track{}) })
@@ -808,10 +788,8 @@ func TestGaplessPromoteSyncedQueueStillWalks(t *testing.T) {
 	}
 }
 
-// TestRepeatShuffleToggleClearsArmedPreload proves DZSetRepeat / DZSetShuffle
-// invalidate an armed preload exactly like every queue-edit path does: after a
-// toggle the stale linear-next must not gapless-promote (repeat-one replays
-// the CURRENT track; a reshuffle changes the upcoming one).
+// TestRepeatShuffleToggleClearsArmedPreload checks that DZSetRepeat and DZSetShuffle
+// invalidate an armed preload, so the stale next is not promoted.
 func TestRepeatShuffleToggleClearsArmedPreload(t *testing.T) {
 	resetEngineQueue() // this test depends on an EMPTY (unsynced) engine queue
 	t.Cleanup(resetEngineQueue)
@@ -831,8 +809,8 @@ func TestRepeatShuffleToggleClearsArmedPreload(t *testing.T) {
 		t.Fatal("engineSetShuffle must clear an armed preload")
 	}
 
-	// With the preload cleared, a subsequent finish cannot promote the stale
-	// next: now-playing stays put and the finish is not engine-owned.
+	// With the preload cleared, a later finish cannot promote the stale next:
+	// now-playing stays put and the finish is not engine-owned.
 	if engineSyncOnGaplessPromote() {
 		t.Fatal("a cleared preload must not make the finish engine-owned")
 	}
@@ -841,11 +819,9 @@ func TestRepeatShuffleToggleClearsArmedPreload(t *testing.T) {
 	}
 }
 
-// TestStopRecordsOutgoingListenOnce proves the Stop paths (DZStop + the
-// control-host Stop handler) record the in-progress listen exactly once: the
-// closures call noteTrackTransition BEFORE p.Stop() while the player is still
-// Playing, and the state guard makes the second Stop — the player is already
-// Stopped then — record nothing.
+// TestStopRecordsOutgoingListenOnce checks that DZStop and the control Stop record the
+// listen once: noteTrackTransition runs before p.Stop() while Playing, and a second
+// Stop (already Stopped) records nothing.
 func TestStopRecordsOutgoingListenOnce(t *testing.T) {
 	t.Cleanup(func() { setCurrentTrack(deezer.Track{}) })
 	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
@@ -860,19 +836,16 @@ func TestStopRecordsOutgoingListenOnce(t *testing.T) {
 		t.Fatalf("stop-listen entry = %+v, want track 77 played 65s", entries[0])
 	}
 
-	// Second Stop: p.Stop() already moved the player to Stopped, so the
-	// transition records nothing (the guard is synchronous — recordListen is
-	// never called — so this can be asserted immediately).
+	// Second Stop: the player is Stopped, so the transition records nothing. The guard is
+	// synchronous (recordListen is never called), so this is asserted at once.
 	recordTransition(audio.Stopped, 65000)
 	if got, _ := historyStore().Recent(10); len(got) != 1 {
 		t.Fatalf("second Stop double-recorded: history = %+v", got)
 	}
 }
 
-// TestGetRepeatShuffleLocalVsRouted proves the getters while casting: shuffle
-// reads the routed device's snapshot, repeat stays the engine queue's (repeat
-// is kept locally and never forwarded, so the snapshot would contradict
-// DZSetRepeat).
+// TestGetRepeatShuffleLocalVsRouted: while routed, shuffle reads the device's snapshot
+// and repeat stays the engine queue's.
 func TestGetRepeatShuffleLocalVsRouted(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	t.Cleanup(clearRoutedRemote)
@@ -952,10 +925,8 @@ func TestRepeatNotForwardedToRoutedRemote(t *testing.T) {
 	}
 }
 
-// TestAutoAdvanceBumpsPlaySeqAndGuardDropsStale: engineAdvanceOnFinish
-// claims a play-seq for its async launch, and a later user play bumps past it so
-// the in-flight resolve is recognised as superseded (and dropped) instead of
-// clobbering the user's track.
+// TestAutoAdvanceBumpsPlaySeqAndGuardDropsStale: engineAdvanceOnFinish claims a play
+// seq, and a later user play bumps past it, so the in-flight resolve is dropped.
 func TestAutoAdvanceBumpsPlaySeqAndGuardDropsStale(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	t.Cleanup(func() { setCurrentTrack(deezer.Track{}) })
@@ -1050,44 +1021,26 @@ func TestErroredFinishNotRecorded(t *testing.T) {
 	t.Cleanup(func() { setCurrentTrack(deezer.Track{}) })
 	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
 
-	// The predicate: error + ~0 played => errored finish.
-	if !isErroredFinish(audio.Errored, "", 0) {
-		t.Fatal("Errored state with ~0 played is an errored finish")
-	}
-	if !isErroredFinish(audio.Stopped, "CDN 403", 0) {
-		t.Fatal("a non-empty LastError with ~0 played is an errored finish")
-	}
-	if isErroredFinish(audio.Stopped, "CDN 403", 120000) {
-		t.Fatal("an error deep into the track is a real partial listen, not an errored finish")
-	}
-	if isErroredFinish(audio.Playing, "", 0) {
-		t.Fatal("a Playing gapless promote is never an errored finish")
-	}
-	if isErroredFinish(audio.Stopped, "", 200000) {
-		t.Fatal("a clean finish (no error) is not an errored finish")
-	}
-
 	prev := deezer.Track{ID: "E", Name: "Failed", DurationMS: 200000}
 	setCurrentTrack(prev)
 
 	// An errored finish records nothing (recordFinished returns before spawning
 	// the async write, so an immediate read is authoritative).
-	recordFinished(prev, "", audio.Errored, "decode failed", 0, true)
+	recordFinished(prev, "", audio.Errored, 0, true)
 	if got, _ := historyStore().Recent(10); len(got) != 0 {
 		t.Fatalf("errored finish was recorded: %+v", got)
 	}
 
 	// A clean finish IS recorded.
-	recordFinished(prev, "", audio.Stopped, "", 0, true)
+	recordFinished(prev, "", audio.Stopped, 0, true)
 	if entries := waitHistory(t, 1); entries[0].TrackID != "E" {
 		t.Fatalf("clean finish recorded %q, want E", entries[0].TrackID)
 	}
 }
 
-// TestSetRemoteStateIdentityChecked: setRemoteState applies only when
-// the passed client is still the CURRENT remote — a late in-flight response from
-// a device we've switched away from can neither overwrite state nor bump the
-// finished counter for the wrong device.
+// TestSetRemoteStateIdentityChecked: setRemoteState applies only for the current remote
+// client; a late response from a previous device changes neither state nor the
+// finished counter.
 func TestSetRemoteStateIdentityChecked(t *testing.T) {
 	t.Cleanup(clearRoutedRemote)
 
@@ -1099,8 +1052,8 @@ func TestSetRemoteStateIdentityChecked(t *testing.T) {
 	startFinished := finished
 	mu.Unlock()
 
-	// Late response from A (no longer current): ignored — state and the finished
-	// counter are unchanged.
+	// Late response from A (not current): ignored, state and the finished counter are
+	// unchanged.
 	setRemoteState(rcA, control.State{State: "stopped", DurationMS: 1000, PositionMS: 1000})
 	mu.Lock()
 	stA, finA := remoteSt, finished
@@ -1143,10 +1096,9 @@ func armPreload(t *testing.T, tr deezer.Track) {
 	preloads.Resolve()
 }
 
-// resetOfflineGlobals waits for the offline fetches and auto-advance launches
-// a test started (both read the media cache), then starts a fresh media cache
-// host, offline store and mode, so an offline test can't leak a cache or a pin
-// into a later test.
+// resetOfflineGlobals waits for a test's offline fetches and auto-advance launches,
+// then starts a fresh media cache host, offline store and mode, so no cache or pin
+// leaks into a later test.
 func resetOfflineGlobals() {
 	advancing.Wait()
 	waitJobsDone(nil)
@@ -1187,10 +1139,9 @@ func waitJobsDone(t *testing.T) {
 	}
 }
 
-// TestSetQueueCommandHookReplacesEngineQueue proves the control command
-// SetQueue(tracksJSON, index) parses the wire payload, replaces engineQ with the
-// cursor at index, and surfaces in engineState (/status). Mirrors the mobile
-// binding's SetQueue hook.
+// TestSetQueueCommandHookReplacesEngineQueue checks that SetQueue(tracksJSON, index)
+// replaces engineQ with the cursor at index and shows in engineState, as the mobile
+// binding's hook does.
 func TestSetQueueCommandHookReplacesEngineQueue(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	clearRoutedRemote()
@@ -1222,11 +1173,9 @@ func TestSetQueueCommandHookReplacesEngineQueue(t *testing.T) {
 	}
 }
 
-// TestOnNaturalFinishNotifiesControlServer proves the factored onFinish callback
-// publishes a natural end-of-track edge to the control server's /events
-// subscribers (NotifyFinished) with the finishing track id AND bumps the GUI
-// finished-counter when the engine queue didn't own the finish. The errored-vs-
-// natural guard itself is covered by TestErroredFinishNotRecorded.
+// TestOnNaturalFinishNotifiesControlServer checks that onFinish publishes the finished
+// edge (NotifyFinished) with the track id and bumps the GUI counter when the engine
+// queue did not own the finish.
 func TestOnNaturalFinishNotifiesControlServer(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	hist := history.New(filepath.Join(t.TempDir(), "history.jsonl"))
@@ -1276,7 +1225,7 @@ func TestOnNaturalFinishNotifiesControlServer(t *testing.T) {
 			case strings.HasPrefix(line, "event: state"):
 				if !sawState {
 					sawState = true
-					close(ready) // subscriber is registered now
+					close(ready) // subscriber is registered
 				}
 			case expectFinishedData && strings.HasPrefix(line, "data: "):
 				var fe struct {
@@ -1349,10 +1298,9 @@ func TestTracksFromInsertJSONAcceptsObjectOrArray(t *testing.T) {
 	}
 }
 
-// TestQueueEditExportsMutateEngineQueue proves the GUI Up-Next edit path behind
-// DZQueueInsertNext / DZQueueRemove / DZQueueMove: insert-next splices after the
-// cursor preserving order, remove guards the playing row, move follows the
-// cursor, and every edit bumps the content version for GUI resync.
+// TestQueueEditExportsMutateEngineQueue checks DZQueueInsertNext, DZQueueRemove and
+// DZQueueMove: insert keeps order after the cursor, remove guards the playing row,
+// move follows the cursor, and each bumps the version.
 func TestQueueEditExportsMutateEngineQueue(t *testing.T) {
 	t.Cleanup(resetEngineQueue)
 	clearRoutedRemote()
@@ -1404,10 +1352,9 @@ func TestQueueEditExportsMutateEngineQueue(t *testing.T) {
 	}
 }
 
-// TestPreparePlanPrefersCache proves the offline cached-plan preference: with a
-// media cache holding a track's meta, preparePlan returns a zero-network,
-// cache-sourced plan (CDNURL==""); a cache miss falls back to the network
-// PrepareStream (which errors "not logged in" for this un-logged-in client).
+// TestPreparePlanPrefersCache: with the track's meta in the media cache, preparePlan
+// returns a cache plan (CDNURL ""); a miss goes to PrepareStream, which errors "not
+// logged in" here.
 func TestPreparePlanPrefersCache(t *testing.T) {
 	cacheProfile(t)
 	if err := caches.SetMB(8); err != nil {

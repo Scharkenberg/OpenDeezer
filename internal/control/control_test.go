@@ -431,6 +431,35 @@ func TestEventsFinishedNotify(t *testing.T) {
 	}
 }
 
+// With nobody listening the event loop does not wake; the first subscriber still
+// gets a change that sent no notify from the fallback tick.
+func TestEventsIdleWithoutSubscriber(t *testing.T) {
+	var stateMu sync.RWMutex
+	state := State{State: "paused"}
+	snapshot := func() State {
+		stateMu.RLock()
+		defer stateMu.RUnlock()
+		return state
+	}
+	s, base := newTestServer(t, Config{}, snapshot, Commands{})
+	time.Sleep(2500 * time.Millisecond)
+	if n := s.eventSignals.Load(); n != 0 {
+		t.Fatalf("%d subscriber signals in 2.5 s with no subscriber", n)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	resp, scanner := openEventStream(t, ctx, base+"/events", nil)
+	defer resp.Body.Close()
+	_ = nextSSEState(t, scanner)
+	stateMu.Lock()
+	state.State = "playing"
+	stateMu.Unlock()
+	start := time.Now()
+	if changed := nextSSEState(t, scanner); changed.State != "playing" || time.Since(start) > 1500*time.Millisecond {
+		t.Fatalf("state %+v after %v", changed, time.Since(start))
+	}
+}
+
 func TestEventsFallbackDetectsSnapshotChange(t *testing.T) {
 	var stateMu sync.RWMutex
 	state := State{State: "paused"}
@@ -2247,8 +2276,8 @@ func TestPairingFlow(t *testing.T) {
 		t.Fatalf("expired session = %d, want 401", code)
 	}
 
-	// 12. After DisablePairing (which clears webRemote), /remote returns 404 again;
-	// existing sessions are now revoked.
+	// 12. After DisablePairing (which clears webRemote), /remote returns 404 and existing
+	// sessions are revoked.
 	s.DisablePairing()
 	resp3, err := http.Get(base + "/remote")
 	if err != nil {
@@ -2283,10 +2312,9 @@ func TestPairingFlow(t *testing.T) {
 	}
 }
 
-// TestSameAccountAcceptsAccountIdOnNonLoopback (LAN Connect / wildcard case).
-// Matching X-OpenDeezer-Account is accepted even on non-loopback bind (the
-// LAN-trust tradeoff); wrong id is still rejected. Pairing for sessions remains
-// available on top.
+// TestSameAccountAcceptsAccountIdOnNonLoopback: a matching X-OpenDeezer-Account is
+// accepted on a non-loopback bind (LAN trust), a wrong id is rejected, and pairing
+// stays available.
 func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
 	acct := func() Account { return Account{UserID: "42", Name: "me"} }
 	s := New(Config{Addr: "0.0.0.0:0", SameAccountOnly: true},
@@ -2439,7 +2467,7 @@ func TestSessionRevocation(t *testing.T) {
 		t.Fatalf("revoke by token = %d, want 401", code)
 	}
 
-	// Now test account switch revokes: first Enable to record pairedAccount, then inject.
+	// Account switch revokes: first Enable to record pairedAccount, then inject.
 	_ = s.EnablePairing() // records pairedAccount="42"
 	s.injectSession("switchtok1234567890abcdef", time.Now().Add(1*time.Hour))
 	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "switchtok1234567890abcdef"}); code != http.StatusOK {

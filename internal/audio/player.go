@@ -1,14 +1,6 @@
-// Package audio is the playback engine: it streams, decrypts and decodes Deezer
-// audio (MP3 + FLAC) into a PCM ring that an output device drains. Supports seek,
-// per-track ReplayGain, gapless transitions and (experimental) crossfade.
-// Each stream is held in a file exactly as received (still encrypted) and
-// decrypted as it is read, so decrypted audio is never written to disk;
-// SetStreamCache attaches an opt-in on-disk cache of those bytes.
-//
-// The output device is abstracted behind the `output` interface so the backend
-// is build-tag-selected: malgo/miniaudio by default (adds output-device
-// selection), or oto under the `otosink` tag — used for the macOS GUI, where
-// malgo's CoreAudio callback runs unreliably inside the c-archive.
+// Package audio streams, decrypts and decodes Deezer audio (MP3, FLAC) into a PCM ring
+// drained by an output device, with seek, ReplayGain, gapless and crossfade. Streams are
+// stored encrypted and decrypted on read; the output backend is chosen by build tag.
 package audio
 
 import (
@@ -17,9 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,10 +21,9 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 )
 
-// output is the platform audio sink. start() begins pulling PCM via read, which
-// fills the given buffer (zeroing any tail it doesn't produce) and returns the
-// number of bytes it actually wrote (for diagnostics). The backend is selected
-// by build tag (output_malgo.go / output_oto.go).
+// output is the platform audio sink (output_malgo.go or output_oto.go by build tag).
+// start() pulls PCM via read, which fills the buffer (zeroing any tail) and returns
+// the bytes it wrote.
 type output interface {
 	start(read func(out []byte) int) error
 	devices() ([]Device, error)
@@ -96,28 +85,14 @@ const (
 
 	fadeInFrames  = sampleRate * 12 / 1000 // ~12ms anti-click ramp after a discontinuity
 	fadeOutFrames = sampleRate * 12 / 1000 // ~12ms anti-click ramp before Pause/Stop/skip/seek
-	sleepFadeNS   = int64(8 * time.Second) // sleep-timer fade-out window before pausing
+	sleepFadeNS   = int64(10 * time.Second) // sleep-timer fade-out window before pausing
 
-	// HTTP Range resume tuning for a dropped/torn CDN download.
-	maxResumeAttempts  = 3                      // consecutive failed re-GETs before giving up
-	maxRefreshAttempts = 2                      // media-URL re-resolutions on 403/410 expiry
-	resumeBackoff      = 300 * time.Millisecond // base backoff, multiplied by the attempt count
-	// minResumeProgress is how many new bytes an attempt must deliver before the
-	// retry budget resets. Resetting on ANY progress would let a host that drips
-	// a byte per connection (and a stream's client deliberately has no overall
-	// Client.Timeout) keep the download looping forever; genuine long streams
-	// with sporadic drops still clear this easily between failures.
-	minResumeProgress = 64 * 1024
 )
 
-// streamStallTimeout is how long a stream body may deliver nothing before it
-// counts as a dropped connection (a variable so tests can shorten it).
-var streamStallTimeout = 15 * time.Second
+// monoBase is the start of the sleep timer's clock: its deadlines are durations since it,
+// so a change of the wall clock moves none of them.
+var monoBase = time.Now()
 
-// streamUserAgent is sent when fetching audio so third-party podcast hosts
-// (Acast etc.) don't reject the default Go agent with 403.
-const streamUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
 // pcmStream is a decoder yielding interleaved s16 PCM, seekable by PCM byte
 // offset. *mp3Stream, *flacStream and *resampleStream all satisfy it.
@@ -130,17 +105,6 @@ type pcmStream interface {
 // but the track is not present in the local StreamCache.
 var ErrOffline = errors.New("offline: track not cached and no CDN URL available")
 
-// playPlan is the plan a source plays with the ReplayGain amplitude factor of
-// its gain.
-type playPlan struct {
-	*deezer.StreamPlan
-	rgFac float64
-}
-
-func newPlayPlan(plan *deezer.StreamPlan) *playPlan {
-	return &playPlan{StreamPlan: plan, rgFac: dbToFactor(plan.GainDB)}
-}
-
 // stripeCipher is the decryptor of plan's stream, nil for a plain stream.
 func stripeCipher(plan *deezer.StreamPlan) *deezer.StripeCipher {
 	if plan.Encrypted {
@@ -152,11 +116,10 @@ func stripeCipher(plan *deezer.StreamPlan) *deezer.StripeCipher {
 // source is one track's pipeline: download -> streamFile -> decrypt -> decoder ->
 // pcmRing. The download and decode each run on their own goroutine.
 type source struct {
-	// pl is the plan the source plays (read through plan(), also from the RT
-	// callback). download replaces it at most once, before the first byte
-	// arrives: a plan from the cache whose entry went is planned again over
-	// the network, possibly at another format.
-	pl    atomic.Pointer[playPlan]
+	// pl is the plan the source plays (read via plan(), also from the RT callback). A
+	// cached plan whose entry is gone is replaced once, before the first byte, by a
+	// network plan, possibly of another format.
+	pl    atomic.Pointer[deezer.StreamPlan]
 	durMS int64
 	// owner is the player that publishes this source's format and gain while
 	// it is current (nil for a source driven without one).
@@ -170,10 +133,20 @@ type source struct {
 	seekTo  atomic.Int64 // pending PCM-byte seek target, or -1
 	dead    atomic.Bool
 	errMsg  atomic.Value // string: download/decode error, if any
+	errNet  atomic.Bool  // that error was a lost network
+	netWait atomic.Bool  // the download waits for the network with no audio left
 	decoded atomic.Int64 // PCM bytes successfully decoded and written to the ring
 	// writeFailed is set when the stream could not be written (a full disk):
 	// the track then ends Errored with that reason, however much of it played.
 	writeFailed atomic.Bool
+
+	// heard counts the PCM bytes of this source the device played (what a
+	// listen reports; a seek does not move it). RT-incremented.
+	heard atomic.Int64
+	// speed is the speed the source plays at (SetSpeed; speedOf).
+	speed atomic.Uint64
+	// pauses and seeks count the pauses and seeks while this source played.
+	pauses, seeks atomic.Int32
 
 	// xfadeConsumed counts bytes of this source's ring drained by the crossfade
 	// path while it is the incoming ("next") track, so the swap can resume it at
@@ -191,13 +164,34 @@ type source struct {
 	mu   sync.Mutex
 	cond *sync.Cond
 
-	// ctx is cancelled by kill() to unblock a stalled Body.Read in download().
+	// ctx is canceled by kill() to unblock a stalled Body.Read in download().
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 type finishCallback struct {
 	fn func()
+}
+
+// Listen is what was heard of one track the player played.
+type Listen struct {
+	TrackID string // the plan's
+	Format  string // the format it played in
+	HeardMS int64  // the audio played, apart from what pauses and seeks skipped
+	Pauses  int
+	Seeks   int
+	Cached  bool // its stream came from the cache
+	Preview bool // the 30-second preview
+}
+
+// listenOf is what was heard of s.
+func listenOf(s *source) Listen {
+	pl := s.plan()
+	s.sb.mu.Lock()
+	cached := s.sb.cached
+	s.sb.mu.Unlock()
+	return Listen{TrackID: pl.TrackID, Format: pl.Format, HeardMS: s.heard.Load() * 1000 / bytesPerSec,
+		Pauses: int(s.pauses.Load()), Seeks: int(s.seeks.Load()), Cached: cached, Preview: pl.Preview}
 }
 
 // nearEndHook is what OnNearEnd registered.
@@ -225,11 +219,12 @@ func (c *stateCell) kick() {
 	}
 }
 
-func (s *source) plan() *playPlan { return s.pl.Load() }
+func (s *source) plan() *deezer.StreamPlan { return s.pl.Load() }
 
 func (s *source) setErr(err error) {
 	if err != nil {
 		s.errMsg.Store(err.Error())
+		s.errNet.Store(deezer.IsNoNetwork(err))
 	}
 }
 
@@ -251,10 +246,13 @@ type Player struct {
 	played      atomic.Int64 // PCM bytes the callback has consumed from cur (position)
 	totalMS     atomic.Int64
 	lastErr     atomic.Value // string
+	lastNet     atomic.Bool  // lastErr came from a lost network
 	format      atomic.Value // string
 	volume      atomic.Uint64
 	gainFac     atomic.Uint64
 	rgOn        atomic.Bool
+	rgTarget    atomic.Uint64 // float64 bits: the target loudness in dB
+	onListenEnd atomic.Pointer[func(Listen)]
 	gapless     atomic.Bool
 	crossfadeMS atomic.Int64
 	cbCount     atomic.Int64 // audio callbacks served (diagnostics)
@@ -267,18 +265,13 @@ type Player struct {
 	// to each new source; it may change during playback.
 	streamCache atomic.Pointer[cacheRef]
 
-	// fadeLeft is the number of frames still to ramp up (anti-click fade-in) after
-	// a playback discontinuity (start / resume / seek). Touched only from the RT
-	// callback and set (store) from control calls; a stale read just fades a hair
-	// longer, which is harmless.
+	// fadeLeft is the frames still to ramp up (anti-click fade-in) after a start, resume
+	// or seek. Read by the RT callback and stored by control calls; a stale read only
+	// lengthens the fade slightly.
 	fadeLeft atomic.Int64
-	// fadeOut is the frames still to ramp DOWN in an anti-click fade-out armed by
-	// Pause/Stop/Play(skip)/SeekMS; the RT callback plays it out so those
-	// operations cut on a near-zero crossing instead of popping. fadeOutArmed
-	// stays set from arm until the control call performs its deferred state
-	// flip/source swap, keeping the output muted in the gap between the ramp
-	// finishing and that flip. Both are touched from the RT callback and control
-	// calls via atomics only — no locks or allocations on the realtime path.
+	// fadeOut is the frames still to ramp down for Pause/Stop/skip/seek, played out by the
+	// RT callback. fadeOutArmed keeps the output muted from arming until the control call's
+	// deferred flip. Both are atomics only.
 	fadeOut      atomic.Int64
 	fadeOutArmed atomic.Bool
 	// mix is a reusable scratch buffer for the crossfade path so the realtime
@@ -288,15 +281,15 @@ type Player struct {
 	// Sleep timer (core-owned so every client shares one implementation).
 	sleepArmed atomic.Bool
 	sleepEOT   atomic.Bool   // end-of-track mode (else duration mode)
-	sleepAtNS  atomic.Int64  // wall-clock deadline (UnixNano) for duration mode
+	sleepAtNS  atomic.Int64  // deadline for duration mode, as time since monoBase
 	sleepGain  atomic.Uint64 // float64 bits: fade-out envelope, 1.0 when not fading
 
 	// pauseWanted is a pause asked for while Loading (Pause, TogglePause, sleep
 	// deadline); manage then promotes Loading to Paused. Play and Resume clear it.
 	pauseWanted atomic.Bool
 
-	// playMu serialises Play with manage's swap to the preloaded next track, so
-	// cur and its published duration/format/gain always belong together.
+	// playMu serializes Play with manage's swap to the preloaded next track, so cur and
+	// its published duration, format and gain belong together.
 	playMu sync.Mutex
 
 	// Equalizer + mono downmix (core-owned DSP; see eq.go). eqCfg is rebuilt and
@@ -314,27 +307,42 @@ type Player struct {
 
 // ---- ReplayGain / volume ----
 
-func dbToFactor(db float64) float64 {
-	if db == 0 {
+// replayGainFactor is the amplitude factor for a track of gain gainDB (Deezer's GAIN):
+// as in Deezer's Android app, a track louder than the target is turned down to it; a
+// quieter one, or one without gain (0), plays as is.
+func replayGainFactor(gainDB, targetDB float64) float64 {
+	if gainDB == 0 || gainDB <= targetDB {
 		return 1
 	}
-	f := math.Pow(10, db/20)
-	if f > 1 {
-		f = 1
-	}
-	if f < 0 {
-		f = 0
-	}
-	return f
+	return math.Pow(10, (targetDB-gainDB)/20)
 }
+
+// rgFactor is pl's ReplayGain factor at the player's target.
+func (p *Player) rgFactor(pl *deezer.StreamPlan) float64 {
+	return replayGainFactor(pl.GainDB, p.ReplayGainTarget())
+}
+
+// SetReplayGainTarget sets the loudness, in dB, tracks are normalized to (the
+// account's GAIN.TARGET).
+func (p *Player) SetReplayGainTarget(db float64) {
+	p.rgTarget.Store(math.Float64bits(db))
+	if p.rgOn.Load() {
+		if cur := p.cur.Load(); cur != nil {
+			p.gainFac.Store(math.Float64bits(p.rgFactor(cur.plan())))
+		}
+	}
+}
+
+// ReplayGainTarget returns the target loudness in dB (0 until one is set).
+func (p *Player) ReplayGainTarget() float64 { return math.Float64frombits(p.rgTarget.Load()) }
 
 func (p *Player) SetReplayGain(on bool) {
 	p.rgOn.Store(on)
 	if on {
-		// Apply the current track's gain immediately, so enabling ReplayGain
-		// mid-playback takes effect now instead of only on the next Play().
+		// Apply the current track's gain at once, so enabling ReplayGain mid-track takes
+		// effect without waiting for the next Play().
 		if cur := p.cur.Load(); cur != nil {
-			p.gainFac.Store(math.Float64bits(cur.plan().rgFac))
+			p.gainFac.Store(math.Float64bits(p.rgFactor(cur.plan())))
 		}
 	} else {
 		p.gainFac.Store(math.Float64bits(1))
@@ -342,11 +350,8 @@ func (p *Player) SetReplayGain(on bool) {
 }
 func (p *Player) ReplayGain() bool { return p.rgOn.Load() }
 
-// volumeTaper maps a 0..1 slider position to a perceptual amplitude gain. Human
-// loudness perception is roughly logarithmic, so a linear slider crams almost
-// all usable range into the bottom (50% already sounds nearly full). A cubic
-// taper spreads the range so the control feels natural in every client. The
-// public 0..1 volume API is unchanged; only the applied gain is tapered.
+// volumeTaper maps a 0..1 slider position to a cubic amplitude gain, matching the
+// roughly logarithmic perception of loudness. The 0..1 volume API is unchanged.
 func volumeTaper(v float64) float64 {
 	if v <= 0 {
 		return 0
@@ -401,10 +406,9 @@ func (p *Player) CrossfadeMS() int { return int(p.crossfadeMS.Load()) }
 
 // ---- sleep timer ----
 
-// SetSleepTimer arms the sleep timer. When endOfTrack is true the player pauses
-// once the current track finishes (d is ignored); otherwise it fades out over
-// the last few seconds and pauses after d elapses. d <= 0 with endOfTrack false
-// cancels any armed timer.
+// SetSleepTimer arms the sleep timer: with endOfTrack the player pauses when the track
+// ends (d ignored), else it fades out and pauses after d. d <= 0 without endOfTrack
+// cancels.
 func (p *Player) SetSleepTimer(d time.Duration, endOfTrack bool) {
 	if !endOfTrack && d <= 0 {
 		p.CancelSleepTimer()
@@ -417,7 +421,7 @@ func (p *Player) SetSleepTimer(d time.Duration, endOfTrack bool) {
 	p.sleepGain.Store(math.Float64bits(1))
 	p.sleepEOT.Store(endOfTrack)
 	if !endOfTrack {
-		p.sleepAtNS.Store(time.Now().Add(d).UnixNano())
+		p.sleepAtNS.Store(int64(time.Since(monoBase) + d))
 	} else {
 		p.sleepAtNS.Store(0)
 	}
@@ -441,7 +445,7 @@ func (p *Player) SleepActive() bool { return p.sleepArmed.Load() }
 func (p *Player) SleepEndOfTrack() bool { return p.sleepArmed.Load() && p.sleepEOT.Load() }
 
 // SleepRemainingMS returns the milliseconds until the timer fires: for duration
-// mode the wall-clock remainder, for end-of-track mode the current track's
+// mode the time left, for end-of-track mode the current track's
 // remaining time. Returns 0 when no timer is armed.
 func (p *Player) SleepRemainingMS() int64 {
 	if !p.sleepArmed.Load() {
@@ -453,7 +457,7 @@ func (p *Player) SleepRemainingMS() int64 {
 		}
 		return 0
 	}
-	if r := (p.sleepAtNS.Load() - time.Now().UnixNano()) / int64(time.Millisecond); r > 0 {
+	if r := (p.sleepAtNS.Load() - int64(time.Since(monoBase))) / int64(time.Millisecond); r > 0 {
 		return r
 	}
 	return 0
@@ -484,7 +488,7 @@ func newPlayer(out output) *Player {
 	p := &Player{out: out, stopMgr: make(chan struct{})}
 	p.state.wake = make(chan struct{}, 1)
 	p.state.Store(int32(Stopped))
-	p.lastErr.Store("")
+	p.setLastErr("", false)
 	p.format.Store("")
 	p.gainFac.Store(math.Float64bits(1))
 	p.sleepGain.Store(math.Float64bits(1))
@@ -495,21 +499,31 @@ func newPlayer(out output) *Player {
 }
 
 // Fail puts the player in the Errored state with msg as LastError, for a
-// failure outside the player (a track that could not be resolved, a lost
-// output device).
+// failure outside the player (a lost output device).
 func (p *Player) Fail(msg string) {
-	p.lastErr.Store(msg)
+	p.setLastErr(msg, false)
 	p.state.Store(int32(Errored))
 }
 
-// SetError records msg as LastError without changing the state: a play that
-// failed before it reached the player, while the old track goes on.
-func (p *Player) SetError(msg string) { p.lastErr.Store(msg) }
+// FailErr puts the player in the Errored state with err as LastError, for a track
+// that could not be resolved; a lost network is marked as such.
+func (p *Player) FailErr(err error) {
+	p.setLastErr(err.Error(), deezer.IsNoNetwork(err))
+	p.state.Store(int32(Errored))
+}
 
-// SetOutputSuspended releases (on=true) or restores (on=false) the OS audio
-// output without tearing down playback state (decoder, ring, position). Use it
-// on audio-focus loss/interruption (e.g. iOS): playback resumes where it left
-// off. Safe to call from any goroutine.
+// SetError records err as LastError without changing the state: a play that
+// failed before it reached the player, while the old track goes on.
+func (p *Player) SetError(err error) { p.setLastErr(err.Error(), deezer.IsNoNetwork(err)) }
+
+func (p *Player) setLastErr(msg string, network bool) {
+	p.lastErr.Store(msg)
+	p.lastNet.Store(network)
+}
+
+// SetOutputSuspended releases (true) or restores (false) the OS audio output while
+// keeping decoder, ring and position, e.g. on an iOS audio interruption. Safe from any
+// goroutine.
 func (p *Player) SetOutputSuspended(on bool) error { return p.out.suspend(on) }
 
 // readPCM fills out with the next PCM for the device (zeroing any tail it can't
@@ -550,6 +564,7 @@ func (p *Player) readPCM(out []byte) int {
 			// Remember how much of next we've already played so the swap resumes
 			// it here instead of restarting (which double-books crossfadeMS).
 			next.xfadeConsumed.Add(int64(m))
+			next.heard.Add(int64(m))
 			fade := float64(pos-(total-xfadeMS)) / float64(xfadeMS)
 			if fade < 0 {
 				fade = 0
@@ -562,8 +577,8 @@ func (p *Player) readPCM(out []byte) int {
 			vs := volumeTaper(p.Volume()) * p.sleepGainClamped()
 			curG, nextG := vs, vs
 			if p.rgOn.Load() {
-				curG *= cur.plan().rgFac
-				nextG *= next.plan().rgFac
+				curG *= p.rgFactor(cur.plan())
+				nextG *= p.rgFactor(next.plan())
 			}
 			mixPCM(out[:n], out[:n], curG*(1-fade))
 			mixPCM(mix[:m], mix[:m], nextG*fade)
@@ -579,18 +594,18 @@ func (p *Player) readPCM(out []byte) int {
 		applyGain(out[:n], p.effectiveVolume())
 	}
 	curBytes := n // the position counts cur only
-	// Gapless: cur ended inside this buffer; fill the rest from next so the
-	// hand-over is sample-contiguous. manage's swap resumes next from
-	// xfadeConsumed. Not when manage will not swap: an end-of-track sleep timer
-	// stops after cur, and a cur that decoded nothing ends as an error.
+	// Gapless: cur ended inside this buffer, so fill the rest from next; manage's swap
+	// resumes next from xfadeConsumed. Skipped when manage will not swap (end-of-track
+	// sleep timer, or a cur that decoded nothing).
 	if n < len(out) && next != nil && xfadeMS == 0 && p.gapless.Load() &&
 		cur.eof.Load() && cur.seekTo.Load() < 0 &&
 		!(p.sleepArmed.Load() && p.sleepEOT.Load()) && cur.decoded.Load() > 0 {
 		m := next.ring.read(out[n:])
 		next.xfadeConsumed.Add(int64(m))
+		next.heard.Add(int64(m))
 		g := volumeTaper(p.Volume()) * p.sleepGainClamped()
 		if p.rgOn.Load() {
-			g *= next.plan().rgFac
+			g *= p.rgFactor(next.plan())
 		}
 		applyGain(out[n:n+m], g)
 		n += m
@@ -604,10 +619,8 @@ func (p *Player) readPCM(out []byte) int {
 	if fl := p.fadeLeft.Load(); fl > 0 {
 		p.fadeLeft.Store(applyFadeIn(out[:n], fl))
 	}
-	// Anti-click (out): a control op (Pause/Stop/skip/seek) armed a down-ramp and
-	// is blocked waiting for us to play it out before it flips state/swaps the
-	// source. Ramp toward zero; once the ramp is spent keep muting so no
-	// full-volume PCM leaks in the gap before that flip.
+	// Anti-click (out): a control op armed a down-ramp and waits for it before flipping
+	// state. Ramp toward zero, then keep muting until that flip.
 	if p.fadeOutArmed.Load() {
 		if fo := p.fadeOut.Load(); fo > 0 {
 			p.fadeOut.Store(applyFadeOut(out[:n], fo))
@@ -617,7 +630,8 @@ func (p *Player) readPCM(out []byte) int {
 			}
 		}
 	}
-	p.played.Add(int64(curBytes))
+	p.played.Add(int64(float64(curBytes) * speedOf(&cur.speed))) // media time
+	cur.heard.Add(int64(curBytes))
 
 	// Diagnostics: a short read means the ring didn't have a full callback's
 	// worth of PCM ready (decode/producer starvation). Counted so we can tell
@@ -662,11 +676,9 @@ func (p *Player) SetOnFinish(fn func()) {
 	}
 }
 
-// OnNearEnd registers fn to run once per current track when its remaining time
-// falls to lead() or less: at once for a track shorter than that or of unknown
-// length, and when a seek lands in that span. A seek back out of the span arms
-// it again. The length is the decoder's when it has one, else the one passed to
-// Play or Preload. fn runs on its own goroutine, never under the player's locks.
+// OnNearEnd registers fn to run once per track when its remaining time falls to lead()
+// or less (at once when shorter or of unknown length); a seek back out re-arms it. fn
+// runs on its own goroutine, never under the player's locks.
 func (p *Player) OnNearEnd(lead func() time.Duration, fn func()) {
 	p.nearEnd.Store(&nearEndHook{lead: lead, fn: fn})
 }
@@ -681,11 +693,17 @@ func (p *Player) RearmNearEnd() {
 
 func (p *Player) State() State      { return State(p.state.Load()) }
 func (p *Player) LastError() string { s, _ := p.lastErr.Load().(string); return s }
+
+// LastErrorNetwork reports whether LastError came from a lost network.
+func (p *Player) LastErrorNetwork() bool { return p.lastNet.Load() }
 func (p *Player) PositionMS() int64 {
 	played := p.played.Load()
 	var latencyBytes int64
 	if p.out != nil {
 		latencyBytes = int64(p.out.latencyFrames() * frameBytes)
+		if cur := p.cur.Load(); cur != nil {
+			latencyBytes = int64(float64(latencyBytes) * speedOf(&cur.speed))
+		}
 	}
 	bytes := played - latencyBytes
 	if bytes < 0 {
@@ -709,7 +727,7 @@ func (p *Player) publish(s *source) {
 	pl := s.plan()
 	p.format.Store(pl.Format)
 	if p.rgOn.Load() {
-		p.gainFac.Store(math.Float64bits(pl.rgFac))
+		p.gainFac.Store(math.Float64bits(p.rgFactor(pl)))
 	} else {
 		p.gainFac.Store(math.Float64bits(1))
 	}
@@ -717,22 +735,15 @@ func (p *Player) publish(s *source) {
 
 // ---- playback ----
 
-// fadeOutAndWait arms an anti-click down-ramp and blocks briefly (off the RT
-// path) until the callback has played it out, so the caller's Pause/Stop/skip/
-// seek cuts on a near-zero crossing instead of popping. It's a no-op when not
-// actively Playing (no callback is draining the ring to ramp). The wait is
-// bounded so a starved/silent output can't wedge the control call. The caller
-// must clear the fade-out state (endFadeOut, or a Resume/Play that re-arms
-// fade-in) after performing its deferred flip.
+// fadeOutAndWait arms an anti-click down-ramp and waits, bounded, until the callback
+// played it out; a no-op unless Playing. The caller clears the fade-out state
+// (endFadeOut, or a Resume/Play re-arming fade-in) after its deferred flip.
 func (p *Player) fadeOutAndWait() {
 	if State(p.state.Load()) != Playing {
 		return
 	}
-	// Publish the frame count BEFORE arming. Go atomics are sequentially
-	// consistent, so a callback that observes fadeOutArmed==true is guaranteed to
-	// see fadeOut==fadeOutFrames and ramp. The reverse order let the callback
-	// observe armed with fadeOut still 0 and hard-zero a full-volume buffer —
-	// exactly the discontinuity this fade exists to prevent.
+	// Publish the frame count before arming: atomics are sequentially consistent, so a
+	// callback that sees fadeOutArmed also sees fadeOut and ramps instead of hard-zeroing.
 	p.fadeOut.Store(fadeOutFrames)
 	p.fadeOutArmed.Store(true)
 	deadline := time.Now().Add(250 * time.Millisecond)
@@ -747,12 +758,9 @@ func (p *Player) endFadeOut() {
 	p.fadeOutArmed.Store(false)
 }
 
-// ReplanIfGone returns the plan to hand to Play or Preload. A plan from the
-// cache (no CDN URL) whose entry went since it was made (evicted, expired,
-// cleared, or the cache turned off) is planned again over the network, which
-// may pick another format; when that fails (offline) the cached plan is kept
-// and fails as before. It can block for the length of several requests:
-// callers run it before taking any lock of theirs.
+// ReplanIfGone returns the plan to hand to Play or Preload: a cached plan whose entry is
+// gone is planned again over the network (maybe another format), keeping the cached plan
+// if that fails. It can block for several requests, so call it before taking locks.
 func (p *Player) ReplanIfGone(plan *deezer.StreamPlan) *deezer.StreamPlan {
 	if plan.CDNURL != "" || plan.Refresh == nil {
 		return plan
@@ -777,14 +785,14 @@ func (p *Player) Play(plan *deezer.StreamPlan, durationMS int64) error {
 	if p.out.deviceDown() {
 		if err := p.out.setDevice(p.out.currentDevice()); err != nil {
 			p.state.Store(int32(Errored))
-			p.lastErr.Store(err.Error())
+			p.setLastErr(err.Error(), false)
 			return err
 		}
 	}
 	p.fadeOutAndWait() // ramp the outgoing track out before the swap (anti-click)
 	p.stopSources()
 	p.state.Store(int32(Loading))
-	p.lastErr.Store("")
+	p.setLastErr("", false)
 	p.played.Store(0)
 	p.totalMS.Store(durationMS)
 	p.endFadeOut()                 // clear the fade-out; the fresh track fades in below
@@ -805,14 +813,13 @@ func (p *Player) Play(plan *deezer.StreamPlan, durationMS int64) error {
 	if oldNext != nil {
 		oldNext.kill()
 	}
-	// Stay Loading; the manager flips to Playing once the ring is prebuffered, so
-	// the callback never pulls from a half-filled ring (which caused a burst of
-	// underruns — a choppy intro — at the start of every track).
+	// Stay Loading; manage flips to Playing once the ring is prebuffered, so the callback
+	// never drains a half-filled ring and underruns at the start of a track.
 	return nil
 }
 
 // Preload prepares the next track so the transition is gapless/crossfaded. It is
-// a no-op if gapless is disabled.
+// a no-op when gapless and crossfade are both off.
 func (p *Player) Preload(plan *deezer.StreamPlan, durationMS int64) {
 	if !p.gapless.Load() && p.crossfadeMS.Load() == 0 {
 		return
@@ -827,31 +834,41 @@ func (p *Player) Preload(plan *deezer.StreamPlan, durationMS int64) {
 	}
 }
 
-// ClearPreload discards any preloaded next source. Call when the upcoming track
-// is no longer determined (e.g. shuffle/repeat was toggled after a linear-next
-// was preloaded) so a stale preload can't be gaplessly swapped in.
+// ClearPreload discards any preloaded next source. Call it when the upcoming track
+// changes (e.g. shuffle or repeat toggled) so a stale preload is not swapped in.
 func (p *Player) ClearPreload() {
 	if old := p.next.Swap(nil); old != nil {
 		old.kill()
 	}
 }
 
-// manage advances to the preloaded next source when the current one is drained.
-// It ticks every 40 ms while a track loads or plays, or a sleep timer of a
-// duration is armed, and otherwise waits for a state change (an end-of-track
-// timer acts only when a track ends, which needs one playing).
+// manage advances to the preloaded next source when the current one is drained. It
+// ticks every 40 ms while a track loads or plays, and otherwise waits for a state change
+// or, with a timed sleep timer armed, for its deadline.
 func (p *Player) manage() {
 	const tick = 40 * time.Millisecond
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	for {
-		timed := p.sleepArmed.Load() && !p.sleepEOT.Load()
-		if st := p.State(); st != Loading && st != Playing && !timed {
+		if st := p.State(); st != Loading && st != Playing {
 			ticker.Stop()
+			// Nothing plays: a timed sleep timer only has to clear at its deadline.
+			var deadline <-chan time.Time
+			var sleepTimer *time.Timer
+			if p.sleepArmed.Load() && !p.sleepEOT.Load() {
+				sleepTimer = time.NewTimer(time.Duration(max(0, p.sleepAtNS.Load()-int64(time.Since(monoBase)))))
+				deadline = sleepTimer.C
+			}
 			select {
 			case <-p.stopMgr:
 				return
 			case <-p.state.wake:
+			case <-deadline:
+				p.clearSleep()
+				p.sleepGain.Store(math.Float64bits(1))
+			}
+			if sleepTimer != nil {
+				sleepTimer.Stop()
 			}
 			ticker.Reset(tick)
 			continue
@@ -865,14 +882,17 @@ func (p *Player) manage() {
 			// pause exactly at the deadline. End-of-track mode is handled in the
 			// finish branch below.
 			if p.sleepArmed.Load() && !p.sleepEOT.Load() {
-				remain := p.sleepAtNS.Load() - time.Now().UnixNano()
+				remain := p.sleepAtNS.Load() - int64(time.Since(monoBase))
 				switch {
 				case remain <= 0:
 					switch p.State() {
 					case Playing:
 						p.state.Store(int32(Paused))
+						p.countPause()
 					case Loading:
-						p.pauseWanted.Store(true)
+						if !p.pauseWanted.Swap(true) {
+							p.countPause()
+						}
 					}
 					p.clearSleep()
 					p.sleepGain.Store(math.Float64bits(1))
@@ -889,6 +909,12 @@ func (p *Player) manage() {
 					}
 					odlog.Debug("audio: callbacks=%d underruns=%d ringBuf=%dKB state=%v",
 						c, p.cbUnderrun.Load(), rb/1024, p.State())
+				}
+			}
+			// The download waits for the network with nothing left to play: Loading, as at a start.
+			if State(p.state.Load()) == Playing {
+				if cur := p.cur.Load(); cur != nil && cur.netWait.Load() && cur.ring.buffered() == 0 {
+					p.state.Store(int32(Loading))
 				}
 			}
 			// Prebuffer: promote Loading -> Playing once the ring has filled (or
@@ -927,15 +953,14 @@ func (p *Player) manage() {
 			if cur == nil {
 				continue
 			}
-			// Finished = decoder hit EOF, the ring has drained, AND no seek is
-			// pending. The seekTo guard closes a race with tail seeks: SeekMS
-			// flushes the ring synchronously (buffered()==0 at once) but the
-			// parked decode goroutine only clears eof after it wakes — without
-			// the guard a tick landing in that window would skip the track,
-			// discarding the seek.
+			// Finished means decoder EOF, an empty ring and no pending seek. SeekMS empties the
+			// ring at once but the decoder clears eof only after waking, so without the seekTo
+			// check a tick in between would skip the track.
 			if cur.eof.Load() && cur.ring.buffered() == 0 && cur.seekTo.Load() < 0 {
-				if cur.lastErr() != "" && (cur.decoded.Load() == 0 || cur.writeFailed.Load()) {
-					p.lastErr.Store(cur.lastErr())
+				// A stream that failed ends the track Errored (position and track stay); a lost
+				// network is marked so the host does not take it for an unplayable track.
+				if cur.lastErr() != "" {
+					p.setLastErr(cur.lastErr(), cur.errNet.Load())
 					if next != nil {
 						if !p.next.CompareAndSwap(next, nil) {
 							continue
@@ -951,14 +976,12 @@ func (p *Player) manage() {
 						next.kill()
 					}
 					cur.kill()
+					p.reportListen(cur)
 					p.state.Store(int32(Errored))
 					if cb := p.onFinish.Load(); cb != nil && cb.fn != nil {
 						cb.fn()
 					}
 					continue
-				}
-				if e := cur.lastErr(); e != "" {
-					p.lastErr.Store(e)
 				}
 				// End-of-track sleep timer: stop after this track finishes and do
 				// not advance (don't fire onFinish, so the engine won't auto-next).
@@ -978,6 +1001,7 @@ func (p *Player) manage() {
 						next.kill()
 					}
 					cur.kill()
+					p.reportListen(cur)
 					p.state.Store(int32(Stopped))
 					p.clearSleep()
 					continue
@@ -996,6 +1020,7 @@ func (p *Player) manage() {
 						continue
 					}
 					cur.kill() // release the decode goroutine parked after EOF
+					p.reportListen(cur)
 					p.state.Store(int32(Stopped))
 					if cb := p.onFinish.Load(); cb != nil && cb.fn != nil {
 						cb.fn()
@@ -1007,7 +1032,7 @@ func (p *Player) manage() {
 }
 
 // advanceToNext swaps the drained cur for the preloaded next and publishes
-// next's metadata. It reports whether next is now playing.
+// next's metadata. It reports whether next is playing.
 func (p *Player) advanceToNext(cur, next *source) bool {
 	p.playMu.Lock()
 	defer p.playMu.Unlock()
@@ -1018,10 +1043,11 @@ func (p *Player) advanceToNext(cur, next *source) bool {
 		return false // preload was cleared/replaced under us
 	}
 	if !p.cur.CompareAndSwap(cur, next) {
-		next.kill() // we own next now; cur changed, so release it
+		next.kill() // next is ours; cur changed, so release it
 		return false
 	}
 	cur.kill()
+	p.reportListen(cur)
 	if p.cur.Load() != next { // a Stop got in between
 		return false
 	}
@@ -1033,7 +1059,31 @@ func (p *Player) advanceToNext(cur, next *source) bool {
 	return true
 }
 
-// SeekMS jumps to an absolute position in the current track.
+// SetSpeed plays the current track at speed, from 0.5 to 2 (1 is normal),
+// pitch not kept; a track starts at normal speed. It is for plain MP3 streams
+// (episodes), which decode through the resampler. It takes effect at once.
+func (p *Player) SetSpeed(speed float64) {
+	cur := p.cur.Load()
+	if cur == nil {
+		return
+	}
+	speed = min(max(speed, 0.5), 2)
+	if speedOf(&cur.speed) == speed {
+		return
+	}
+	// The buffered PCM was decoded at the old speed: drop it, count its media time as
+	// played and decode on at the new speed. No seek, since an MP3 still downloading may
+	// wait for the rest of the stream.
+	old := speedOf(&cur.speed)
+	p.fadeOutAndWait()
+	cur.speed.Store(math.Float64bits(speed))
+	dropped := cur.ring.buffered()
+	cur.ring.flush()
+	p.played.Add(int64(float64(dropped) * old))
+	p.endFadeOut()
+	p.fadeLeft.Store(fadeInFrames)
+}
+
 func (p *Player) SeekMS(ms int64) {
 	cur := p.cur.Load()
 	if cur == nil {
@@ -1047,17 +1097,14 @@ func (p *Player) SeekMS(ms int64) {
 	}
 	off := ms * bytesPerSec / 1000
 	off -= off % frameBytes
-	// Ramp the pre-seek audio out first (anti-click) so the jump doesn't pop, then
-	// set the seek target and flush the ring synchronously so pre-seek PCM stops
-	// playing immediately (the decode goroutine's own flush can lag by a device
-	// period while it's blocked in ring.write). requestSeek before flush so the
-	// decoder re-checks the target instead of refilling the flushed ring with
-	// pre-seek PCM. The ring is now empty, so fadeLeft is spent on the first
-	// post-seek PCM (the real discontinuity), not on stale audio.
+	// Ramp out first (anti-click), then set the seek target and flush the ring so pre-seek
+	// PCM stops at once. requestSeek comes before flush so the decoder does not refill the
+	// ring with pre-seek PCM; fadeLeft then applies to the first post-seek PCM.
 	p.fadeOutAndWait()
 	cur.requestSeek(off)
 	cur.ring.flush()
 	p.played.Store(off)
+	cur.seeks.Add(1)
 	// Seeking back out of the crossfade (or gapless hand-over) window: rewind
 	// next, whose intro was already drained into the mix. The length is the
 	// decoder's, else the one passed; with neither, next is rewound.
@@ -1070,6 +1117,7 @@ func (p *Player) SeekMS(ms int64) {
 		next.requestSeek(0)
 		next.ring.flush()
 		next.xfadeConsumed.Store(0)
+		next.heard.Store(0)
 	}
 	p.endFadeOut()
 	p.fadeLeft.Store(fadeInFrames) // anti-click ramp on the first post-seek PCM
@@ -1080,13 +1128,38 @@ func (p *Player) Pause() {
 	case Playing:
 		p.fadeOutAndWait() // anti-click ramp before going silent
 		// CAS: the track may have finished (Stopped/Errored) during the fade.
-		p.state.CompareAndSwap(int32(Playing), int32(Paused))
-		// Leave fadeOut/fadeOutArmed set: state is now Paused so the callback
-		// returns silence anyway; Resume clears them and re-arms the fade-in.
+		if p.state.CompareAndSwap(int32(Playing), int32(Paused)) {
+			p.countPause()
+		}
+		// Leave fadeOut/fadeOutArmed set: the state is Paused, so the callback returns silence;
+		// Resume clears them and re-arms the fade-in.
 	case Loading:
-		p.pauseWanted.Store(true) // manage promotes Loading to Paused
+		if !p.pauseWanted.Swap(true) { // manage promotes Loading to Paused
+			p.countPause()
+		}
 	}
 }
+
+// SetOnListenEnd sets fn to run with each track's Listen when it stops playing (ended,
+// failed, replaced, stopped or handed to the next). fn runs on the goroutine that ended
+// it and must not block.
+func (p *Player) SetOnListenEnd(fn func(Listen)) { p.onListenEnd.Store(&fn) }
+
+// reportListen hands what was heard of s, which stopped playing, to the
+// OnListenEnd function.
+func (p *Player) reportListen(s *source) {
+	if fn := p.onListenEnd.Load(); fn != nil && *fn != nil {
+		(*fn)(listenOf(s))
+	}
+}
+
+// countPause counts a pause of the current track.
+func (p *Player) countPause() {
+	if cur := p.cur.Load(); cur != nil {
+		cur.pauses.Add(1)
+	}
+}
+
 func (p *Player) Resume() {
 	p.pauseWanted.Store(false)
 	if p.cur.Load() == nil {
@@ -1097,7 +1170,7 @@ func (p *Player) Resume() {
 		if p.out.deviceDown() {
 			if err := p.out.setDevice(p.out.currentDevice()); err != nil {
 				p.state.Store(int32(Errored))
-				p.lastErr.Store(err.Error())
+				p.setLastErr(err.Error(), false)
 				return
 			}
 		}
@@ -1132,6 +1205,7 @@ func (p *Player) Stop() {
 func (p *Player) stopSources() {
 	if cur := p.cur.Swap(nil); cur != nil {
 		cur.kill()
+		p.reportListen(cur)
 	}
 	if next := p.next.Swap(nil); next != nil {
 		next.kill()
@@ -1173,7 +1247,7 @@ func newSource(plan *deezer.StreamPlan, durMS int64) *source {
 		durMS: durMS,
 		ring:  newPCMRing(ringMax),
 	}
-	s.pl.Store(newPlayPlan(plan))
+	s.pl.Store(plan)
 	s.sb = newStreamFile(stripeCipher(plan))
 	s.cond = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -1181,45 +1255,13 @@ func newSource(plan *deezer.StreamPlan, durMS int64) *source {
 	return s
 }
 
-// download writes the CDN body, as received, into the stream file; readers
-// decrypt it (encrypted streams) as they read.
-//
-// It is resilient to a torn mid-body transfer: a dropped connection is
-// recovered by re-issuing the GET with a Range header at the file's length, and
-// the file just keeps growing where it left off, so it ends identical to an
-// uninterrupted download. If the signed media URL has expired (403/410), it
-// re-resolves a fresh one via plan.Refresh (when available) and resumes from
-// the same offset.
-//
-// When a StreamCache is attached (SetStreamCache) and the plan is a full
-// encrypted track, the raw ciphertext is served from / kept in the cache: a
-// hit reads the cache file itself with no HTTP (or Refresh) at all, and a miss
-// streams into a cache temp file that the cache adopts as the entry once it
-// holds the whole declared body (resumes included); a short body is not
-// adopted, so that play simply isn't cached.
-//
-// A plan from the cache (no CDN URL) whose entry went after ReplanIfGone
-// looked is planned again through its Refresh, at whatever format that gives,
-// and becomes the source's plan before the first byte arrives: its decryptor,
-// gain, cache key and meta, and the player's published format and gain when
-// the source is current. Without a Refresh, or when it fails, the track fails
-// with ErrOffline.
+// download writes the CDN body as received into the stream file, resuming torn
+// transfers with a Range GET and refreshing an expired URL (403/410). With a StreamCache,
+// full encrypted tracks are read from or stored in the cache.
 func (s *source) download() {
 	pl := s.plan()
 	url := pl.CDNURL
-	buf := make([]byte, 64*1024)
-	var consumed int64 // bytes written so far (== Range resume offset)
-	attempts := 0      // consecutive failed re-GETs without progress
-	refreshes := 0     // media-URL re-resolutions performed
-	lenSet := false    // stream length recorded once
-	// validator is the first response's entity validator (ETag, else
-	// Last-Modified). Resume GETs send it as If-Range so a host whose entity
-	// changed mid-download answers 200-full instead of a 206 we would blindly
-	// splice; a 200-with-progress whose validator differs is fatal (below).
-	// Mainly matters for plain passthrough/podcast hosts — encrypted Deezer CDN
-	// tracks are immutable.
-	validator := ""
-	validatorSet := false
+	refreshes := 0 // media-URL re-resolutions performed
 
 	// Cache hit: the cached file is the stream, complete; no HTTP at all. A
 	// damaged entry (another size than recorded) is a miss.
@@ -1252,7 +1294,7 @@ func (s *source) download() {
 			s.sb.finish(ErrOffline)
 			return
 		}
-		pl, url = newPlayPlan(np), np.CDNURL
+		pl, url = np, np.CDNURL
 		s.sb.mu.Lock()
 		s.sb.dec = stripeCipher(np)
 		s.sb.mu.Unlock()
@@ -1286,188 +1328,52 @@ func (s *source) download() {
 		}
 	}
 
-	for {
-		if s.dead.Load() {
-			s.sb.finish(nil)
-			return
-		}
-		startOff := consumed
-		resp, err := s.openStream(url, consumed, validator)
-		if err != nil {
-			if s.dead.Load() {
-				s.sb.finish(nil)
-				return
-			}
-			attempts++
-			if attempts > maxResumeAttempts {
-				s.setErr(err)
-				s.sb.finish(err)
-				return
-			}
-			s.backoff(attempts)
-			continue
-		}
-		switch {
-		case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusGone:
-			// Expired signed URL: re-resolve and retry from the same offset.
-			resp.Body.Close()
-			if u2 := s.refreshURL(&refreshes); u2 != "" {
-				url = u2
-				continue
-			}
-			e := fmt.Errorf("CDN returned %s", resp.Status)
-			s.setErr(e)
-			s.sb.finish(e)
-			return
-		case resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent:
-			resp.Body.Close()
-			e := fmt.Errorf("CDN returned %s", resp.Status)
-			s.setErr(e)
-			s.sb.finish(e)
-			return
-		}
-		// Resume sanity: a 206 must continue exactly at the consumed offset —
-		// splicing a body that starts anywhere else corrupts the stream. Treat a
-		// mismatched (or unparsable) Content-Range start as a failed attempt.
-		if resp.StatusCode == http.StatusPartialContent && consumed > 0 {
-			if start := contentRangeStart(resp); start != consumed {
-				resp.Body.Close()
-				attempts++
-				if attempts > maxResumeAttempts {
-					e := fmt.Errorf("CDN resume at %d answered Content-Range start %d", consumed, start)
-					s.setErr(e)
-					s.sb.finish(e)
-					return
-				}
-				s.backoff(attempts)
-				continue
+	var dryAt time.Time // when the audio ran out while the network was gone
+	_, _, err := deezer.Resume{
+		Plan:        s.plan(),
+		URL:         url,
+		Refreshes:   refreshes,
+		Pump:        s.pump,
+		WaitNetwork: func(n int) bool { return s.waitNetwork(n, &dryAt) },
+		Opened: func() {
+			dryAt = time.Time{}
+			s.netWait.Store(false)
+		},
+		Total: s.sb.setTotal,
+		Fatal: func(error) bool { return s.writeFailed.Load() },
+	}.Run(s.ctx)
+	s.netWait.Store(false)
+	switch {
+	case s.dead.Load():
+		s.sb.finish(nil)
+	case err != nil:
+		s.setErr(err)
+		s.sb.finish(err)
+	default:
+		// The cache adopts the body only at its declared length. Once adopted the temp name is
+		// gone, so close leaves the entry alone, and the next play uses the cache.
+		if total := s.sb.Total(); cacheFile && total > 0 {
+			meta := mediacache.StreamMeta{Format: pl.Format, AskedFormat: pl.AskedFormat, KeyID: pl.KeyID, Encrypted: true, GainDB: pl.GainDB}
+			if err := s.cache.Adopt(cacheKey, s.sb.f.Name(), total, meta); err != nil {
+				odlog.Debug("stream %s: not cached: %v", pl.TrackID, err)
 			}
 		}
-		if !lenSet {
-			if total := totalLength(resp); total > 0 {
-				s.sb.setTotal(total)
-			}
-			lenSet = true
-		}
-		if !validatorSet {
-			validator = responseValidator(resp)
-			validatorSet = true
-		}
-		// If we asked for a Range but the server ignored it (answered 200 full),
-		// skip the bytes already consumed so we don't write them twice, but
-		// only when the entity is provably the same one we started on. A
-		// stored validator that no longer matches means the host swapped the
-		// entity mid-download (the If-Range miss case): splicing would feed
-		// mismatched bytes, so fail cleanly instead.
-		var skip int64
-		if consumed > 0 && resp.StatusCode == http.StatusOK {
-			if validator != "" && responseValidator(resp) != validator {
-				resp.Body.Close()
-				e := fmt.Errorf("stream entity changed during resume (validator mismatch)")
-				s.setErr(e)
-				s.sb.finish(e)
-				return
-			}
-			skip = consumed
-		}
-		// A body that delivers nothing for streamStallTimeout is closed, which
-		// ends the pump with an error: a dropped connection, resumed below.
-		stall := time.AfterFunc(streamStallTimeout, func() { resp.Body.Close() })
-		completed, rerr := s.pump(deezer.StallReader{R: resp.Body, Timer: stall, After: streamStallTimeout}, buf, &consumed, skip)
-		stall.Stop()
-		resp.Body.Close()
-		if completed {
-			// The cache checks the body against the declared length: a short
-			// one never becomes an entry. The file's old name is gone once
-			// adopted, so close leaves the entry alone. The stream fields go
-			// with the body, so the track plays from the cache next time
-			// whether or not it finishes now.
-			if total := s.sb.Total(); cacheFile && total > 0 {
-				meta := mediacache.StreamMeta{Format: pl.Format, AskedFormat: pl.AskedFormat, KeyID: pl.KeyID, Encrypted: true, GainDB: pl.GainDB}
-				if err := s.cache.Adopt(cacheKey, s.sb.f.Name(), total, meta); err != nil {
-					odlog.Debug("stream %s: not cached: %v", pl.TrackID, err)
-				}
-			}
-			s.sb.finish(nil)
-			return
-		}
-		if s.dead.Load() {
-			s.sb.finish(nil)
-			return
-		}
-		if s.writeFailed.Load() {
-			s.setErr(rerr)
-			s.sb.finish(rerr)
-			return
-		}
-		// Torn mid-body: resume. Meaningful progress refreshes the retry budget so
-		// a long stream with sporadic drops isn't capped at a handful of total
-		// tries — but only past minResumeProgress, so a host dripping a byte per
-		// connection exhausts the budget instead of looping forever.
-		if consumed-startOff >= minResumeProgress {
-			attempts = 0
-		}
-		attempts++
-		if attempts > maxResumeAttempts {
-			if rerr != nil && !s.dead.Load() {
-				s.setErr(rerr)
-			}
-			s.sb.finish(eofToNil(rerr))
-			return
-		}
-		s.backoff(attempts)
+		s.sb.finish(nil)
 	}
 }
 
-// openStream issues the CDN GET, resuming from offset via a Range header when
-// offset > 0. validator (the first response's ETag/Last-Modified, may be "") is
-// sent as If-Range on resumes so a host whose entity changed answers 200-full —
-// which download() then validates — instead of a 206 of the wrong entity. The
-// per-source context cancels a stalled read on kill().
-func (s *source) openStream(url string, offset int64, validator string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	// A browser User-Agent: Deezer's own CDN is permissive, but third-party
-	// podcast hosts (e.g. Acast for direct-stream episodes) reject the default Go
-	// agent with 403. The engine's shared client follows the redirects those
-	// hosts use; it has no overall timeout (a stream lasts as long as it
-	// lasts), and s.ctx cancels the request when the source is killed.
-	req.Header.Set("User-Agent", streamUserAgent)
-	if offset > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
-		if validator != "" {
-			req.Header.Set("If-Range", validator)
-		}
-	}
-	resp, err := deezer.HTTPClient(0).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	pl := s.plan()
-	odlog.Debug("stream %s: HTTP %d %s (%s) off=%d", pl.TrackID, resp.StatusCode,
-		resp.Header.Get("Content-Type"), pl.Format, offset)
-	return resp, nil
-}
-
-// cacheKey is pl's key in the raw-stream cache, "" when the source has no
-// cache or pl is not cacheable: only full encrypted tracks are, so the bytes
-// at rest stay ciphertext (previews and plain passthrough streams such as
-// podcasts are never cached).
-func (s *source) cacheKey(pl *playPlan) string {
+// cacheKey is pl's key in the raw-stream cache, "" when there is no cache or pl is not
+// a full encrypted track (previews and plain streams are never cached).
+func (s *source) cacheKey(pl *deezer.StreamPlan) string {
 	if s.cache == nil || !pl.Encrypted || pl.Preview {
 		return ""
 	}
 	return pl.TrackID + "." + pl.Format
 }
 
-// pump writes one response body into the stream file as received. It advances
-// *consumed to the offset for a possible resume. skip discards leading bytes
-// already consumed (when the server ignored a Range request and re-sent from
-// the start). Returns completed=true on a clean io.EOF; on any other read
-// error returns completed=false with the error so the caller can resume. A
-// write error sets writeFailed and is returned: the caller must not resume.
+// pump writes one response body into the stream file, advancing *consumed and skipping
+// skip leading bytes. completed is true on a clean EOF; a read error is returned for a
+// resume, a write error sets writeFailed (no resume).
 func (s *source) pump(body io.Reader, buf []byte, consumed *int64, skip int64) (completed bool, err error) {
 	for {
 		n, rerr := body.Read(buf)
@@ -1506,96 +1412,31 @@ func (s *source) pump(body io.Reader, buf []byte, consumed *int64, skip int64) (
 	}
 }
 
-// refreshURL re-resolves a fresh CDN URL via plan.Refresh when the current one
-// has expired (403/410). Returns "" when refresh is unavailable or exhausted,
-// or when the refreshed plan is not the same stream: the caller resumes the
-// download at the offset already written into the SAME stream file, which is
-// only valid if the refreshed plan has the identical format /
-// encryption / preview identity. A plan that changed (quality switched at
-// runtime, preview fallback) would splice mismatched bytes — corrupt audio,
-// 416s, and a poisoned StreamCache entry — so it is rejected and download()
-// falls through to its clean error path.
-func (s *source) refreshURL(count *int) string {
-	pl := s.plan()
-	if pl.Refresh == nil || *count >= maxRefreshAttempts {
-		return ""
+// waitNetwork waits before the n-th network retry and reports whether to try again: always
+// while audio is still buffered, for deezer.NetDryWait once it ran dry (dryAt marks when;
+// the player shows Loading meanwhile).
+func (s *source) waitNetwork(n int, dryAt *time.Time) bool {
+	if s.ring.buffered() == 0 {
+		if dryAt.IsZero() {
+			*dryAt = time.Now()
+		}
+		if time.Since(*dryAt) > deezer.NetDryWait {
+			return false
+		}
+		s.netWait.Store(true)
 	}
-	*count++
-	np, err := pl.Refresh()
-	if err != nil || np == nil || np.CDNURL == "" ||
-		np.Format != pl.Format || np.CipherID() != pl.CipherID() || np.Encrypted != pl.Encrypted || np.Preview != pl.Preview {
-		return ""
-	}
-	return np.CDNURL
-}
-
-// backoff sleeps a short, attempt-scaled interval before a resume, waking early
-// if the source is killed.
-func (s *source) backoff(attempt int) {
-	t := time.NewTimer(resumeBackoff * time.Duration(attempt))
+	t := time.NewTimer(deezer.NetRetryDelays[min(n, len(deezer.NetRetryDelays)-1)])
 	defer t.Stop()
 	select {
 	case <-s.ctx.Done():
+		return false
 	case <-t.C:
+		return !s.dead.Load()
 	}
 }
 
-// totalLength extracts the full stream length from a response: the number after
-// the slash in Content-Range for a 206, else Content-Length for a full 200.
-func totalLength(resp *http.Response) int64 {
-	if resp.StatusCode == http.StatusPartialContent {
-		cr := resp.Header.Get("Content-Range")
-		if i := strings.LastIndex(cr, "/"); i >= 0 {
-			if v, err := strconv.ParseInt(strings.TrimSpace(cr[i+1:]), 10, 64); err == nil && v > 0 {
-				return v
-			}
-		}
-		return 0
-	}
-	if resp.ContentLength > 0 {
-		return resp.ContentLength
-	}
-	return 0
-}
-
-// contentRangeStart parses the start offset from a 206's Content-Range header
-// ("bytes <start>-<end>/<total>"). Returns -1 when absent or unparsable, so a
-// resume can't silently splice a body whose position is unknown.
-func contentRangeStart(resp *http.Response) int64 {
-	cr := strings.TrimSpace(resp.Header.Get("Content-Range"))
-	cr = strings.TrimSpace(strings.TrimPrefix(cr, "bytes"))
-	dash := strings.IndexByte(cr, '-')
-	if dash < 0 {
-		return -1
-	}
-	v, err := strconv.ParseInt(strings.TrimSpace(cr[:dash]), 10, 64)
-	if err != nil || v < 0 {
-		return -1
-	}
-	return v
-}
-
-// responseValidator returns the response's entity validator for resume checks:
-// ETag when present, else Last-Modified, else "".
-func responseValidator(resp *http.Response) string {
-	if et := resp.Header.Get("ETag"); et != "" {
-		return et
-	}
-	return resp.Header.Get("Last-Modified")
-}
-
-func eofToNil(err error) error {
-	if err == io.EOF {
-		return nil
-	}
-	return err
-}
-
-// watermarkBytes estimates a safe head-start of encoded audio (~15s) to buffer
-// before decoding, from the format's nominal bitrate. Starting on this margin
-// instead of the whole file cuts time-to-first-audio; the stream's blocking
-// Read then paces the decoder as the rest streams in. Floored at 256KB so tiny
-// or unknown-bitrate streams still have a cushion.
+// watermarkBytes estimates ~15 s of encoded audio from the format's bitrate, the amount
+// buffered before decoding starts. At least 256 KB.
 func watermarkBytes(format string) int {
 	up := strings.ToUpper(format)
 	kbps := 128
@@ -1620,13 +1461,9 @@ func watermarkBytes(format string) int {
 // decode builds the decoder over a reader of the stream and pumps PCM into the
 // ring, honoring seek requests.
 func (s *source) decode() {
-	// Start on a watermark of encoded audio rather than the whole track, so the
-	// first sample plays sooner. The ring blocks the decoder when full (pacing it)
-	// and the download runs in parallel and is usually far faster than realtime,
-	// so the decoder rarely outruns the network; when it does, the reader's
-	// blocking Read simply parks it until more arrives. The plan is final once
-	// the first byte arrived (download may replace it before), so the format
-	// is read after that.
+	// Start decoding on a watermark rather than the whole track; the stream's blocking Read
+	// parks the decoder when it outruns the download. The plan is final after the first
+	// byte, so the format is read after that.
 	s.sb.waitWatermark(1)
 	format := s.plan().Format
 	s.sb.waitWatermark(int64(watermarkBytes(format)))
@@ -1636,11 +1473,8 @@ func (s *source) decode() {
 	var dec pcmStream
 	var err error
 	if strings.Contains(strings.ToUpper(format), "FLAC") {
-		// flac.NewSeek reads only the leading metadata (no full-download scan), so
-		// FLAC decodes progressively from the stream. Seeking builds the seek
-		// table lazily: if the FLAC has no SEEKTABLE block that scan reads to EOF,
-		// which the stream's reader turns into a block-until-downloaded: a
-		// graceful degradation, not a failure.
+		// flac.NewSeek reads only the metadata, so FLAC decodes progressively. Without a
+		// SEEKTABLE the first seek reads to EOF, which blocks until the download completes.
 		var fs *flacStream
 		fs, err = newFLACStream(s.sb.reader())
 		if err == nil {
@@ -1653,14 +1487,12 @@ func (s *source) decode() {
 		var ms *mp3Stream
 		ms, err = newMP3Stream(s.sb)
 		if err == nil {
-			// go-mp3 always emits 2ch s16 but at the FILE's native rate, while the
-			// output device is fixed at 44100. Deezer tracks are 44.1k, but the
-			// plain-stream path also serves third-party podcast MP3s (48k/24k/22.05k);
-			// left unresampled they'd play at the wrong speed and pitch. Wrap the
-			// decoder in a linear resampler when the rate differs.
-			if r := ms.SampleRate(); r != sampleRate {
+			// go-mp3 emits 2ch s16 at the file's own rate while the output runs at 44100, so other
+			// rates (podcast MP3s) go through a linear resampler. Plain streams (episodes) always
+			// use it, for SetSpeed.
+			if r := ms.SampleRate(); r != sampleRate || !s.plan().Encrypted {
 				odlog.Debug("mp3 decode: resampling %dHz -> %dHz format=%s", r, sampleRate, format)
-				dec = newResampleStream(ms, r)
+				dec = newResampleStream(ms, r, &s.speed)
 			} else {
 				dec = ms
 			}
@@ -1671,11 +1503,8 @@ func (s *source) decode() {
 			s.setErr(err)
 		}
 		s.eof.Store(true)
-		// There is no decoder to service seeks, and manage()'s finish check
-		// treats a pending seek as "not finished" — so park here swallowing any
-		// seek requests until the source is killed. Returning immediately
-		// instead would let a SeekMS on this errored source leave seekTo set
-		// forever, wedging manage() out of ever finishing/advancing.
+		// No decoder can service seeks, and manage() treats a pending seek as not finished, so
+		// park here swallowing seek requests until the source is killed.
 		for s.waitSeekOrDead() {
 			s.seekTo.Store(-1)
 		}
@@ -1688,11 +1517,8 @@ func (s *source) decode() {
 			return
 		}
 		if s.seekTo.Load() >= 0 {
-			// Clear eof BEFORE consuming the seek target: manage()'s finish check
-			// is `eof && ring empty && no pending seek`, so the "not finished"
-			// signal must hand off from seekTo to eof without a gap. Swapping
-			// seekTo first would open a window (seekTo=-1, eof still true) in
-			// which manage() could finish and skip the track.
+			// Clear eof before taking the seek target: manage() finishes on eof, an empty ring and
+			// no pending seek, so taking seekTo first could let it skip the track.
 			s.eof.Store(false) // seeking back into the track: PCM will grow again
 			if to := s.seekTo.Swap(-1); to >= 0 {
 				serr := func() (err error) {
@@ -1720,10 +1546,8 @@ func (s *source) decode() {
 		n, rerr := dec.Read(buf)
 		if n > 0 {
 			if !s.ring.write(buf[:n], seq) {
-				// The ring was flushed/closed under us (a seek, from here or from
-				// SeekMS). Drop this chunk and loop so a pending seek is re-checked
-				// at the top before we decode more — otherwise pre-seek PCM decoded
-				// before the Seek executes could be written into the flushed ring.
+				// The ring was flushed or closed (a seek). Drop this chunk and loop so a pending seek is
+				// handled before decoding more, keeping pre-seek PCM out of the flushed ring.
 				if s.dead.Load() {
 					return
 				}
@@ -1733,10 +1557,8 @@ func (s *source) decode() {
 			s.decoded.Add(int64(n))
 		}
 		if rerr != nil {
-			// Decoder EOF, but the source is still alive: the ring may hold several
-			// seconds of PCM and the user can still seek back into the track. Mark
-			// eof (so manage() finishes once the ring drains) and park until a seek
-			// or kill wakes us, then resume decoding.
+			// Decoder EOF with the source alive: the user may still seek back. Mark eof so manage()
+			// finishes once the ring drains, and park until a seek or kill.
 			s.eof.Store(true)
 			if !s.waitSeekOrDead() {
 				return
@@ -1785,10 +1607,9 @@ func init() {
 	}
 }
 
-// pcm16 casts a little-endian byte slice to an int16 slice in-place using unsafe.Slice.
-// It assumes a little-endian host architecture (which is verified at init time).
-// If the input slice length is less than 2, it returns nil.
-// If the input slice length is odd, the trailing odd byte is ignored and left untouched.
+// pcm16 reinterprets a little-endian byte slice as int16 in place (unsafe.Slice; the
+// host is checked to be little-endian at init). nil below 2 bytes; an odd last byte is
+// ignored.
 func pcm16(b []byte) []int16 {
 	if len(b) < 2 {
 		return nil
@@ -1832,11 +1653,9 @@ func applyFadeIn(b []byte, remaining int64) int64 {
 	return remaining
 }
 
-// applyFadeOut ramps interleaved s16 stereo frames DOWN from unity toward zero
-// over fadeOutFrames, starting from `remaining` frames left, and returns the
-// frames still to ramp. When the ramp completes partway through the buffer the
-// tail is zeroed (the discontinuity has happened). Runs in the RT callback; no
-// allocation.
+// applyFadeOut ramps interleaved s16 stereo frames down toward zero from `remaining`
+// frames left and returns the frames still to ramp; past the ramp's end the buffer is
+// zeroed. Runs in the RT callback without allocating.
 func applyFadeOut(b []byte, remaining int64) int64 {
 	samples := pcm16(b)
 	numFrames := len(samples) / channels

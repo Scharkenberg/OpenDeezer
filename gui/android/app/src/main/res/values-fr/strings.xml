@@ -236,9 +236,9 @@
     <string name="favorite_update_failed">Impossible de modifier « J\'aime » — vérifiez votre connexion.</string>
     <string name="preview_chip">Extrait</string>
     <string name="account_free_hint">Compte gratuit · qualité standard (128 kbps)</string>
-    <string name="settings_ads">Publicités</string>
-    <string name="setting_disable_ads_title">Désactiver les publicités</string>
-    <string name="setting_disable_ads_disclaimer">Deezer Free est financé par la publicité. Signaler vos écoutes — comme l\'application officielle — rémunère les artistes et alimente les publicités. Désactiver cette option supprime les publicités mais arrête le signalement de vos écoutes, ce qui prive les artistes de leur nombre d\'écoutes et enfreint les conditions d\'utilisation de Deezer. À utiliser à vos propres risques.</string>
+    <string name="settings_ads">Signalement des écoutes</string>
+    <string name="setting_disable_ads_title">Ne pas signaler mes écoutes</string>
+    <string name="setting_disable_ads_disclaimer">OpenDeezer ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l\'arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d\'utilisation de Deezer. À vos risques et périls.</string>
 
     <!-- v2.2 : radio, téléchargement par lot, historique, cache de streaming -->
     <string name="action_start_radio">Lancer la radio</string>
@@ -273,8 +273,6 @@
     <string name="cd_downloaded">Téléchargé</string>
     <string name="cd_reorder">Réorganiser</string>
     <string name="offline_ready">%1$s disponible hors ligne</string>
-    <string name="offline_already">%1$s déjà hors ligne</string>
-    <string name="offline_needs_cache">Activez le cache de flux dans les Réglages pour télécharger hors ligne</string>
     <string name="device_self_phone">OpenDeezer (Android)</string>
     <string name="device_self_tv">OpenDeezer (Android TV)</string>
     <string name="settings_connect">OpenDeezer Connect</string>

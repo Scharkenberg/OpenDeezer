@@ -16,16 +16,14 @@ const (
 	listItemStride = listItemHeight + 1 // item + spacing
 )
 
-// handleMouse implements conservative mouse support: the wheel scrolls
-// whatever the current screen scrolls, a left click selects the row under the
-// cursor (a click on the already-selected row activates it), and a click on
-// the footer progress bar seeks proportionally. Clicks anywhere ambiguous are
-// ignored.
+// handleMouse: the wheel scrolls the current screen, a left click selects the row (a
+// click on the selected row activates it), a click on the progress bar seeks. Other
+// clicks are ignored.
 func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.screen == screenNoInternet { // full-screen view, no footer/list geometry
 		return m, nil
 	}
-	m.plConfirm = false // a pending delete is cancelled by any mouse action
+	m.plConfirm = false // a pending delete is canceled by any mouse action
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
 		return m.handleWheel(true)
@@ -99,7 +97,7 @@ func (m *Model) clickSeek(x int) tea.Cmd {
 	times := fmt.Sprintf("%s / %s", fmtMS(m.player.PositionMS()), fmtMS(dur))
 	barWidth := max(1, m.width) - lipgloss.Width(times) - 1
 	if barWidth <= 0 || x < 0 || x >= barWidth {
-		return nil // click on the times text or off the bar — ignore
+		return nil // click on the times text or off the bar: ignore
 	}
 	return m.seekCmd(dur * int64(x) / int64(barWidth))
 }

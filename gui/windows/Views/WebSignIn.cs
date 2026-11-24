@@ -37,7 +37,7 @@ internal sealed class WebSignInView : View
         _done = false;
         var ct = Ct;
         _state.ShowLoading();
-        _staleArl = await Task.Run(Config.LoadArlFile); // never hand back the login we already have
+        _staleArl = await Task.Run(Config.LoadArlFile); // a login equal to the saved one is never handed back
         await Session.WebProfileReady;
         if (ct.IsCancellationRequested) return;
         try { CoreWebView2Environment.GetAvailableBrowserVersionString(); }
@@ -48,7 +48,7 @@ internal sealed class WebSignInView : View
             return;
         }
         _web = new WebView2();
-        _web.CoreWebView2Initialized += (s, e) =>
+        _web.CoreWebView2Initialized += async (s, e) =>
         {
             if (e.Exception != null)
             {
@@ -56,8 +56,11 @@ internal sealed class WebSignInView : View
                 _state.ShowEmpty(Icons.Error, Loc.S("Login_WebView2Missing"));
                 return;
             }
-            // A stale or previous account's cookie must never be captured.
-            s.CoreWebView2.CookieManager.DeleteAllCookies();
+            // A stale or previous account's session must never be captured: its cookies go. The
+            // device's stay, so Deezer sees the device it knows sign in again.
+            var cookies = s.CoreWebView2.CookieManager;
+            foreach (var c in await cookies.GetCookiesAsync("https://www.deezer.com"))
+                if (c.Name is "arl" or "sid" or "refresh-token" or "account_id") cookies.DeleteCookie(c);
             s.CoreWebView2.NavigationCompleted += (_, _) => CheckCookie();
             s.CoreWebView2.SourceChanged += (_, _) => CheckCookie();
             s.CoreWebView2.Navigate("https://www.deezer.com/login");
@@ -67,6 +70,11 @@ internal sealed class WebSignInView : View
         _host.Children.Add(_web);
         _ = _web.EnsureCoreWebView2Async();
     }
+
+    // Signs the account in again after Deezer ended its session (the notice and the offline page
+    // offer it); the queue stays when it is the same account.
+    public static void SignInAgain() =>
+        App.Navigator.Push<WebSignInView>(new Func<string, Task>(arl => App.Session.SignInAsync(arl)));
 
     public override void Hide()
     {

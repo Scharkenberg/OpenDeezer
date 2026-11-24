@@ -9,10 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// updateCheckMsg carries the result of a GitHub release check (see
-// internal/update). A non-nil err means the check failed (offline, rate
-// limited, etc.) — treated as "no update", never surfaced as an error unless
-// the user asked for a manual re-check.
+// updateCheckMsg carries a GitHub release check result (internal/update). A failed
+// check (err) counts as "no update" and is shown only for a manual re-check.
 type updateCheckMsg struct {
 	info update.Info
 	err  error
@@ -28,8 +26,8 @@ func (m *Model) updateCheckCmd() tea.Cmd {
 	}
 }
 
-// openInBrowser opens url with the OS's default handler, best-effort. Errors
-// are intentionally ignored — this never blocks or fails the UI.
+// openInBrowser opens url with the OS's default handler; errors are ignored, so the UI
+// never blocks or fails on it.
 func openInBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

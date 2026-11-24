@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
 /**
  * TV settings: audio, OpenDeezer Connect (make this device reachable + phone
  * remote + play-on other devices), update check and account. Everything is
- * D-pad focusable; toggles flip on the centre button.
+ * D-pad focusable; toggles flip on the center button.
  */
 @Composable
 fun TvSettingsScreen(account: Account?, onLogout: () -> Unit) {

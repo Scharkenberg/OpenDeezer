@@ -1,9 +1,6 @@
-// Package engine is the OpenDeezer engine the native shells host: corelib
-// (the C ABI the desktop apps call) and mobile (the gomobile API). It owns the
-// logged-in client, the player, the now-playing track, the engine queue,
-// preloads, the media cache, the listening history, the control server with
-// its commands, the phone remote and the Connect routing; a shell converts
-// arguments and results and nothing more.
+// Package engine is the OpenDeezer engine hosted by corelib (C ABI) and mobile
+// (gomobile): client, player, queue, media cache, history, control server, phone
+// remote and Connect. The shells only convert arguments and results.
 package engine
 
 import (
@@ -54,17 +51,11 @@ func loginKind(err error) int32 {
 	}
 }
 
-// Init logs in with arl and starts the engine-hosted services. The first call
-// also clears the stream files a crash left behind and the caches of older
-// versions, makes the player (with playback.json's settings, which the
-// client of each login takes too) and opens the media cache (media.json, and kept
-// open while anything is pinned). Another account than the logged-in one
-// drops the Connect route and rebuilds the control server; the same account
-// keeps both. It reports whether the login succeeded; LoginErrorKind tells
-// why not. A login that fails for want of a network turns offline mode on,
-// for the last account that signed in; a later successful one turns that
-// mode off again (not one the host set).
+// Init logs in with arl and starts the engine services; the first call also cleans up
+// leftovers and opens the player and media cache. Another account drops the Connect
+// route and rebuilds the control server; a network failure turns offline mode on.
 func Init(arl string) bool {
+	forgetMarks() // another account's, or read before this login
 	// One-time, non-network setup under the lock.
 	mu.Lock()
 	first := player == nil
@@ -80,14 +71,14 @@ func Init(arl string) bool {
 		}
 		player = p
 		player.SetOnFinish(onNaturalFinish)
+		player.SetOnListenEnd(listenLog.Ended)
 		preloads.Attach(p)
 		applyPlayback(p, nil)
 	}
 	mu.Unlock()
 	if first {
-		// The on-disk raw-stream cache (media.json: mediaCacheMB > 0, or
-		// anything pinned). Best-effort: a cache failure only logs; playback
-		// runs uncached.
+		// The on-disk raw-stream cache (media.json: mediaCacheMB > 0, or anything pinned). A
+		// cache failure is logged and playback runs uncached.
 		if err := caches.Open(); err != nil {
 			odlog.Warn("media cache: %v", err)
 		} else if caches.Current() != nil {
@@ -97,6 +88,7 @@ func Init(arl string) bool {
 
 	// Login is a network round-trip (up to 30s): do it WITHOUT holding mu, so it
 	// can't block every other engine call meanwhile.
+	deezer.SetWebRelease(config.LoadWebRelease())
 	c := deezer.New(arl)
 	if err := c.Login(); err != nil {
 		kind := loginKind(err)
@@ -106,6 +98,7 @@ func Init(arl string) bool {
 			offlineOn.Store(true)
 			offlineAuto.Store(true)
 			stopNetJobs()
+			stopElsewhere()
 		}
 		return false
 	}
@@ -117,6 +110,12 @@ func Init(arl string) bool {
 	rememberUser(c.UserID())
 	c.SetAdsDisabled(config.LoadAdsDisabled()) // free-tier ads opt-out (persisted)
 	applyPlayback(nil, c)
+	listenLog.Flush() // listens kept while offline
+	// Offline mode the host set stays on: nothing goes to the network until it ends.
+	online := !offlineOn.Load()
+	if online {
+		go learnRelease(c)
+	}
 	mu.Lock()
 	// Another account: drop the Connect route, whose client carries the old
 	// account's id.
@@ -142,6 +141,9 @@ func Init(arl string) bool {
 	// re-login swaps it into the running server, another account rebuilds the
 	// server (startServices runs under a sync.Once and won't re-run).
 	refreshControlServer(c)
+	if online {
+		watchElsewhere(c)
+	}
 	return true
 }
 
@@ -150,12 +152,13 @@ func Init(arl string) bool {
 // device.
 func LoginErrorKind() int { return int(lastLoginKind.Load()) }
 
-// Logout ends the session: it disconnects a Connect device (stopping it),
-// stops playback and the offline fetches, closes the control server (dropping
-// the phone remote's sessions and the old account's same-account auth) and its
-// advertiser, and forgets the client. The next Init starts the services again.
+// Logout ends the session: disconnects a Connect device, stops the live watch,
+// playback and offline fetches, closes the control server and its advertiser, and
+// forgets the client. The next Init restarts the services.
 func Logout() {
 	DisconnectDevice()
+	stopElsewhere()
+	forgetMarks()
 	withPlayer(func(p *audio.Player) { p.Stop() })
 	ctrlMu.Lock()
 	webRemotePrev = nil
@@ -167,6 +170,14 @@ func Logout() {
 	servicesOnce = sync.Once{} // startServices runs again on the next Init
 	mu.Unlock()
 	dropJobs(func(*offlineJob) bool { return true }) // after the client went: none starts again with it
+}
+
+// SessionExpired reports that Deezer refused the signed-in account's ARL since
+// it signed in (a call's re-login failed): only a new sign-in brings the
+// session back. ARLs are not renewed by use; Deezer ends them itself.
+func SessionExpired() bool {
+	c := Client()
+	return c != nil && c.Refused()
 }
 
 // Client returns the logged-in client, nil before Init succeeded.
@@ -219,12 +230,9 @@ func startResult(err error) PlayResult {
 	}
 }
 
-// Play resolves and plays a track, or plays it on the routed Connect device.
-// durationMS is the length the host knows (0 when unknown). A newer play
-// started meanwhile wins: this one then reports PlaySuperseded. With no client
-// (offline mode, no login) only a pinned or cached track plays, and nothing is
-// requested. When the track could not be planned the player's LastError says
-// why.
+// Play plays a track locally or on the routed Connect device; durationMS is the known
+// length (0 unknown). A newer play wins (PlaySuperseded). Without a client only pinned
+// or cached tracks play; on failure the player's LastError says why.
 func Play(id string, durationMS int64) PlayResult {
 	// A fresh user play supersedes any in-flight resolve (newest wins) and holds
 	// off the engine's auto-advance while it resolves.
@@ -246,12 +254,14 @@ func Play(id string, durationMS int64) PlayResult {
 	c := netClient()
 	plan, err := preparePlan(c, id)
 	if err != nil {
-		p.SetError(err.Error())
+		if plays.superseded(seq) {
+			return PlaySuperseded
+		}
+		p.SetError(err)
 		return PlayFailed
 	}
-	// Track the now-playing for Discord RP + remote status. A cache-sourced plan
-	// carries no metadata (unless pinned): its title/artist/album are filled in
-	// asynchronously.
+	// Track the playing track for Discord RP and remote status. A cache-sourced plan has
+	// no metadata (unless pinned), so title, artist and album are filled in asynchronously.
 	t := plan.Track
 	if t.ID == "" {
 		t = deezer.Track{ID: id, DurationMS: durationMS}
@@ -266,16 +276,12 @@ func Play(id string, durationMS int64) PlayResult {
 	if plan.Track.ID == "" {
 		go fetchTrackMeta(c, id, gen)
 	}
-	// Report the play to Deezer (log.listen), like the web player: free-tier ad
-	// accounting + artist play-counts depend on it. Best-effort, off the hot path.
-	go func() { _ = c.NowPlaying(id) }()
 	return PlayStarted
 }
 
-// PlayEpisode resolves and plays a podcast episode (a plain, unencrypted
-// stream). The episode is the current track at once (id + duration), its
-// title, podcast name and artwork follow asynchronously. It reports as Play
-// does.
+// PlayEpisode plays a podcast episode (unencrypted) at the episode speed, from its
+// bookmark unless heard. It is the current track at once; title, podcast name and
+// artwork follow asynchronously. Reports as Play does.
 func PlayEpisode(id string, durationMS int64) PlayResult {
 	seq, done := plays.beginUser() // as in Play
 	defer done()
@@ -285,21 +291,35 @@ func PlayEpisode(id string, durationMS int64) PlayResult {
 	}
 	c, err := Online()
 	if err != nil {
-		p.SetError(err.Error())
+		if plays.superseded(seq) {
+			return PlaySuperseded
+		}
+		p.SetError(err)
 		return PlayFailed
 	}
+	bookmark := make(chan deezer.EpisodeBookmark, 1)
+	go func() { bookmark <- episodeMark(id) }()
 	plan, err := c.PodcastEpisodeStream(id)
 	if err != nil {
 		odlog.Warn("episode %s: %v", id, err)
+		if plays.superseded(seq) {
+			return PlaySuperseded
+		}
+		p.SetError(err)
 		return PlayFailed
 	}
-	// setCurrentEpisode (not setCurrentTrack) tags the media kind so this listen
-	// lands in history as Kind="episode" and history screens replay it via
-	// PlayEpisode.
+	// setCurrentEpisode records the listen as Kind="episode" so history replays it via
+	// PlayEpisode. The bookmark is set before the start, so the episode starts there at
+	// the episode speed.
+	b := <-bookmark
 	var gen uint64
 	if r := startResult(startPlay(p, plan, durationMS, seq, func() { gen = setCurrentEpisode(deezer.Track{ID: id, DurationMS: durationMS}) })); r != PlayStarted {
 		return r
 	}
+	if b.OffsetS > 0 && !b.Heard {
+		p.SeekMS(int64(b.OffsetS) * 1000)
+	}
+	p.SetSpeed(PlaybackSpeed())
 	go fetchEpisodeMeta(c, id, gen)
 	return PlayStarted
 }
@@ -317,7 +337,8 @@ func Pause() {
 	withPlayerNotify(func(p *audio.Player) { p.Pause() })
 }
 
-// Resume resumes playback (on the routed device while it is paused).
+// Resume resumes playback (on the routed device while it is paused); a local
+// resume is announced to the account's other sessions (announceLocal).
 func Resume() {
 	if rc := routedRemote(); rc != nil {
 		if remoteSnapshot().State == "paused" {
@@ -327,11 +348,11 @@ func Resume() {
 		}
 		return
 	}
-	withPlayerNotify(func(p *audio.Player) { p.Resume() })
+	withPlayerNotify(func(p *audio.Player) { p.Resume(); announceIfPlaying(p) })
 }
 
-// TogglePause flips Playing and Paused only; from Stopped or Errored the host
-// plays again.
+// TogglePause flips Playing and Paused only (a local resume is announced, as
+// in Resume); from Stopped or Errored the host plays again.
 func TogglePause() {
 	if rc := routedRemote(); rc != nil {
 		if st, err := rc.PlayPause(); err == nil {
@@ -339,7 +360,7 @@ func TogglePause() {
 		}
 		return
 	}
-	withPlayerNotify(func(p *audio.Player) { p.TogglePause() })
+	withPlayerNotify(func(p *audio.Player) { p.TogglePause(); announceIfPlaying(p) })
 }
 
 // Stop stops playback, recording the listen so far.
@@ -460,13 +481,9 @@ func IsPreview() bool {
 	return p != nil && p.IsPreview()
 }
 
-// Preload asks for a track to follow the current one gaplessly or with a
-// crossfade. It only records the request: the engine resolves and downloads
-// it once the current track has max(30 s, crossfade + 20 s) left (at once when
-// it is shorter or already there). A new request replaces the recorded one; a
-// request for the track already recorded or preloaded changes nothing.
-// durationMS 0 takes the length from the engine queue. No-op when routed to a
-// Connect device.
+// Preload records the track to follow the current one (gapless or crossfade); it is
+// fetched once max(30 s, crossfade + 20 s) remain. A new request replaces it;
+// durationMS 0 takes the queue's length. No-op when routed.
 func Preload(id string, durationMS int64) {
 	if routedRemote() != nil {
 		return // remote playback: nothing to preload locally
@@ -477,9 +494,8 @@ func Preload(id string, durationMS int64) {
 	preloads.Request(id, durationMS)
 }
 
-// ClearPreload discards the recorded and the preloaded next track. Call when
-// the upcoming track is no longer determined, so a stale preload can't be
-// gaplessly swapped in.
+// ClearPreload discards the recorded and the preloaded next track. Call it when the
+// upcoming track changes, so a stale preload is not swapped in.
 func ClearPreload() { preloads.Clear() }
 
 // queuedDurationMS looks a track's duration up in the engine queue (0 when
@@ -510,10 +526,9 @@ func DownloadTrack(id, dir string) (string, error) {
 	return c.SaveTrack(context.Background(), id, dir)
 }
 
-// DownloadAlbum saves every track of an album to the download folder, skipping
-// files already there, and returns {"saved":N,"failed":N,"dir":"...",
-// "error":""}: error is "" on full success and carries the batch error
-// otherwise. Blocking; premium-only.
+// DownloadAlbum saves every album track not yet in the download folder and returns
+// {"saved":N,"failed":N,"dir":"...","error":""} (error "" on full success). Blocking;
+// premium only.
 func DownloadAlbum(id string) (map[string]any, error) {
 	return downloadBatch(func(c *deezer.Client, dir string, opts deezer.DownloadOptions) ([]string, error) {
 		return c.SaveAlbum(context.Background(), id, dir, opts)
@@ -578,11 +593,9 @@ func EQ() (st EQState, ok bool) {
 	}, true
 }
 
-// SetEQJSON applies a partial equalizer update. Recognized keys (all
-// optional): enabled (bool), mono (bool), preampDb (number), gainsDb
-// ([10]number), preset (string), band ({"index":N,"gainDb":X}). It reports
-// false when js does not parse, there is no player, or a present key failed to
-// apply (unknown preset, bad band index or length).
+// SetEQJSON applies a partial EQ update (optional keys enabled, mono, preampDb,
+// gainsDb, preset, band). It returns false when js does not parse, there is no player,
+// or a key fails to apply.
 func SetEQJSON(js string) bool {
 	var req struct {
 		Enabled  *bool      `json:"enabled"`

@@ -117,7 +117,7 @@ private:
     // that table's rows.
     void          installTrackMenu(QTableWidget *table, QVector<Track> *src);
 
-    // ---- favourites / playlists mutations (v0.4) ----
+    // ---- favorites / playlists mutations (v0.4) ----
     void seedFavorites();                                 // liked-ids mirror at login
     void toggleLikeCurrent();                              // heart on the transport
     void likeTrack(const QString &trackId, bool like);    // one-shot like/unlike
@@ -439,7 +439,7 @@ private:
     QLabel          *m_castLabel = nullptr;     // status-bar "Playing on <device>" indicator
     int              m_quality     = 0;         // 0 Normal, 1 High, 2 HiFi
     bool             m_replayGain  = false;     // loudness normalization (DZReplayGain)
-    bool             m_closeToTray = true;      // honour close-to-tray setting
+    bool             m_closeToTray = true;      // honor close-to-tray setting
     bool             m_gapless     = false;     // gapless playback (DZGapless)
     int              m_crossfadeMs = 0;         // crossfade duration ms (DZCrossfadeMS)
 

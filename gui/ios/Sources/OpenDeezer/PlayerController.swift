@@ -371,7 +371,7 @@ final class PlayerController: ObservableObject {
     func next() { advance(auto: false) }
 
     func previous() {
-        if positionMs > 3000 || currentIndex == nil {
+        if positionMs >= 5000 || currentIndex == nil { // from 5 s in, restart the track
             seek(to: 0)
             return
         }

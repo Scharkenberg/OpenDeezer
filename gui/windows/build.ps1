@@ -41,7 +41,7 @@ Receive-Job $goBuild -Wait -AutoRemoveJob
 if ($publishExit -ne 0) { throw "dotnet publish failed ($publishExit)" }
 
 Write-Host '==> [3/3] copying libdeezercore.dll into the publish dir' -ForegroundColor Cyan
-# Resolve the publish dir robustly: find OpenDeezer.exe under bin and use its folder.
+# The publish dir: the folder of OpenDeezer.exe under bin.
 $exe = Get-ChildItem -Path (Join-Path $here 'bin') -Filter 'OpenDeezer.exe' -Recurse -File -ErrorAction SilentlyContinue |
        Where-Object { $_.FullName -match '\\publish\\' } |
        Select-Object -First 1

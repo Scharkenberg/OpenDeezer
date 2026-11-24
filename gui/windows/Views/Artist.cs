@@ -1,5 +1,6 @@
 // An artist: picture, name and fans, popular tracks, albums and related artists.
 
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -8,9 +9,11 @@ namespace OpenDeezer;
 internal sealed class ArtistView : View
 {
     private readonly Hero _hero;
+    private readonly Button _radio;
+    private readonly FavoriteButton _favorite = new();
     private readonly TrackList _top = new();
-    private readonly TileGrid<Album> _albums = new(Tiles.Album, a => CollectionView.Open(Collection.Of(a)), a => Menus.PlayCollection(Collection.Of(a)));
-    private readonly TileGrid<ArtistInfo> _related = new(Tiles.Artist, a => Open(a.Id));
+    private readonly TileGrid<Album> _albums = TileGrids.Albums();
+    private readonly TileGrid<ArtistInfo> _related = TileGrids.Artists();
     private readonly Section _topSection;
     private readonly ScrollViewer _scroller;
     private readonly StateView _state;
@@ -28,13 +31,28 @@ internal sealed class ArtistView : View
         if (artistId.Length > 0) App.Navigator.Go<ArtistView>(artistId);
     }
 
+    // Show all: the artist's top tracks beyond the profile's few; those few if the read fails.
+    private async void ShowAllTop()
+    {
+        string id = _id, name = _profile.Artist.Name;
+        var profileTop = _profile.Top;
+        var context = _top.Context;
+        var ct = Ct;
+        var reply = await Task.Run(() => DeezerCore.ArtistTop(id));
+        // The page was left meanwhile: no navigation.
+        if (ct.IsCancellationRequested) return;
+        CollectionView.Open(Collection.Of(name, reply.Tracks.Count > 0 ? reply.Tracks : profileTop, context));
+    }
+
     public ArtistView()
     {
+        _radio = Ui.Button(Loc.S("Menu_StartRadio"), () => Menus.StartArtistRadio(_id), Icons.Flow);
         _hero = new Hero(ArtShape.Circle, Size.ArtistArt,
-            Ui.Button(Loc.S("Btn_Play"), () => Player.Play(_profile.Top, 0), Icons.Play, accent: true),
-            Ui.Button(Loc.S("Menu_StartRadio"), () => Menus.StartArtistRadio(_id), Icons.Flow));
-        _topSection = new Section("Section_Popular", _top.Root,
-            () => CollectionView.Open(Collection.Of(_profile.Artist.Name, _profile.Top)));
+            Ui.Button(Loc.S("Btn_Play"), () => Player.Play(_profile.Top, 0, _top.Context), Icons.Play, accent: true),
+            _radio,
+            _favorite.Root,
+            Menus.MoreButton(items => Menus.Artist(items, _profile.Artist with { Id = _id })));
+        _topSection = new Section("Section_Popular", _top.Root, ShowAllTop);
         // The hero is the artist's title and comes with the data, so it sits inside the state.
         _state = new StateView(Section.Stack(
             _hero.Root,
@@ -48,6 +66,10 @@ internal sealed class ArtistView : View
     public override async void Show(object? arg, bool isBack)
     {
         _id = arg as string ?? "";
+        _top.Context = new("artist_top", _id);
+        _favorite.Bind("artist", _id);
+        // Disabled in offline mode, as in the menus.
+        _radio.IsEnabled = !App.Offline.Mode;
         if (await LoadAsync<ArtistProfile>(Library.Key("artist", _id), _state) is not { } profile) return;
         if (!Same(profile)) Fill(profile);
         _state.ShowResult(profile.Artist.Name.Length == 0 && profile.Top.Count == 0, profile.Error, () => Show(_id, false), Icons.Person, Loc.S("Empty_Artist"));

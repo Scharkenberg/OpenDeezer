@@ -85,10 +85,8 @@ func availableBodyHeight(total int, footer string) int {
 	return max(1, total-lipgloss.Height(footer))
 }
 
-// noInternetView is shown when a login or browse call fails at the transport
-// level (DNS/refused/unreachable/timeout). The session is not dropped — the user
-// stays "logged in" and just retries, which distinguishes a passing outage from
-// an expired ARL (which instead prompts a re-login in the footer).
+// noInternetView is shown when a login or browse call fails at the transport level.
+// The session is kept and the user retries; an expired ARL prompts a re-login instead.
 func (m *Model) noInternetView() string {
 	hint := i18n.T("r to retry")
 	if m.loading {
@@ -350,7 +348,7 @@ func (m *Model) queueWindow(bodyRows, n int) (start, visible int) {
 }
 
 // queueView lists the queued tracks: ▶ marks the playing one, › the cursor.
-// Rows are edited in place (enter jump, x remove, J/K move — see handleKey).
+// Rows are edited in place (enter jump, x remove, J/K move; see handleKey).
 func (m *Model) queueView(bodyRows int) string {
 	ts := m.q.Tracks()
 	if len(ts) == 0 {

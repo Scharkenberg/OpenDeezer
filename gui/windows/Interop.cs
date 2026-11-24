@@ -8,7 +8,7 @@ namespace OpenDeezer;
 
 internal static class NativeMethods
 {
-    internal const uint WM_TRAYCALLBACK = 0x8000 + 1; // WM_APP + 1 (matches the C++ kTrayCallback)
+    internal const uint WM_TRAYCALLBACK = 0x8000 + 1; // WM_APP + 1: the tray icon's callback message
     internal const uint WM_COMMAND = 0x0111;
     internal const int WM_LBUTTONUP = 0x0202;
     internal const int WM_LBUTTONDBLCLK = 0x0203;

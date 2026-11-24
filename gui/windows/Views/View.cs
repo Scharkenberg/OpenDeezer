@@ -23,7 +23,7 @@ internal abstract class View
 
     public virtual ScrollViewer? Scroller => null;
 
-    // Cancelled when the view is hidden: loaders check it after every await.
+    // Canceled when the view is hidden: loaders check it after every await.
     protected CancellationToken Ct => _cts.Token;
 
     public abstract void Show(object? arg, bool isBack);
@@ -73,7 +73,7 @@ internal abstract class View
     {
         if (_restoreOffset is not double y || Scroller is not { } sv) return;
         _restoreOffset = null;
-        // A virtualised extent grows over several layout passes and a refilled list scrolls back: retry.
+        // A virtualized extent grows over several layout passes and a refilled list scrolls back: retry.
         int passes = 0;
         void Restore(object? sender, object e)
         {

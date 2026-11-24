@@ -11,7 +11,7 @@ internal sealed class WindowBounds(Window window, IntPtr hwnd, Settings settings
 {
     private AppWindow AppWindow => window.AppWindow;
 
-    // The saved bounds when they are on a monitor that still exists, else centred.
+    // The saved bounds when they are on a monitor that still exists, else centered.
     public void Place()
     {
         window.MinWidth = Size.WindowMinWidth;
@@ -26,15 +26,14 @@ internal sealed class WindowBounds(Window window, IntPtr hwnd, Settings settings
                 return;
             }
         }
-        uint dpi = NativeMethods.GetDpiForWindow(hwnd);
-        double scale = dpi == 0 ? 1.0 : dpi / 96.0;
+        double scale = Ui.DpiScale(hwnd);
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         int w = Math.Min((int)(Size.WindowWidth * scale), area.Width);
         int h = Math.Min((int)(Size.WindowHeight * scale), area.Height);
         AppWindow.MoveAndResize(new RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
     }
 
-    // The restored bounds, not the maximised ones.
+    // The restored bounds, not the maximized ones.
     public void Capture()
     {
         if (AppWindow.Presenter is not OverlappedPresenter op || !AppWindow.IsVisible || op.State == OverlappedPresenterState.Minimized) return;

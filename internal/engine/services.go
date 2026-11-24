@@ -1,13 +1,8 @@
 package engine
 
-// Engine-hosted services shared by every host: Discord Rich Presence and the
-// control API (remote control + MCP). The host just plays tracks and the
-// engine tracks the current one for now-playing and remote status.
-//
-// Engine-side control covers the player-level actions (play/pause, stop, seek,
-// volume, restart) plus play-by-id. next/prev/shuffle/repeat walk the engine
-// queue (engineQ); a host mirrors its own queue into it (QueueSet,
-// QueueSetIndex) so remote controllers see and drive the real queue.
+// Engine-hosted services shared by every host: Discord Rich Presence and the control
+// API. next/prev/shuffle/repeat walk the engine queue (engineQ), which a host mirrors
+// its queue into (QueueSet, QueueSetIndex).
 
 import (
 	"encoding/json"
@@ -28,6 +23,7 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/discord"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
 	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
@@ -41,21 +37,15 @@ var (
 	ctrlSrv      *control.Server
 	coreVersion  = version.Number
 
-	// ctrlCfg + ctrlSrvUserID remember how ctrlSrv was built so
-	// refreshControlServer can rebuild it around a new client after an account
-	// switch (re-login), instead of the sync.Once keeping the old account's
-	// session alive forever. We track the account UserID (not the *deezer.Client
-	// pointer) because Init allocates a fresh client on every call, so a
-	// same-account re-login must compare equal and stay a no-op.
+	// ctrlCfg and ctrlSrvUserID record how ctrlSrv was built, so refreshControlServer can
+	// rebuild it after an account switch. The UserID is compared (Init makes a new client
+	// each call), so a same-account re-login is a no-op.
 	ctrlCfg       control.Config
 	ctrlSrvUserID string
 
-	// advertiser is the LAN discovery responder for OpenDeezer Connect (nil when
-	// the control server is loopback-only or disabled). It advertises the control
-	// port so other devices can find us; it is retained here — not discarded — so
-	// it can be Closed + re-pointed whenever the control server is rebuilt on a
-	// new port or torn down, instead of leaving a ghost advertising a dead port.
-	// Guarded by mu (mirrors the TUI's model.advertiser).
+	// advertiser is the LAN discovery responder for Connect (nil when the control server
+	// is loopback-only or off). It is kept so it can be closed and re-pointed when the
+	// server is rebuilt or torn down. Guarded by mu.
 	advertiser *discovery.Responder
 
 	// connectHostSwitch is set by a host with a Connect host switch
@@ -63,18 +53,14 @@ var (
 	// ctrlMu.
 	connectHostSwitch, connectHost bool
 
-	// caches is the on-disk raw-stream cache (its Current is nil while the
-	// budget is 0 and nothing is pinned), attached to the player. Held here as
-	// well so preparePlan can prefer a zero-network cache-sourced plan and
-	// pins can be fetched into it; a cache that opens takes the pins of
-	// offline.json.
+	// caches is the on-disk raw-stream cache attached to the player (Current is nil while
+	// the budget is 0 and nothing is pinned). preparePlan prefers its plans, pins are
+	// fetched into it, and an opening cache takes offline.json's pins.
 	caches = &mediacache.Host{Attach: attachCache, Pinned: anyPinned}
 
-	// preloads is the next-track preload: Preload records the request, the
-	// player's near-end hook resolves and arms it. Its armed track is exactly
-	// the one a gapless/crossfade promote swaps in, which lets
-	// engineAdvanceOnFinish move now-playing forward even when the host never
-	// synced its queue into engineQ.
+	// preloads is the next-track preload: Preload records it and the near-end hook resolves
+	// and arms it. Its armed track is the one a gapless or crossfade promote swaps in, so
+	// engineAdvanceOnFinish can move now-playing even without a synced queue.
 	preloads = preload.New(Player, func(req deezer.Track) (*deezer.StreamPlan, deezer.Track, error) {
 		plan, err := preparePlan(netClient(), req.ID)
 		if err != nil {
@@ -95,22 +81,19 @@ var (
 	curMu    sync.Mutex
 	curTrack deezer.Track
 	curGen   uint64 // bumped by setCurrentTrack/setCurrentEpisode; lets an async metadata fetch detect a newer track
-	// curKind is the media kind of curTrack for history recording: "" = song
-	// (set by setCurrentTrack, the common path) and history.KindEpisode =
-	// podcast (set by setCurrentEpisode). Guarded by curMu alongside curTrack so
-	// the recorder never pairs a track with a stale kind.
+	// curKind is curTrack's media kind for history: "" for a song (setCurrentTrack),
+	// history.KindEpisode for a podcast (setCurrentEpisode). Guarded by curMu with
+	// curTrack.
 	curKind string
 
-	// engineQ is the engine-side playback queue. enginePlayPlaylist /
-	// enginePlayTrack load the full track list into it and play the current track;
-	// when a track ends naturally the player's onFinish callback advances this
-	// queue and starts the next track, so remote/control-driven playlist playback
-	// walks every track instead of stopping after the first. Guarded by queueMu.
+	// engineQ is the engine-side playback queue: enginePlayPlaylist / enginePlayTrack load
+	// it, and the player's onFinish advances it, so control-driven playlists play through.
+	// Guarded by queueMu.
 	queueMu sync.Mutex
 	engineQ = queue.New()
 )
 
-// setCurrentTrack makes t the now-playing song and returns its generation for
+// setCurrentTrack makes t the playing song and returns its generation for
 // a following metadata fetch (setCurrentTrackAt).
 func setCurrentTrack(t deezer.Track) uint64 {
 	curMu.Lock()
@@ -123,6 +106,7 @@ func setCurrentTrack(t deezer.Track) uint64 {
 	// Every track change (play, auto-advance, gapless promote, async metadata
 	// enrichment, remote sync) is a state change controllers care about.
 	notifyControlState()
+	radioTopUp()
 	return gen
 }
 
@@ -157,10 +141,8 @@ func setCurrentTrackAt(gen uint64, t deezer.Track) {
 	}
 }
 
-// notifyControlState nudges the control server's SSE event loop to publish a
-// fresh /events snapshot right away. The loop has its own 1s fallback ticker,
-// so this is purely a latency optimization — safe to skip (nil server) and
-// cheap to repeat (notifications are coalesced, the send never blocks).
+// notifyControlState nudges the control server's SSE loop to publish a snapshot at
+// once. The loop also ticks every second; notifications are coalesced and never block.
 func notifyControlState() {
 	mu.Lock()
 	srv := ctrlSrv
@@ -172,7 +154,45 @@ func notifyControlState() {
 	case discordWake <- struct{}{}:
 	default:
 	}
+	select {
+	case episodeWake <- struct{}{}:
+	default:
+	}
 }
+
+// radioTopUp tops a queue played from Flow or a mix up as it runs low, off the
+// caller: at each track change and each new queue. RadioFill runs one fetch at
+// a time.
+func radioTopUp() {
+	if ctx := listenCtx.Load(); ctx != nil && deezer.IsRadio(ctx.Type) {
+		go func() {
+			queueMu.Lock()
+			n, left := engineQ.Len(), engineQ.Len()-engineQ.Index()-1
+			queueMu.Unlock()
+			if n == 0 {
+				return // the host has yet to set the list
+			}
+			more := radioMore(*ctx, left, func() []deezer.Track {
+				ts, _, _ := QueueSnapshot()
+				return ts
+			})
+			engineQueueAppend(more)
+		}()
+	}
+}
+
+var (
+	// radioFill tops the engine queue up from Flow, a Flow mood or a mix.
+	radioFill deezer.RadioFill
+	// radioMore asks radioFill for the tracks to append; tests replace it.
+	radioMore = func(ctx listens.Context, left int, queued func() []deezer.Track) []deezer.Track {
+		c := netClient()
+		if c == nil {
+			return nil
+		}
+		return radioFill.More(c, ctx.Type, ctx.ID, left, queued)
+	}
+)
 
 // withPlayerNotify runs a state-mutating player action, then pokes the SSE
 // loop. Use it instead of withPlayer for pause/stop/seek/volume-style
@@ -188,34 +208,25 @@ func currentTrack() deezer.Track {
 	return curTrack
 }
 
-// currentTrackSnapshot returns the now-playing track together with its media
-// kind ("" = song, history.KindEpisode = podcast), read under a single lock so
-// the history recorder never pairs a track with a stale kind.
+// currentTrackSnapshot returns the playing track with its media kind ("" = song,
+// history.KindEpisode = podcast), read under one lock.
 func currentTrackSnapshot() (deezer.Track, string) {
 	curMu.Lock()
 	defer curMu.Unlock()
 	return curTrack, curKind
 }
 
-// getCtrlSrv reads the shared control server under mu (nil when disabled), so
-// callers off the UI thread — e.g. the player's onFinish callback — can publish
-// a finished edge without racing the settings-toggle writers of ctrlSrv.
+// getCtrlSrv reads the shared control server under mu (nil when disabled), so callers
+// off the UI thread, such as onFinish, can publish without racing the writers.
 func getCtrlSrv() *control.Server {
 	mu.Lock()
 	defer mu.Unlock()
 	return ctrlSrv
 }
 
-// preparePlan resolves a playable stream plan for id, preferring the on-disk
-// media cache when one is attached: a fully-cached track (its StreamMeta was
-// stored when the cache adopted its body) yields a plan with CDNURL=="" that the
-// audio layer serves with zero network. On a cache miss it falls back to the
-// normal PrepareStream network path. With no client (offline mode, no login)
-// the plan comes from the cache alone (localPlan), or the track is not
-// available; a track the account pinned that cannot be resolved online (Deezer
-// no longer serves it, the network is gone) plays from its pin. Every local
-// play path (Play, Preload, enginePlayResolved, engineAutoAdvance) goes
-// through here for consistent offline behavior.
+// preparePlan resolves a stream plan for id, preferring a fully cached copy (CDNURL "",
+// no network) over PrepareStream. Without a client the plan comes from the cache alone;
+// a pinned track that fails online plays from its pin.
 func preparePlan(c *deezer.Client, id string) (*deezer.StreamPlan, error) {
 	if c == nil {
 		return localPlan(id)
@@ -241,21 +252,19 @@ func preparePlan(c *deezer.Client, id string) (*deezer.StreamPlan, error) {
 // queue only follows a gapless promote.
 var hostAdvances atomic.Bool
 
-// SetHostAdvances declares (on) that the host advances its own queue on
-// FinishedCount, also for a queue it mirrors into the engine; otherwise the
-// engine advances a mirrored queue whose cursor is on the finished track
-// itself and FinishedCount does not bump for it. Call before Init.
+// SetHostAdvances(true) declares that the host advances its own queue on FinishedCount,
+// also for a mirrored queue; otherwise the engine advances a mirrored queue on the
+// finished track and FinishedCount does not bump. Call before Init.
 func SetHostAdvances(on bool) { hostAdvances.Store(on) }
 
-// onNaturalFinish is the player's onFinish callback. An errored finish
-// (CDN/decode failure, ~0 played) is not a real end: refresh state and return.
-// Otherwise: capture the finishing track id (before any advance moves
-// currentTrack on), record the listen, auto-advance the engine queue (or bump
-// the host's finished counter so exactly one queue mechanism advances),
-// publish the natural end-of-track edge to /events subscribers, and push a
-// fresh state snapshot.
+// onNaturalFinish is the player's onFinish callback. A track that ended Errored (a failed
+// stream, a lost network) records the listen it gave and refreshes state: nothing advances
+// and the counter stays, so Play goes on from it. Otherwise it records the listen, advances
+// the engine queue (or bumps the host's counter), publishes the finished edge and a fresh
+// snapshot.
 func onNaturalFinish() {
-	if erroredFinish() {
+	if p := Player(); p != nil && p.State() == audio.Errored {
+		noteTrackFinished()
 		notifyControlState()
 		return
 	}
@@ -278,10 +287,8 @@ func onNaturalFinish() {
 	notifyControlState()
 }
 
-// tracksFromInsertJSON decodes QueueInsertNext's payload, which may be either
-// a single wire track object {...} or a JSON array [...] of them. Reuses the
-// shared queue decoders (queueTracksFromJSON/trackFromWire). Entries without an
-// id are dropped; a bad payload yields an empty slice (a no-op insert).
+// tracksFromInsertJSON decodes QueueInsertNext's payload: one wire track or an array.
+// Entries without an id are dropped; a bad payload yields an empty slice.
 func tracksFromInsertJSON(js string) []deezer.Track {
 	js = strings.TrimSpace(js)
 	if js == "" {
@@ -298,11 +305,9 @@ func tracksFromInsertJSON(js string) []deezer.Track {
 	return []deezer.Track{trackFromWire(w)}
 }
 
-// QueueInsertNext splices the tracks of js (a wire track or an array of them,
-// in order) right after the current track ("play next"), discarding a
-// preloaded next (the upcoming track changed) and bumping the version +
-// notifying so a host or controller resyncs. Local-only: the host's Up-Next
-// editor owns this queue.
+// QueueInsertNext inserts js's tracks (a wire track or an array) after the current
+// track, drops a preloaded next, bumps the version and notifies. Local only: the
+// host's Up-Next editor owns this queue.
 func QueueInsertNext(js string) {
 	ts := tracksFromInsertJSON(js)
 	if len(ts) == 0 {
@@ -315,9 +320,8 @@ func QueueInsertNext(js string) {
 	notifyControlState()
 }
 
-// fetchTrackMeta fills in the full metadata for the current track (title/artist/
-// album), so Discord + remote status show more than an id, unless another
-// track was set since gen. Best-effort.
+// fetchTrackMeta fills in the current track's title, artist and album for Discord and
+// remote status, unless another track was set since gen. A failure leaves the id only.
 func fetchTrackMeta(c *deezer.Client, id string, gen uint64) {
 	if c == nil || id == "" {
 		return
@@ -327,8 +331,6 @@ func fetchTrackMeta(c *deezer.Client, id string, gen uint64) {
 	}
 }
 
-// startServices starts Discord RP + the control API once, after a successful
-// login. The just-logged-in client is passed in; closures read globals lazily.
 // engineEQ bridges the control API's /eq endpoint to the engine player.
 func engineEQ() *control.EQ {
 	return control.PlayerEQ(func() control.EQController {
@@ -339,7 +341,10 @@ func engineEQ() *control.EQ {
 	}, audio.EQPresetNames)
 }
 
+// startServices starts Discord RP + the control API once, after a successful
+// login. The just-logged-in client is passed in; closures read globals lazily.
 func startServices(c *deezer.Client) {
+	ensureEpisodeLoop()
 	servicesOnce.Do(func() {
 		appID := config.LoadDiscordAppID()
 		dp = discord.New(appID)
@@ -370,13 +375,9 @@ func startServices(c *deezer.Client) {
 	})
 }
 
-// refreshAdvertiser Closes any existing LAN discovery responder and, when the
-// control server is currently bound to a reachable (non-loopback) address,
-// starts a fresh one advertising its port; with a Connect host switch
-// (SetConnectHostSwitch) only while it is on. Call it whenever the control
-// server is (re)built on a possibly-different port or torn down, or the switch
-// changes, so a ghost responder never keeps advertising a dead port. Caller
-// holds ctrlMu, not mu.
+// refreshAdvertiser closes the LAN discovery responder and, when the control server is
+// on a non-loopback address (and the Connect host switch is on), starts one for its
+// port. Call it after each rebuild or switch change, holding ctrlMu, not mu.
 func refreshAdvertiser() {
 	mu.Lock()
 	srv := ctrlSrv
@@ -419,16 +420,13 @@ func refreshAdvertiser() {
 	}
 }
 
-// ctrlMu serialises every control-server rebuild (startup, a config change, the
-// web remote on/off, an account refresh): two overlapping rebuilds could fail to
-// bind or publish a server built from a stale config. mu still guards the
-// published pointers.
+// ctrlMu serializes every control-server rebuild, since overlapping rebuilds could fail
+// to bind or publish a stale config. mu guards the published pointers.
 var ctrlMu sync.Mutex
 
-// rebuildControlServer replaces the control server: it closes the current one,
-// starts a new one for cfg around c on the first of addrs that binds (none: no
-// server), publishes it with its config, and re-points the LAN advertiser.
-// Caller holds ctrlMu.
+// rebuildControlServer closes the control server, starts one for cfg around c on the
+// first of addrs that binds (none: no server), publishes it and re-points the
+// advertiser. Caller holds ctrlMu.
 func rebuildControlServer(cfg control.Config, c *deezer.Client, addrs ...string) *control.Server {
 	mu.Lock()
 	old := ctrlSrv
@@ -467,14 +465,9 @@ func rebuildControlServer(cfg control.Config, c *deezer.Client, addrs ...string)
 	return srv
 }
 
-// refreshControlServer rebuilds the control server around the current client
-// after a re-login: control.New snapshots the *deezer.Client for the browse
-// endpoints (/playlists, /search), so without this an account switch (a second
-// Init with a new ARL) keeps serving the previous account's library on its
-// stale session — startServices runs under a sync.Once and never re-runs.
-// Pairing sessions are dropped deliberately: a phone paired under the old
-// account must re-pair. For the same account it only swaps c into the running
-// server (its sessions stay); without a server it does nothing.
+// refreshControlServer rebuilds the control server around the current client after a
+// re-login with another account, dropping paired sessions. For the same account it
+// swaps c into the running server; without a server it does nothing.
 func refreshControlServer(c *deezer.Client) {
 	ctrlMu.Lock()
 	defer ctrlMu.Unlock()
@@ -495,7 +488,7 @@ func refreshControlServer(c *deezer.Client) {
 	}
 }
 
-// discordWake is signalled by notifyControlState, so the presence loop wakes
+// discordWake is signaled by notifyControlState, so the presence loop wakes
 // when playback starts.
 var discordWake = make(chan struct{}, 1)
 
@@ -517,10 +510,8 @@ func serviceTicker() {
 }
 
 func publishDiscord(p *audio.Player) {
-	// When routed to a remote device local playback is stopped, so the local
-	// player would report "stopped" and Update() would clear the presence. Derive
-	// it from the remote snapshot instead (matches the now-playing / lyrics sync
-	// remotePoller already keeps) so RP reflects the remote track.
+	// Routed to a remote, the local player is stopped and would clear the presence, so
+	// derive it from the remote snapshot.
 	if routedRemote() != nil {
 		st := remoteSnapshot()
 		ds := discord.State{PositionMS: st.PositionMS, DurationMS: st.DurationMS}
@@ -564,10 +555,8 @@ func engineState() control.State { return engineStateSince(0) }
 // includes it.
 func engineStateSince(sent uint64) control.State {
 	st := control.State{State: "stopped"}
-	// Queue + repeat + shuffle come from the engine queue, so /status reports the
-	// real values once a host has synced them (QueueSet / SetRepeat /
-	// SetShuffle). A host that never syncs keeps the old wire shape: no queue,
-	// repeat "off", shuffle false.
+	// Queue, repeat and shuffle come from the engine queue. A host that never syncs it
+	// reports no queue, repeat "off" and shuffle false.
 	queueMu.Lock()
 	st.Repeat = engineQ.Repeat().String()
 	st.Shuffle = shuffleOn
@@ -622,11 +611,9 @@ func toControlTrack(t deezer.Track) control.Track {
 
 // ---- engine queue sync (host queue -> engineQ) ----
 
-// queueTracksFromJSON decodes a host queue payload: a JSON array of tracks in
-// the same wire shape every list/browse call returns (bridge.Track). Only "id"
-// is required; "durationMs" should be set so controllers' end-of-track
-// detection works without a metadata refetch. Entries without an id are
-// dropped. "" and "null" decode to an empty queue (clear).
+// queueTracksFromJSON decodes a host queue: a JSON array of wire tracks (bridge.Track),
+// "id" required, "durationMs" recommended. Entries without an id are dropped; "" and
+// "null" give an empty queue.
 func queueTracksFromJSON(js string) ([]deezer.Track, error) {
 	if js == "" {
 		return nil, nil
@@ -662,12 +649,9 @@ func trackFromWire(w bridge.Track) deezer.Track {
 	return t
 }
 
-// QueueSet replaces the engine-side queue with the host's queue so remote
-// controllers see it on /status and /next + /prev walk it. js is a JSON array
-// of tracks in the wire shape every list call returns; only id is required,
-// but durationMs should be set so controllers' end-of-track detection works.
-// The cursor resets to 0 (follow with QueueSetIndex) and the version always
-// bumps; "[]" clears. A parse error leaves the queue as it was.
+// QueueSet replaces the engine queue with the host's (a JSON array of wire tracks,
+// "[]" clears), resets the cursor to 0 and bumps the version. A parse error leaves the
+// queue as it was.
 func QueueSet(js string) error {
 	ts, err := queueTracksFromJSON(js)
 	if err != nil {
@@ -683,6 +667,7 @@ func engineQueueSet(ts []deezer.Track) {
 	engineQ.Set(ts, 0)
 	queueMu.Unlock()
 	notifyControlState()
+	radioTopUp()
 }
 
 // QueueAppend adds the tracks of js (QueueSet's shape) to the end of the
@@ -696,10 +681,9 @@ func QueueAppend(js string) error {
 	return nil
 }
 
-// engineQueueAppend adds ts to the end of the engine queue, keeping the cursor;
-// the version bumps once when anything was added. A preload is dropped only
-// when the track after the cursor changed (the cursor was on the last row, or
-// repeat-all wrapped to the first).
+// engineQueueAppend adds ts to the end of the engine queue, keeping the cursor; the
+// version bumps once when anything was added. A preload is dropped only when the
+// track after the cursor changed.
 func engineQueueAppend(ts []deezer.Track) {
 	if len(ts) == 0 {
 		return
@@ -715,12 +699,9 @@ func engineQueueAppend(ts []deezer.Track) {
 	notifyControlState()
 }
 
-// QueueSetIndex aligns the engine queue cursor to the row the host is
-// already playing (clamped; no-op when the queue is empty). It uses
-// AlignIndex, not SetIndex, so this pure synchronisation doesn't push a
-// synthetic history entry that would make a later remote Prev jump to a
-// never-played track. Genuine remote jumps go through engineQueueSelect
-// (SetIndex), which does record history.
+// QueueSetIndex aligns the engine queue cursor to the host's playing row (clamped)
+// with AlignIndex, which records no history, so Prev never jumps to an unplayed track.
+// Remote jumps use engineQueueSelect (SetIndex).
 func QueueSetIndex(i int) {
 	queueMu.Lock()
 	engineQ.AlignIndex(i)
@@ -773,11 +754,8 @@ func engineSetRepeat(mode string) {
 	notifyControlState()
 }
 
-// SetRepeat sets the repeat mode (0=off, 1=all, 2=one) of the engine queue,
-// which reports it on /status and honors it when it advances. It is never
-// forwarded to a routed Connect device: this instance owns the queue and
-// streams the device one track at a time, so a Repeat-All there would loop
-// its single-item queue for ever.
+// SetRepeat sets the engine queue's repeat mode (0 off, 1 all, 2 one). It is never
+// forwarded to a Connect device, which gets one track at a time and would loop it.
 func SetRepeat(mode int) {
 	m := "off"
 	switch mode {
@@ -789,10 +767,8 @@ func SetRepeat(mode int) {
 	engineSetRepeat(m)
 }
 
-// Repeat returns the engine queue's repeat mode ("off", "all" or "one"),
-// also while routed to a Connect device: repeat is kept here and never
-// forwarded (the device is set to "off"), so its snapshot would contradict
-// SetRepeat.
+// Repeat returns the engine queue's repeat mode ("off", "all" or "one"), also while
+// routed: repeat is kept here and the device is set to "off".
 func Repeat() string {
 	queueMu.Lock()
 	defer queueMu.Unlock()
@@ -819,10 +795,9 @@ func Shuffle() bool {
 	return engineShuffle()
 }
 
-// SetShuffleHostOwned(true) declares that the host owns play order: it
-// shuffles its own queue and syncs that order (QueueSet), so SetShuffle and a
-// controller's shuffle only record the flag for /status, Shuffle and
-// notifications, without reordering the engine queue. Call before Init.
+// SetShuffleHostOwned(true) declares that the host owns play order: shuffle changes
+// only record the flag (for /status, Shuffle, notifications) and never reorder the
+// engine queue. Call before Init.
 func SetShuffleHostOwned(on bool) {
 	queueMu.Lock()
 	shuffleHostOwned = on
@@ -832,10 +807,8 @@ func SetShuffleHostOwned(on bool) {
 	queueMu.Unlock()
 }
 
-// The shuffle flag as reported (/status, Shuffle, notifications). With
-// shuffleHostOwned (SetShuffleHostOwned) the host shuffles its own queue and
-// syncs that order, so the flag is recorded but never applied to engineQ.
-// Both guarded by queueMu.
+// The shuffle flag as reported. With shuffleHostOwned it is recorded but never applied
+// to engineQ. Both guarded by queueMu.
 var shuffleOn, shuffleHostOwned bool
 
 func engineShuffle() bool {
@@ -920,12 +893,9 @@ func engineAccount() control.Account {
 	return control.Account{UserID: a.UserID, Name: a.Name, Offer: a.Offer}
 }
 
-// engineCommands maps control commands to player-level actions. next/prev drive
-// the engine playback queue (engineQ) when playing locally, or forward to the
-// connected remote when a device is selected; shuffle/repeat are recorded on
-// the engine queue (so /status reports them and the queue honors them) and also
-// forward to the connected remote (if any) so a controller can drive the
-// remote's queue.
+// engineCommands maps control commands to player actions. next/prev drive engineQ
+// locally or forward to the selected device; shuffle is recorded on engineQ and
+// forwarded too.
 func engineCommands() control.Commands {
 	return control.Commands{
 		PlayPause: func() { withPlayerNotify(func(p *audio.Player) { p.TogglePause() }) },
@@ -939,11 +909,8 @@ func engineCommands() control.Commands {
 		SetVolume:    func(v float64) { withPlayerNotify(func(p *audio.Player) { p.SetVolume(v) }) },
 		PlayTrack:    enginePlayTrack,
 		PlayPlaylist: enginePlayPlaylist,
-		// CycleRepeat / SetRepeat: record the mode locally only. Repeat is NOT
-		// forwarded to a routed remote — this instance owns the queue and streams
-		// the host one track at a time, so a Repeat-All forwarded to the host would
-		// trap it looping its single-item queue. The engine's own auto-advance
-		// honors repeat when it drives the remote.
+		// CycleRepeat / SetRepeat: record the mode locally only. A Repeat-All forwarded to the
+		// host would loop its single-item queue; the engine's auto-advance applies repeat.
 		CycleRepeat: func() {
 			queueMu.Lock()
 			next := ((engineQ.Repeat() + 1) % 3).String()
@@ -960,9 +927,9 @@ func engineCommands() control.Commands {
 		SetShuffle:    SetShuffle,
 		QueueAdd:      engineQueueAdd,
 		QueueJump:     engineQueueJump,
-		// SetQueue lets a controller replace the engine queue wholesale (cursor at
-		// index). QueueSet + QueueSetIndex in one hop: parse, Set, clear a
-		// now-stale preload, and notify. Nil-safe (parse error surfaced).
+		// SetQueue lets a controller replace the engine queue (cursor at index): QueueSet and
+		// QueueSetIndex in one step, clearing a stale preload and notifying. A parse error is
+		// returned.
 		SetQueue: func(tracksJSON string, index int) error {
 			ts, err := queueTracksFromJSON(tracksJSON)
 			if err != nil {
@@ -986,10 +953,9 @@ func engineCommands() control.Commands {
 	}
 }
 
-// fetchEpisodeMeta enriches the current episode with title/podcast name/artwork
-// by calling the REST /episode/{id} endpoint, unless another track was set
-// since gen. Best-effort, like fetchTrackMeta. The episode's "artist line" is
-// the podcast/show name.
+// fetchEpisodeMeta adds the current episode's title, podcast name (its artist line)
+// and artwork via REST /episode/{id}, unless another track was set since gen. A failure
+// leaves the episode as it is.
 func fetchEpisodeMeta(c *deezer.Client, id string, gen uint64) {
 	if c == nil || id == "" {
 		return
@@ -1001,9 +967,9 @@ func fetchEpisodeMeta(c *deezer.Client, id string, gen uint64) {
 	setCurrentTrackAt(gen, ep.AsTrack())
 }
 
-// startPlay starts plan on p unless a newer play claimed a seq meanwhile, then
-// runs started (now-playing bookkeeping) in the same step. A cached plan whose
-// entry is gone is planned again first, outside that step.
+// startPlay starts plan on p unless a newer play claimed a seq meanwhile, runs started
+// in the same step and announces the start (announceLocal). A cached plan whose entry
+// is gone is planned again first, outside that step.
 func startPlay(p *audio.Player, plan *deezer.StreamPlan, durationMS int64, seq uint64, started func()) error {
 	plan = p.ReplanIfGone(plan)
 	plays.startMu.Lock()
@@ -1017,6 +983,8 @@ func startPlay(p *audio.Player, plan *deezer.StreamPlan, durationMS int64, seq u
 	}
 	preloads.Clear() // p.Play discarded any pending preload; drop its request and stash too
 	started()
+	listenStarted()
+	announceLocal()
 	return nil
 }
 
@@ -1049,6 +1017,7 @@ func enginePlayTrack(id string) {
 	if p == nil {
 		return
 	}
+	SetListenContext("track_page", id)
 	seq, done := plays.beginUser()
 	defer done()
 	c := netClient()
@@ -1065,9 +1034,8 @@ func enginePlayTrack(id string) {
 			}
 		}
 	}
-	// A single-track "queue": nothing to auto-advance to, but loading it keeps the
-	// engine queue in sync with what's actually playing, so a previously loaded
-	// playlist can't auto-advance after this ad-hoc single track finishes.
+	// A single-track "queue": loading it keeps the engine queue in step with what plays,
+	// so an earlier playlist cannot auto-advance after this track.
 	queueMu.Lock()
 	engineQ.Set([]deezer.Track{t}, 0)
 	queueMu.Unlock()
@@ -1086,14 +1054,13 @@ func enginePlayPlaylist(id string) {
 	if err != nil || len(ts) == 0 {
 		return
 	}
+	SetListenContext("playlist_page", id)
 	_ = engineLoadAndPlay(p, ts, 0, seq)
 }
 
-// engineQueueAdvance advances the engine queue when the track finishedID ends
-// naturally and returns the next track to play. It advances only when finishedID
-// is the queue's current track, so an ad-hoc Play (which bypasses the engine
-// queue) can't trigger a stale auto-advance into an unrelated playlist. Pure
-// queue logic — the caller performs the network resolve + Play.
+// engineQueueAdvance advances the engine queue when finishedID ends naturally and
+// returns the next track, only when finishedID is the queue's current track. The
+// caller resolves and plays it.
 func engineQueueAdvance(finishedID string) (deezer.Track, bool) {
 	queueMu.Lock()
 	defer queueMu.Unlock()
@@ -1107,16 +1074,9 @@ func engineQueueAdvance(finishedID string) (deezer.Track, bool) {
 	return engineQ.Current()
 }
 
-// engineAdvanceOnFinish runs from the player's onFinish callback on the
-// player's manage() goroutine when a track ends naturally. It
-// advances the engine queue and starts the next track on a FRESH goroutine, so
-// the callback never blocks the manager on the network resolve + Play (which
-// would stall prebuffer promotion + the sleep-timer fade).
-//
-// It returns true only when the engine queue actually drove this finish (the
-// finished track was the engine queue's current track). The onFinish callback
-// uses that to decide whether to also bump the host's finished counter, so the
-// engine queue and the host's own queue never both advance on one finish.
+// engineAdvanceOnFinish runs from onFinish on manage()'s goroutine and starts the next
+// track on a new goroutine so the manager never blocks. It returns true when the engine
+// queue owned the finished track, so the host counter is not bumped too.
 func engineAdvanceOnFinish() bool {
 	// Gapless/crossfade promote: the player swapped the preloaded source in and
 	// kept playing (a real finish passes through Stopped before onFinish fires).
@@ -1154,11 +1114,9 @@ var advancing sync.WaitGroup
 // before it stops in the Errored state.
 const maxAdvanceFailures = 3
 
-// engineAutoAdvance plays next as seq. A track that cannot be resolved is
-// skipped like a user Next (also under repeat-one), and after
-// maxAdvanceFailures in a row, or when the queue ends first, the player
-// reports the reason instead of sitting Stopped with nothing playing. A failed
-// start (the output device) is the player's own error and skips nothing.
+// engineAutoAdvance plays next as seq. An unresolvable track is skipped like Next;
+// after maxAdvanceFailures in a row, or at the queue's end, the player reports the
+// reason. A failed start (output device) skips nothing.
 func engineAutoAdvance(next deezer.Track, seq uint64) {
 	for failures := 1; ; failures++ {
 		plan, err := preparePlan(netClient(), next.ID)
@@ -1175,13 +1133,19 @@ func engineAutoAdvance(next deezer.Track, seq uint64) {
 		queueMu.Lock()
 		cur, ok := engineQ.Current()
 		ok = ok && cur.ID == next.ID // else the queue moved on meanwhile
-		ended := ok && (failures == maxAdvanceFailures || !engineQ.Next())
+		// A lost network is not an unplayable track: the cursor stays on the one that could not start.
+		ended := ok && (failures == maxAdvanceFailures || deezer.IsNoNetwork(err) || !engineQ.Next())
 		if ok && !ended {
 			next, ok = engineQ.Current()
 		}
 		queueMu.Unlock()
 		if ended {
-			withPlayer(func(p *audio.Player) { p.Fail(err.Error()) })
+			// One step with the check, as in startPlay: a play started meanwhile stays as it is.
+			plays.startMu.Lock()
+			if !plays.superseded(seq) {
+				withPlayer(func(p *audio.Player) { p.FailErr(err) })
+			}
+			plays.startMu.Unlock()
 			return
 		}
 		if !ok {
@@ -1191,16 +1155,9 @@ func engineAutoAdvance(next deezer.Track, seq uint64) {
 	}
 }
 
-// engineSyncOnGaplessPromote does the queue + now-playing bookkeeping after
-// the player gaplessly promoted its preloaded source (it is still Playing
-// then). Split from engineAdvanceOnFinish so tests can drive a promote without
-// a live audio device. Returns whether the engine queue owned the finished
-// track (the caller uses that to keep exactly one queue mechanism advancing).
-//
-// The preloaded track is always the deterministic linear next, so when the
-// engine queue owned the finished track just walk the cursor + now-playing
-// along with the audio — re-resolving + Play here would kill the promoted
-// stream and restart the track over the network.
+// engineSyncOnGaplessPromote updates the queue and now-playing after a gapless promote,
+// walking the cursor along with the audio instead of replaying. It returns whether the
+// engine queue owned the finished track.
 func engineSyncOnGaplessPromote() bool {
 	queueMu.Lock()
 	cur, ok := engineQ.Current()
@@ -1214,16 +1171,13 @@ func engineSyncOnGaplessPromote() bool {
 	// identity so a later finish can't reuse it.
 	promoted, armed := preloads.Take()
 	if !owned {
-		// Engine queue empty or misaligned: the host preloaded without mirroring
-		// its queue (QueueSet). The promoted stream can only be the armed
-		// preload — p.next is set solely by the preloader, which stashes it — so
-		// move now-playing onto it. Otherwise /status would stay on the
-		// finished track, whose NEXT finish would re-record it in history while
-		// the promoted track never gets recorded. The outgoing listen itself was
-		// already recorded by noteTrackFinished (it runs before this in the
-		// onFinish callback).
+		// Engine queue empty or misaligned: the host preloaded without QueueSet. The promoted
+		// stream is the armed preload, so move now-playing onto it; noteTrackFinished already
+		// recorded the outgoing listen.
 		if armed {
 			gen := setCurrentTrack(promoted)
+			listenStarted()
+			announceLocal()
 			if promoted.Name == "" { // stashed from a cache-sourced plan
 				go fetchTrackMeta(netClient(), promoted.ID, gen)
 			}
@@ -1231,6 +1185,8 @@ func engineSyncOnGaplessPromote() bool {
 		return false // still not the engine queue's finish; the host's own queue advances
 	}
 	setCurrentTrack(next)
+	listenStarted()
+	announceLocal()
 	return true
 }
 
@@ -1239,7 +1195,20 @@ func engineSyncOnGaplessPromote() bool {
 // they move the engine queue and play the new current track locally.
 func engineNext() { engineStep(engineQ.Next, (*control.Client).Next) }
 
-func enginePrev() { engineStep(engineQ.Prev, (*control.Client).Prev) }
+// prevRestartMS is the position from which Previous restarts the track, as Deezer's apps do.
+const prevRestartMS = 5000
+
+// enginePrev restarts a local track played for prevRestartMS or more, else steps back.
+// While a user play resolves, the position is the outgoing track's: it steps back.
+func enginePrev() {
+	if routedRemote() == nil && plays.user.Load() == 0 {
+		if p := Player(); p != nil && p.PositionMS() >= prevRestartMS {
+			p.SeekMS(0)
+			return
+		}
+	}
+	engineStep(engineQ.Prev, (*control.Client).Prev)
+}
 
 func engineStep(move func() bool, remote func(*control.Client) (control.State, error)) {
 	if rc := routedRemote(); rc != nil {
@@ -1260,16 +1229,11 @@ func engineStep(move func() bool, remote func(*control.Client) (control.State, e
 }
 
 // ---- extended control commands: queue edits, album/mix play, history ----
-//
-// These back the control API's /queue/*, /play/album, /play/mix/* and
-// /history/recent endpoints. Like Next/Prev they forward to the routed Connect
-// device when one is selected (this instance is then a controller, so queue
-// edits belong to the remote's queue); HistoryRecent stays local — the
-// listening history never leaves the machine that did the listening.
+// They back /queue/*, /play/album, /play/mix/* and /history/recent and forward to the
+// routed Connect device, except HistoryRecent, which stays local.
 
-// engineQueueInsert is the pure queue mutation behind QueueAdd: insert t right
-// after the current track (next=true) or append it to the end. A preloaded
-// next stream is discarded — the upcoming track may have changed.
+// engineQueueInsert inserts t after the current track (next=true) or appends it,
+// discarding a preloaded next stream.
 func engineQueueInsert(t deezer.Track, next bool) {
 	queueMu.Lock()
 	if next {
@@ -1308,9 +1272,8 @@ func engineQueueAdd(id string, next bool) error {
 	return nil
 }
 
-// engineQueueSelect is the pure cursor move behind QueueJump: validate index,
-// move the cursor (recording history so Prev retraces) and return the now-
-// current track.
+// engineQueueSelect validates index, moves the cursor (recording history for Prev) and
+// returns the new current track.
 func engineQueueSelect(index int) (deezer.Track, error) {
 	queueMu.Lock()
 	defer queueMu.Unlock()
@@ -1348,10 +1311,8 @@ func engineQueueJump(index int) error {
 	return nil
 }
 
-// QueueRemove removes the row at index (POST /queue/remove, the host's Up-Next
-// editor); routed to a Connect device, the edit goes to it. The playing row
-// can't be removed (same guard as the TUI): the audio would keep playing a
-// track that no longer exists in the queue, desyncing every controller.
+// QueueRemove removes the row at index (POST /queue/remove), forwarding to a routed
+// device. The playing row cannot be removed.
 func QueueRemove(index int) error {
 	if rc := routedRemote(); rc != nil {
 		st, err := rc.QueueRemove(index)
@@ -1376,10 +1337,9 @@ func QueueRemove(index int) error {
 	return nil
 }
 
-// QueueMove moves the row at from to to (POST /queue/move, the host's Up-Next
-// editor); routed to a Connect device, the edit goes to it. The cursor,
-// history and shuffle cycle all follow the moved tracks (queue.Move), so
-// reordering never changes what's audible. from == to is a no-op success.
+// QueueMove moves the row at from to to (POST /queue/move), forwarding to a routed
+// device. Cursor, history and shuffle cycle follow the moved track (queue.Move);
+// from == to succeeds as a no-op.
 func QueueMove(from, to int) error {
 	if rc := routedRemote(); rc != nil {
 		st, err := rc.QueueMove(from, to)
@@ -1439,6 +1399,7 @@ func enginePlayAlbum(id string) error {
 		}
 		return err
 	}
+	SetListenContext("album_page", id)
 	return enginePlayFetched("album", func(*deezer.Client) ([]deezer.Track, error) { return AlbumTracks(id) })
 }
 
@@ -1452,6 +1413,7 @@ func enginePlayMixTrack(id string) error {
 		}
 		return err
 	}
+	SetListenContext("track_mix_contextual", id)
 	return enginePlayFetched("mix", func(c *deezer.Client) ([]deezer.Track, error) { return c.TrackMix(id) })
 }
 
@@ -1464,6 +1426,7 @@ func enginePlayMixArtist(id string) error {
 		}
 		return err
 	}
+	SetListenContext("artist_smartradio", id)
 	return enginePlayFetched("mix", func(c *deezer.Client) ([]deezer.Track, error) { return c.ArtistMix(id) })
 }
 
@@ -1490,10 +1453,9 @@ var (
 	histInited bool
 )
 
-// HistoryRecent returns the newest n entries of the machine-local listening
-// history (n <= 0: all), songs recorded without artwork or duration filled in
-// from the track (see fillHistoryMeta). Each entry's Kind is "" for a song
-// and "episode" for a podcast episode, which a host replays with PlayEpisode.
+// HistoryRecent returns the newest n local history entries (n <= 0: all), filling in
+// missing song artwork and duration (fillHistoryMeta). Kind "episode" marks a podcast
+// episode, replayed with PlayEpisode.
 func HistoryRecent(n int) ([]history.Entry, error) {
 	st := historyStore()
 	if st == nil {
@@ -1517,10 +1479,9 @@ var (
 // maxMetaLookups bounds the concurrent track lookups of fillHistoryMeta.
 const maxMetaLookups = 4
 
-// fillHistoryMeta fills a missing artwork URL and duration of song entries
-// from the track itself: each id is looked up once per process, at most
-// maxMetaLookups at a time. A lookup that fails is not asked again, unless it
-// failed for want of a network. Episodes are left as they are.
+// fillHistoryMeta fills missing artwork and duration of song entries from the track,
+// looking each id up once per process, at most maxMetaLookups at a time. A failed
+// lookup is retried only after a network failure. Episodes are left as they are.
 func fillHistoryMeta(c *deezer.Client, entries []history.Entry) {
 	missing := func(e history.Entry) bool {
 		return e.Kind != history.KindEpisode && e.TrackID != "" && (e.ArtworkURL == "" || e.DurationMS == 0)
@@ -1605,12 +1566,9 @@ type jArtistStat struct {
 	TotalSec int64  `json:"totalSec"`
 }
 
-// HistoryStats computes the local listening stats over the last sinceDays
-// (sinceDays <= 0 = all history): {topTracks:[{trackId,title,artist,plays,
-// totalSec}], topArtists:[{artist,plays,totalSec}], totalSeconds:N}.
-// topTracks and topArtists are music only; totalSeconds is all listening
-// time. Always the full shape (empty arrays + 0) when the store is unavailable
-// or empty.
+// HistoryStats computes the local stats over the last sinceDays (<= 0: all) as
+// {topTracks, topArtists, totalSeconds}. The tops are music only; the full shape with
+// empty arrays comes back when there is no history.
 func HistoryStats(sinceDays int) map[string]any {
 	topTracks := []jTrackStat{}
 	topArtists := []jArtistStat{}
@@ -1637,10 +1595,8 @@ func HistoryStats(sinceDays int) map[string]any {
 	return map[string]any{"topTracks": topTracks, "topArtists": topArtists, "totalSeconds": total}
 }
 
-// listenEntry converts an outgoing track + its media kind ("" = song,
-// history.KindEpisode = podcast) + listened milliseconds into a history entry.
-// ok=false when it isn't worth recording: no track id, or under a second of
-// listening (start-skips, double-taps).
+// listenEntry converts an outgoing track, its media kind and the milliseconds listened
+// into a history entry; ok is false without a track id or under one second listened.
 func listenEntry(prev deezer.Track, kind string, playedMS int64) (history.Entry, bool) {
 	if prev.ID == "" || playedMS < 1000 {
 		return history.Entry{}, false
@@ -1661,10 +1617,9 @@ func listenEntry(prev deezer.Track, kind string, playedMS int64) (history.Entry,
 	}, true
 }
 
-// recordListen appends the outgoing track to the local listening history,
-// tagged with its media kind so replay can route (song -> Play, episode ->
-// PlayEpisode). The file write (append + fsync) runs on its own goroutine so
-// callers on the player's manage/callback path never block on disk I/O.
+// recordListen appends the outgoing track with its media kind to the local history.
+// The write (append and fsync) runs on its own goroutine so the player's paths never
+// wait on disk.
 func recordListen(prev deezer.Track, kind string, playedMS int64) {
 	e, ok := listenEntry(prev, kind, playedMS)
 	if !ok {
@@ -1679,12 +1634,9 @@ func recordListen(prev deezer.Track, kind string, playedMS int64) {
 	}()
 }
 
-// noteTrackTransition records the outgoing track when a new stream is about to
-// replace one the user was actually listening to (manual skip / pick / new
-// selection). Call BEFORE p.Play. A
-// Stopped/Errored player means the previous track either ended naturally
-// (already recorded by noteTrackFinished) or stopped long ago; neither may be re-recorded here, which also keeps
-// pause/resume free of duplicates (they never reach this path at all).
+// noteTrackTransition records the outgoing track when a new stream replaces one being
+// listened to; call it before p.Play. A Stopped or Errored player records nothing
+// (already recorded or long stopped).
 func noteTrackTransition(p *audio.Player) {
 	if p == nil {
 		return
@@ -1692,11 +1644,9 @@ func noteTrackTransition(p *audio.Player) {
 	recordTransition(p.State(), p.PositionMS())
 }
 
-// recordTransition is noteTrackTransition's pure core, split out so tests can
-// drive the Playing/Paused duplicate guard without a live audio device (a real
-// player can't reach Playing in tests). A Stopped/Errored state records
-// nothing — that's what makes a second Stop (or a Play after a natural finish)
-// duplicate-free.
+// recordTransition is noteTrackTransition's pure core, for tests without an audio
+// device. A Stopped or Errored state records nothing, so a second Stop or a Play after
+// a natural finish adds no duplicate.
 func recordTransition(state audio.State, positionMS int64) {
 	switch state {
 	case audio.Playing, audio.Paused:
@@ -1705,64 +1655,25 @@ func recordTransition(state audio.State, positionMS int64) {
 	}
 }
 
-// erroredFinishMaxMS bounds how much audio can have played for a finish to be
-// treated as an error (CDN/decode failure) rather than a listen. A track that
-// dies near its start played ~0; a failure well into the track is a real
-// (partial) listen and is recorded normally.
-const erroredFinishMaxMS = 1000
-
-// isErroredFinish is the pure predicate behind erroredFinish (testable without
-// a live audio device): the just-finished track carried an error (the player is
-// Errored, or LastError is non-empty because internal/audio stored the source's
-// download/decode error) AND almost no audio played.
-//
-// A still-Playing state is never an errored finish: that is a gapless/crossfade
-// promote (the next track is already playing successfully). manage() copies the
-// OUTGOING track's error into LastError even on a promote, so without this guard
-// a promote following an early-errored track would be misclassified and its
-// now-playing/queue bookkeeping skipped.
-func isErroredFinish(state audio.State, lastErr string, positionMS int64) bool {
-	if state == audio.Playing {
-		return false
-	}
-	errored := state == audio.Errored || lastErr != ""
-	return errored && positionMS < erroredFinishMaxMS
-}
-
-// erroredFinish reports whether the finish now firing is a CDN/decode failure
-// rather than a natural end, reading the live player. False when no player.
-func erroredFinish() bool {
-	p := Player()
-	if p == nil {
-		return false
-	}
-	return isErroredFinish(p.State(), p.LastError(), p.PositionMS())
-}
-
-// noteTrackFinished records the track that just ended naturally. It runs from
-// the player's onFinish callback (the manage goroutine): for a real finish the
-// player retains the end position; for a gapless/crossfade promote the player
-// is already Playing the NEXT track, so the outgoing one played its full
-// duration.
+// noteTrackFinished records the track that ended naturally, from onFinish on the manage
+// goroutine. After a real finish the player holds the end position; after a promote the
+// outgoing track played its full duration.
 func noteTrackFinished() {
 	var state audio.State
-	var lastErr string
 	var posMS int64
 	havePlayer := false
 	if p := Player(); p != nil {
-		state, lastErr, posMS, havePlayer = p.State(), p.LastError(), p.PositionMS(), true
+		state, posMS, havePlayer = p.State(), p.PositionMS(), true
 	}
 	prev, kind := currentTrackSnapshot()
-	recordFinished(prev, kind, state, lastErr, posMS, havePlayer)
+	recordFinished(prev, kind, state, posMS, havePlayer)
 }
 
-// recordFinished is noteTrackFinished's pure core (testable without a live audio
-// device). It drops an errored finish (a CDN/decode failure with ~0 played is
-// not a real listen) and otherwise records the outgoing listen using the
-// track duration — or the player's actual end position when it retained one (a
-// real finish, not a gapless promote where the player is already Playing next).
-func recordFinished(prev deezer.Track, kind string, state audio.State, lastErr string, positionMS int64, havePlayer bool) {
-	if havePlayer && isErroredFinish(state, lastErr, positionMS) {
+// recordFinished is noteTrackFinished's pure core. It records the listen with the
+// player's end position when it has one, else the track duration; a track that ended
+// Errored before any audio records nothing.
+func recordFinished(prev deezer.Track, kind string, state audio.State, positionMS int64, havePlayer bool) {
+	if havePlayer && state == audio.Errored && positionMS <= 0 {
 		return
 	}
 	playedMS := prev.DurationMS

@@ -150,7 +150,9 @@ internal sealed partial class EngineQueueMirror
             }
             string curId = e.CurrentId();
             e.Set(QueueJson(snapshot));
-            int target = curId.Length > 0 ? snapshot.FindIndex(t => t.Id == curId) : -1;
+            // From the app's cursor first: a track queued twice keeps the later copy the engine is on.
+            int target = curId.Length > 0 ? snapshot.FindIndex(Math.Max(0, Math.Min(index, snapshot.Count)), t => t.Id == curId) : -1;
+            if (target < 0 && curId.Length > 0) target = snapshot.FindIndex(t => t.Id == curId);
             if (target < 0) target = index;
             if (target >= 0) e.SetIndex(target); // the poll adopts it once now-playing matches
         });

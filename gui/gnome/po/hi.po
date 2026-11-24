@@ -312,7 +312,7 @@ msgid "Crossfade"
 msgstr "क्रॉसफ़ेड"
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr "व्यवहार"
 
 #: src/main.c:1857
@@ -383,11 +383,11 @@ msgid "Removed from Liked Songs"
 msgstr "पसंदीदा गानों से हटाया गया"
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr "पसंदीदा में जोड़ा नहीं जा सका"
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr "पसंदीदा से हटाया नहीं जा सका"
 
 #: src/main.c:2238 src/main.c:3702
@@ -957,24 +957,16 @@ msgid "Preview only — a 30-second clip"
 msgstr "केवल झलक — 30-सेकंड का अंश"
 
 #: src/main.c:1836
-msgid "Ads"
-msgstr "विज्ञापन"
+msgid "Play reporting"
+msgstr "प्ले रिपोर्टिंग"
 
 #: src/main.c:1839
-msgid "Disable ads"
-msgstr "विज्ञापन बंद करें"
+msgid "Don't report my plays"
+msgstr "मेरे प्ले रिपोर्ट न करें"
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
-msgstr ""
-"Deezer Free विज्ञापन-समर्थित है। आधिकारिक ऐप की तरह आपके प्ले रिपोर्ट करने से कलाकारों "
-"को श्रेय मिलता है और विज्ञापन चलते हैं। इसे बंद करने पर विज्ञापन हट जाते हैं, लेकिन आपके प्ले "
-"रिपोर्ट होना भी रुक जाता है, जिससे कलाकारों को उनकी प्ले गिनती नहीं मिलती और Deezer "
-"की उपयोग की शर्तें टूटती हैं। अपने जोखिम पर उपयोग करें।"
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।"
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3
 msgid "OpenDeezer"

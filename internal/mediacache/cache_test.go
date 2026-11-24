@@ -71,7 +71,7 @@ func TestAtomicVisibility(t *testing.T) {
 		t.Fatal("partial write must not be visible")
 	}
 
-	// now finish
+	// finish the write
 	_, _ = wc.Write([]byte(" more"))
 	if err := wc.Close(); err != nil {
 		t.Fatal(err)
@@ -406,8 +406,8 @@ func TestEvictAdoptedWhileOpen(t *testing.T) {
 	}
 }
 
-// ageCache holds "old.MP3", last used 40 days ago, and "new.MP3", used now; the
-// last use comes from the index when the cache is opened.
+// ageCache holds "old.MP3", last used 40 days ago, and "new.MP3", just used; the last
+// use comes from the index when the cache is opened.
 func ageCache(t *testing.T) (*Cache, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -453,9 +453,9 @@ func TestSetMaxAgeRemovesOldEntries(t *testing.T) {
 	}
 }
 
-// The last use is kept in the index, not in the file's mtime (which cannot be
-// changed on Windows while the player has the file open): a track played now
-// whose file's mtime is 40 days old survives a 30-day limit after a restart.
+// The last use is kept in the index, not the mtime (unchangeable on Windows while the
+// player has the file open): a track just played whose mtime is 40 days old survives a
+// 30-day limit after a restart.
 func TestLastUseSurvivesRestart(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 1<<20)
@@ -612,9 +612,8 @@ func TestNoEvictActiveWrite(t *testing.T) {
 	rc.Close()
 }
 
-// A second body for an already-cached key that is abandoned (a stream that
-// arrived short) must not destroy the previously-good entry: the old bytes stay
-// visible until a replacement actually commits.
+// An abandoned second body for a cached key (a short stream) must not destroy the
+// good entry: the old bytes stay visible until a replacement commits.
 func TestAbandonedRewriteKeepsExistingEntry(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 10<<20)
@@ -658,7 +657,7 @@ func TestAbandonedRewriteKeepsExistingEntry(t *testing.T) {
 		t.Fatalf("stats = %d entries, %d bytes; want 1, %d", n, b, len(orig))
 	}
 
-	// Third Put, closed without any writes (empty abandon) — same guarantee.
+	// Third Put, closed without any writes (empty abandon): same guarantee.
 	wc3, _ := c.Put(key)
 	_ = wc3.Close()
 	if rc, _, hit := c.Get(key); !hit {
@@ -689,12 +688,9 @@ func TestAbandonedRewriteKeepsExistingEntry(t *testing.T) {
 	}
 }
 
-// When a victim's file cannot be deleted (Windows sharing violation while a
-// reader holds it open), eviction must keep the entry and its accounting —
-// dropping only the bookkeeping would orphan the file on disk and let a
-// restart's recover() blow past maxBytes. It skips that victim and goes on
-// with the next one, and terminates rather than retry the same undeletable
-// victim forever.
+// When a victim's file cannot be deleted (open on Windows), eviction keeps its entry
+// and accounting, skips to the next victim, and terminates instead of retrying the
+// same one.
 func TestEvictionKeepsEntryWhenRemoveFails(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 60)
@@ -708,8 +704,8 @@ func TestEvictionKeepsEntryWhenRemoveFails(t *testing.T) {
 		}
 	}
 
-	// Simulate the LRU victim (A) being busy: its removal fails. Each entry now
-	// has a unique on-disk name, so resolve A's actual path from the index.
+	// Simulate the LRU victim (A) being busy: its removal fails. Each entry has a unique
+	// on-disk name, so resolve A's actual path from the index.
 	c.mu.Lock()
 	busy := c.entries["A.MP3"].path
 	c.mu.Unlock()
@@ -722,10 +718,8 @@ func TestEvictionKeepsEntryWhenRemoveFails(t *testing.T) {
 	}
 	defer func() { removeFile = orig }()
 
-	// Adding C (30) pushes total to 90 > 60: eviction picks A, fails to
-	// delete it, keeps its accounting and evicts B instead. Dropping A's
-	// bookkeeping would desync (total 60 with 90 bytes on disk); retrying A
-	// in a loop would hang.
+	// Adding C (30) pushes the total to 90 > 60: eviction picks A, fails to delete it,
+	// keeps its accounting and evicts B instead.
 	wc, _ := c.Put("C.MP3")
 	_, _ = wc.Write(payload)
 	if err := wc.Close(); err != nil {
@@ -746,8 +740,8 @@ func TestEvictionKeepsEntryWhenRemoveFails(t *testing.T) {
 		t.Fatal("busy victim's bytes corrupted")
 	}
 
-	// Once the file is deletable again, the next commit's eviction catches up.
-	// (The Get above bumped A's recency, so B and C are now the LRU victims.)
+	// Once the file is deletable, the next commit's eviction catches up. The Get above
+	// bumped A's recency, so B and C are the LRU victims.
 	removeFile = os.Remove
 	wc, _ = c.Put("D.MP3")
 	_, _ = wc.Write(payload)
@@ -776,17 +770,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// TestReplaceWhileReaderOpen is the exact Windows scenario the unique-filename
-// scheme exists to survive: committing a replacement for a key while a reader
-// still holds the previous file open. The old, same-name scheme did
-// os.Rename(temp, key) here — on Windows that fails with "Access is denied"
-// because the target file is open. With unique names the replacement renames
-// onto a brand-new path and never touches the open file, so the commit
-// succeeds on every OS, the open reader keeps reading the ORIGINAL bytes, and a
-// fresh Get sees the replacement. (On Windows the best-effort delete of the old
-// file fails while the reader is open and the file is left as a reclaimable
-// orphan; the commit still returns nil. On Unix the delete succeeds but the
-// open fd stays valid.)
+// TestReplaceWhileReaderOpen commits a replacement while a reader holds the old file:
+// it renames onto a new path, so the commit succeeds on every OS, the reader keeps the
+// original bytes and a fresh Get sees the replacement.
 func TestReplaceWhileReaderOpen(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 10<<20)
@@ -851,7 +837,7 @@ func TestReplaceWhileReaderOpen(t *testing.T) {
 	}
 }
 
-// --- Phase 3 meta persistence for cached plans ---
+// --- Meta persistence for cached plans ---
 
 func TestPutMetaGetMeta_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
@@ -1040,9 +1026,8 @@ func TestForeignFilesSurvive(t *testing.T) {
 	check("a second New")
 }
 
-// The cache older versions kept by default in <config dir>/mediacache (they
-// kept no lock file) is removed with its folder; a file of someone else's
-// keeps the folder.
+// An old-layout cache in <config dir>/mediacache (it has no lock file) is
+// removed with its folder; a file of someone else's keeps the folder.
 func TestRemoveOldCaches(t *testing.T) {
 	base := t.TempDir()
 	config.SetBaseDir(base)
@@ -1111,11 +1096,9 @@ func readFolder(t *testing.T, dir string) map[string]string {
 	return files
 }
 
-// Files that look like cache files but are not (a date, upper-case hex), a
-// foreign index.json, a lock, a temp name and a text file stay as they are
-// through RemoveOldCaches, New, Purge, Clear and a folder change away and back.
-// An old-layout cache beside such files is removed, and only its indexed
-// files and index go. RemoveOldCaches runs once.
+// Look-alike files, a foreign index.json, a lock, a temp name and a text file survive
+// RemoveOldCaches, New, Purge, Clear and folder changes; an old-layout cache beside
+// them loses only its indexed files and index. RemoveOldCaches runs once.
 func TestOldCacheRemovalKeepsOtherFiles(t *testing.T) {
 	base := t.TempDir()
 	config.SetBaseDir(base)
@@ -1157,7 +1140,7 @@ func TestOldCacheRemovalKeepsOtherFiles(t *testing.T) {
 	if err := config.SaveMedia(config.Media{MediaCacheMB: 1, MediaCacheDir: picked}); err != nil {
 		t.Fatal(err)
 	}
-	// The default folder of older versions: a real cache with other files
+	// The old-layout default folder: a real cache with other files
 	// beside it.
 	old := filepath.Join(base, "mediacache")
 	c, err := New(old, 1<<20)
@@ -1296,8 +1279,8 @@ func TestOneCachePerFolder(t *testing.T) {
 	c2.Close()
 }
 
-// After Close the cache refuses Get, Adopt and PutMeta, and a recency flush
-// due from before does not overwrite the index of the cache now on the folder.
+// After Close the cache refuses Get, Adopt and PutMeta, and a pending recency flush
+// does not overwrite the index of the cache that took the folder.
 func TestClosedCacheRefuses(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 1<<20)

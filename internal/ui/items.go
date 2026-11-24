@@ -62,9 +62,8 @@ type row struct {
 func (r row) Title() string       { return r.title }
 func (r row) Description() string { return r.desc }
 
-// FilterValue matches the local list filter (ctrl+f) against the title AND the
-// description, so tracks are findable by artist/album too. Section headers
-// never match — filtering an artist page should surface entries, not dividers.
+// FilterValue matches the list filter (ctrl+f) against title and description, so
+// tracks are found by artist or album too. Section headers never match.
 func (r row) FilterValue() string {
 	if r.kind == rowSection {
 		return ""
@@ -130,15 +129,11 @@ func deviceRow(id, name string, current bool) row {
 	return row{kind: rowDevice, title: title, desc: desc, deviceID: id}
 }
 
-// peerRow renders a discovered Connect device, with its client/version and (if
-// known) what it's currently playing.
+// peerRow renders a discovered Connect device with its client, version and address.
 func peerRow(p peerDevice) row {
 	desc := deviceTypeLabel(p.dev.Client)
 	if p.dev.Version != "" {
 		desc += " · v" + p.dev.Version
-	}
-	if p.nowPlaying != "" {
-		desc += " · ▶ " + p.nowPlaying
 	}
 	desc += " · " + p.dev.Addr
 	return row{kind: rowPeer, title: "🔊 " + p.dev.Name, desc: desc, peerAddr: p.dev.Addr}

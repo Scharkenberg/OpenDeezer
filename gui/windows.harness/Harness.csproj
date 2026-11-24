@@ -24,7 +24,14 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.3.260402-preview2" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.3.260402-preview2" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.6-experimental" />
+    <!-- The Windows App SDK components the app uses; the metapackage would also bring ML, AI,
+         Search and Widgets (about 125 MB of unused ONNX and DirectML files). -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Base" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.6.6-experimental" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="2.6.6-experimental" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
   </ItemGroup>
   <ItemGroup>

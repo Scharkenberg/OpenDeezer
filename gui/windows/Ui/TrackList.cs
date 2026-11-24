@@ -23,6 +23,8 @@ internal sealed class TrackList
     private readonly ListView? _list;
     private readonly ItemsRepeater? _repeater;
     private ObservableCollection<Track> _items = new();
+    // The whole list: the rows may show the first part of it only, and a row plays from all of it.
+    private IReadOnlyList<Track> _all = [];
     private Track[] _dragOrder = [];
     private ColumnDefinition? _headerAlbum;
     private ScrollViewer? _scroller;
@@ -34,9 +36,23 @@ internal sealed class TrackList
     public ScrollViewer? Scroller => _scroller ??= _list == null ? null : FindScroller(_list);
 
     public TrackMenu MenuContext { get; set; } = new();
+    // The list its rows play from, for Deezer's listen log.
+    public ListenContext Context { get; set; } = ListenContext.None;
     public Action<int>? Activate { get; set; }
     public Action<int>? Remove { get; set; }
     public Action<int, int>? Reorder { get; set; }
+
+    // Rows reorder by drag (the queue; a playlist of one's own in its own order).
+    public bool CanReorder
+    {
+        set
+        {
+            if (_list == null) return;
+            _list.CanDragItems = value;
+            _list.CanReorderItems = value;
+            _list.AllowDrop = value;
+        }
+    }
 
     public bool ShowAlbum
     {
@@ -70,7 +86,8 @@ internal sealed class TrackList
                 Bind(row, t, args.ItemIndex);
                 args.Handled = true;
             };
-            if (mode == ListMode.Queue) EnableReorder(_list);
+            EnableReorder(_list);
+            CanReorder = mode == ListMode.Queue;
             Root = _list;
         }
         else
@@ -112,12 +129,14 @@ internal sealed class TrackList
             App.Player.TrackChanged += Refresh;
             App.Player.LikeChanged += Refresh;
             App.Offline.Changed += Refresh;
+            Episodes.Changed += Refresh;
         };
         Root.Unloaded += (_, _) =>
         {
             App.Player.TrackChanged -= Refresh;
             App.Player.LikeChanged -= Refresh;
             App.Offline.Changed -= Refresh;
+            Episodes.Changed -= Refresh;
         };
     }
 
@@ -144,6 +163,7 @@ internal sealed class TrackList
 
     public void SetItems(IReadOnlyList<Track> tracks, int limit = int.MaxValue)
     {
+        _all = tracks;
         _items = new ObservableCollection<Track>();
         for (int i = 0; i < tracks.Count && i < limit; i++) _items.Add(tracks[i]);
         if (_list != null) _list.ItemsSource = _items;
@@ -158,6 +178,7 @@ internal sealed class TrackList
 
     public void Update(IReadOnlyList<Track> next)
     {
+        _all = next;
         if (Ui.TryEdit(_items, next)) Refresh();
         else SetItems(next);
     }
@@ -175,14 +196,9 @@ internal sealed class TrackList
         if (_list != null && index >= 0 && index < _items.Count) _list.ScrollIntoView(_items[index], ScrollIntoViewAlignment.Leading);
     }
 
-    public void Refresh() => Refresh("");
-
     // The moved row is found by comparing orders: the queue can hold the same track twice.
     private void EnableReorder(ListView list)
     {
-        list.CanDragItems = true;
-        list.CanReorderItems = true;
-        list.AllowDrop = true;
         list.DragItemsStarting += (_, _) => _dragOrder = [.. _items];
         list.DragItemsCompleted += (_, _) =>
         {
@@ -211,7 +227,7 @@ internal sealed class TrackList
             int i = r.Index;
             if (i < 0 || i >= _items.Count) return;
             if (Activate != null) Activate(i);
-            else App.Player.Play(_items, i);
+            else App.Player.Play(_all.Count > _items.Count ? _all : _items, i, Context);
         }, _mode == ListMode.Queue ? RemoveRow : null);
         _rows.Add(row);
         return row;
@@ -233,7 +249,7 @@ internal sealed class TrackList
     private void Bind(TrackRow row, Track t, int index)
     {
         row.Bind(t, index, new RowOptions(_showAlbum && _albumFits, _mode == ListMode.Queue ? App.Player.QueueIndex : -1));
-        row.Container.ContextFlyout = t.IsEpisode || t.Id.Length == 0 ? null : _menu;
+        row.Container.ContextFlyout = t.Id.Length == 0 ? null : _menu;
     }
 
     private void ApplyAlbum()
@@ -241,6 +257,8 @@ internal sealed class TrackList
         if (_headerAlbum != null) _headerAlbum.Width = TrackRow.AlbumWidth(_showAlbum && _albumFits);
         Refresh();
     }
+
+    public void Refresh() => Refresh("");
 
     private void Refresh(string id)
     {

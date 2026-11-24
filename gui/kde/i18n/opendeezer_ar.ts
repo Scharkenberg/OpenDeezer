@@ -1353,7 +1353,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>السلوك</translation>
     </message>
     <message>
@@ -1468,18 +1468,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>الإعلانات</translation>
+        <source>Play reporting</source>
+        <translation>الإبلاغ عن الاستماع</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>تعطيل الإعلانات</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>لا تبلّغ عن استماعي</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>يعتمد Deezer Free على الإعلانات. إنّ الإبلاغ عن مرّات استماعك — مثل التطبيق الرسمي — يدعم الفنانين ويشغّل الإعلانات. تعطيل هذا الخيار يزيل الإعلانات لكنه يوقف الإبلاغ عن مرّات استماعك، مما يحرم الفنانين من عدد مرّات الاستماع الخاص بهم ويخالف شروط استخدام Deezer. استخدمه على مسؤوليتك الخاصة.</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك.</translation>
     </message>
 </context>
 </TS>

@@ -314,7 +314,7 @@ msgid "Crossfade"
 msgstr ""
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr ""
 
 #: src/main.c:1857
@@ -384,11 +384,11 @@ msgid "Removed from Liked Songs"
 msgstr ""
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr ""
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr ""
 
 #: src/main.c:2238 src/main.c:3702
@@ -951,19 +951,15 @@ msgid "Preview only — a 30-second clip"
 msgstr ""
 
 #: src/main.c:1836
-msgid "Ads"
+msgid "Play reporting"
 msgstr ""
 
 #: src/main.c:1839
-msgid "Disable ads"
+msgid "Don't report my plays"
 msgstr ""
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
 msgstr ""
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3

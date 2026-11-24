@@ -3,18 +3,16 @@ package audio
 import (
 	"io"
 	"math"
+	"sync/atomic"
 )
 
-// resampleStream linearly resamples an interleaved s16 stereo pcmStream from a
-// source rate to the fixed output rate (sampleRate, 44100). go-mp3 emits PCM at
-// the file's native rate; the output device is fixed at 44100, so a non-44100
-// podcast MP3 would otherwise play at the wrong speed and pitch. It satisfies
-// the pcmStream (Read + SeekStart) contract so decode() treats it like any
-// decoder. It runs on the decode goroutine (never realtime), so the modest
-// per-Read buffering here is fine.
+// resampleStream linearly resamples interleaved s16 stereo PCM to 44100 Hz and plays at
+// speedOf (pitch not kept), offsets in media time. It implements pcmStream and runs on
+// the decode goroutine.
 type resampleStream struct {
-	src  pcmStream
-	step float64 // source frames advanced per output frame (srcRate/dstRate)
+	src   pcmStream
+	ratio float64        // source frames per output frame at normal speed (srcRate/dstRate)
+	speed *atomic.Uint64 // the speed, read at each Read (speedOf)
 
 	in     []byte  // buffered source PCM (interleaved s16 stereo)
 	inBase int64   // source-frame index of in[0]
@@ -23,8 +21,19 @@ type resampleStream struct {
 	rbuf   []byte // scratch for reading from src
 }
 
-func newResampleStream(src pcmStream, srcRate int) *resampleStream {
-	return &resampleStream{src: src, step: float64(srcRate) / float64(sampleRate)}
+func newResampleStream(src pcmStream, srcRate int, speed *atomic.Uint64) *resampleStream {
+	return &resampleStream{src: src, ratio: float64(srcRate) / float64(sampleRate), speed: speed}
+}
+
+// speedOf is a playback speed kept as float64 bits: 0 (and nil) is normal
+// speed.
+func speedOf(v *atomic.Uint64) float64 {
+	if v != nil {
+		if b := v.Load(); b != 0 {
+			return math.Float64frombits(b)
+		}
+	}
+	return 1
 }
 
 // fill pulls one chunk from the source into the buffer.
@@ -76,10 +85,33 @@ func (rs *resampleStream) frameAt(idx int64) (l, r int16, ok bool) {
 }
 
 func (rs *resampleStream) Read(p []byte) (int, error) {
+	step := rs.ratio * speedOf(rs.speed)
+	rs.compactTo(int64(math.Floor(rs.pos)))
+	// One source frame per output frame from a whole frame on: copied as is.
+	if step == 1 && rs.pos == math.Floor(rs.pos) {
+		n := 0
+		for n+frameBytes <= len(p) {
+			i0 := int64(rs.pos)
+			if i0 >= rs.inBase+int64(len(rs.in)/frameBytes) && !rs.srcEOF {
+				rs.fill()
+			}
+			avail := rs.inBase + int64(len(rs.in)/frameBytes) - i0
+			if avail <= 0 {
+				break
+			}
+			o := int(i0-rs.inBase) * frameBytes
+			c := copy(p[n:n+(len(p)-n)/frameBytes*frameBytes], rs.in[o:o+int(avail)*frameBytes])
+			n += c
+			rs.pos += float64(c / frameBytes)
+		}
+		if n == 0 {
+			return 0, io.EOF
+		}
+		return n, nil
+	}
 	n := 0
 	for n+frameBytes <= len(p) {
 		i0 := int64(math.Floor(rs.pos))
-		rs.compactTo(i0)
 		l0, r0, ok := rs.frameAt(i0)
 		if !ok {
 			if n > 0 {
@@ -99,13 +131,14 @@ func (rs *resampleStream) Read(p []byte) (int, error) {
 		p[n+2] = byte(r)
 		p[n+3] = byte(uint16(r) >> 8)
 		n += frameBytes
-		rs.pos += rs.step
+		rs.pos += step
 	}
 	return n, nil
 }
 
-// Seek moves to a byte offset in the OUTPUT (44100) stream (SeekStart only, like
-// the player uses), mapping it back to the corresponding source frame.
+// Seek moves to a byte offset in the output (44100) stream at normal speed
+// (SeekStart only, like the player uses), mapping it back to the
+// corresponding source frame.
 func (rs *resampleStream) Seek(off int64, whence int) (int64, error) {
 	if whence != io.SeekStart {
 		return 0, io.ErrUnexpectedEOF
@@ -114,7 +147,7 @@ func (rs *resampleStream) Seek(off int64, whence int) (int64, error) {
 		off = 0
 	}
 	dstFrame := off / frameBytes
-	srcFrame := int64(float64(dstFrame) * rs.step)
+	srcFrame := int64(float64(dstFrame) * rs.ratio)
 	if _, err := rs.src.Seek(srcFrame*frameBytes, io.SeekStart); err != nil {
 		return 0, err
 	}

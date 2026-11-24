@@ -87,7 +87,7 @@ enum Engine {
         try decode(await run { OdmobileFavorites() }, as: TracksResponse.self).tracks
     }
     /// Just the account's liked-track ids (a lightweight `FavoriteIDsJSON` fetch,
-    /// no full track objects) so hearts stay truthful cheaply. Comes back "[]" on
+    /// no full track objects) so hearts stay truthful cheaply. Empty on an
     /// error or logged out, so callers guard against wiping a good cache.
     static func favoriteIDs() async -> [String] {
         let json = await run { OdmobileFavoriteIDsJSON() }
@@ -103,7 +103,7 @@ enum Engine {
         try decode(await run { OdmobileAlbumTracks(id) }, as: TracksResponse.self).tracks
     }
     static func flow() async throws -> [Track] {
-        try decode(await run { OdmobileFlow() }, as: TracksResponse.self).tracks
+        try decode(await run { OdmobileFlow("") }, as: TracksResponse.self).tracks
     }
     /// "Song radio" seeded from a track — `{tracks:[...]}` like Flow, seed first.
     static func trackMix(_ id: String) async throws -> [Track] {
@@ -208,7 +208,7 @@ enum Engine {
         await run { OdmobileRemoveFromPlaylist(playlistID, trackID) }
     }
     static func createPlaylist(_ title: String) async throws -> String {
-        try decode(await run { OdmobileCreatePlaylist(title) }, as: CreatedPlaylist.self).id
+        try decode(await run { OdmobileCreatePlaylist(title, "") }, as: CreatedPlaylist.self).id
     }
     static func renamePlaylist(_ id: String, title: String) async -> Bool {
         await run { OdmobileRenamePlaylist(id, title) }
@@ -382,34 +382,20 @@ enum Engine {
             ?? DownloadResult(path: nil, error: nil)
     }
 
-    /// `OdmobileDownloadForOffline` result: `{"status":"…","key":"…","trackID":"…"}`
-    /// on success (status is "cached"/"already_cached"/"cache_only") or
-    /// `{"error":"…"}` on failure. `key` is `<trackID>.<format>`. All optional so
-    /// a partial/malformed reply still decodes.
+    /// `OdmobilePinOffline` result: `{"error":""}` when the pin is accepted or
+    /// `{"error":"reason"}` when it is refused. Optional so a malformed reply
+    /// still decodes.
     struct OfflineResult: Decodable {
-        let status: String?
-        let key: String?
-        let trackID: String?
         let error: String?
-        /// The track id that was cached, derived from `trackID` (preferred) or the
-        /// `<id>.<fmt>` prefix of `key`.
-        var cachedTrackID: String? {
-            if let t = trackID, !t.isEmpty { return t }
-            guard let key, !key.isEmpty else { return nil }
-            let head = key.split(separator: ".", maxSplits: 1).first.map(String.init)
-            return (head?.isEmpty == false) ? head : nil
-        }
     }
 
-    /// Caches `id`'s raw stream into the on-disk media cache so later plays are
-    /// network-free. Blocking engine-side (network fetch + cache write), so it
-    /// runs on the IO queue. Premium-only, and requires the stream cache to be
-    /// enabled (Settings › Stream cache > 0) — a Free account or a disabled cache
-    /// comes back with the reason in `error`.
+    /// Pins track `id` for offline play; the engine fetches it in the
+    /// background. Runs on the IO queue; a refusal comes back with the reason
+    /// in `error`.
     static func downloadForOffline(id: String) async -> OfflineResult {
-        let json = await run { OdmobileDownloadForOffline(id) }
+        let json = await run { OdmobilePinOffline("track", id) }
         return (try? decoder.decode(OfflineResult.self, from: Data(json.utf8)))
-            ?? OfflineResult(status: nil, key: nil, trackID: nil, error: nil)
+            ?? OfflineResult(error: nil)
     }
     /// Batch-download result for `downloadAlbum`/`downloadPlaylist`:
     /// `{"saved":N,"failed":N,"dir":"…","error":"…"}`. On a Free account it comes

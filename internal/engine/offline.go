@@ -1,11 +1,8 @@
 package engine
 
-// Offline music: tracks, albums and playlists pinned for play with no
-// network. The media cache keeps their bodies as pinned entries (never
-// evicted, outside its size); offline.json in the config dir keeps the pins,
-// each collection and each pinned track's wire metadata and stream meta, so a
-// lost cache index loses nothing. Pins belong to the account that made them.
-// Offline mode requests nothing: plays come from pins and the cache.
+// Offline music: tracks, albums and playlists pinned per account for play without a
+// network. The cache keeps their bodies as pinned entries; offline.json keeps the pins
+// and metadata. Offline mode requests nothing.
 
 import (
 	"context"
@@ -171,10 +168,9 @@ func applyPins(mc *mediacache.Cache) {
 	mc.SetPins(pins, metas)
 }
 
-// attachCache hands the cache in use (nil: none) to the player and gives it
-// the store's pins. A pinned track offline.json holds no stream meta for (it
-// is saved at a job's end, not per track) takes it from its pinned entry in
-// the cache's index, which names the body only once it is complete.
+// attachCache hands the cache in use (nil: none) to the player with the store's pins.
+// A pinned track without stream meta in offline.json takes it from its cache index
+// entry.
 func attachCache(c *mediacache.Cache) {
 	withPlayer(func(p *audio.Player) {
 		if c != nil {
@@ -209,7 +205,7 @@ func anyPinned() bool {
 // open while anything is pinned) and sets its pins.
 func pinsChanged() error {
 	err := saveOffline()
-	applyPins(caches.Current()) // first: a cache that closes evicts what is no longer pinned
+	applyPins(caches.Current()) // first: a cache that closes evicts what is not pinned
 	if oerr := caches.Open(); err == nil {
 		err = oerr // a cache that opens takes the pins in Attach
 	}
@@ -255,17 +251,21 @@ var (
 // offline mode is on.
 var ErrOfflineMode = errors.New("offline mode: nothing is sent to Deezer")
 
-// SetOfflineMode turns offline mode on or off. In it nothing is requested:
-// only pinned and cached tracks play, and browsing, likes, playlist edits and
-// listen reports are refused. Turning it on stops the fetches that request
-// (they leave the list); turning it off starts them again.
+// SetOfflineMode turns offline mode on or off: only pinned and cached tracks play and
+// requests are refused. On stops the fetches that need the network and the live watch;
+// off starts them again.
 func SetOfflineMode(on bool) {
 	offlineOn.Store(on)
 	offlineAuto.Store(false)
 	if on {
 		stopNetJobs()
-	} else {
-		resumeJobs()
+		stopElsewhere()
+		return
+	}
+	resumeJobs()
+	if c := Client(); c != nil {
+		watchElsewhere(c)
+		go learnRelease(c) // a login made in offline mode kept the stored web build
 	}
 }
 
@@ -308,7 +308,7 @@ func findCollLocked(user, kind, id string) int {
 	})
 }
 
-// dropUnusedTracksLocked forgets the tracks no pin holds any more.
+// dropUnusedTracksLocked forgets the tracks no pin holds.
 func dropUnusedTracksLocked() {
 	d := offlineLocked()
 	used := map[string]bool{}
@@ -364,10 +364,9 @@ func fetchCollection(c *deezer.Client, kind, id string) (ts []deezer.Track, titl
 	return ts, title, cover, nil
 }
 
-// PinOffline pins a track, an album or a playlist for the signed-in account
-// and fetches its tracks in the background (OfflineProgress). An album's or a
-// playlist's track list is fetched first; in offline mode it must be pinned
-// already (by any account). Episodes are refused.
+// PinOffline pins a track, album or playlist for the account and fetches its tracks in
+// the background. A collection's list is fetched first (in offline mode it must be
+// pinned already). Episodes are refused.
 func PinOffline(kind, id string) error {
 	if kind != "track" && kind != "album" && kind != "playlist" {
 		return fmt.Errorf("a %q cannot be kept offline", kind)
@@ -425,10 +424,9 @@ func PinOffline(kind, id string) error {
 	return err
 }
 
-// UnpinOffline removes the signed-in account's pin of kind and id and stops
-// its fetch; kind "track" with id "" removes every single-track pin of the
-// account. A track also pinned through a collection stays pinned through it.
-// Unpinning what is not pinned changes nothing.
+// UnpinOffline removes the account's pin of kind and id and stops its fetch; kind
+// "track" with id "" removes every single-track pin. Tracks still pinned through a
+// collection stay pinned.
 func UnpinOffline(kind, id string) error {
 	user := offlineUser()
 	match := func(u, k, i string) bool { return u == user && k == kind && (i == id || (kind == "track" && id == "")) }
@@ -449,10 +447,9 @@ func UnpinOffline(kind, id string) error {
 	return pinsChanged()
 }
 
-// syncPinned keeps the signed-in account's pin of kind and id in step with ts,
-// its track list just fetched online: new tracks are pinned and fetched,
-// removed ones unpinned. A list shorter than total, the length the reply
-// declared, is not complete and changes nothing; nor does an empty album.
+// syncPinned keeps the account's pin in step with ts, its list just fetched: new tracks
+// are pinned and fetched, removed ones unpinned. A list shorter than total, or an empty
+// album, changes nothing.
 func syncPinned(c *deezer.Client, kind, id string, ts []deezer.Track, total int) {
 	if len(ts) < total || (kind == "album" && len(ts) == 0) {
 		return
@@ -534,11 +531,9 @@ func ClearCache(includePinned bool) error {
 	return nil
 }
 
-// SetMediaCacheDir moves the media cache to dir as Host.SetDir does. The
-// running fetches stop for the move, so none writes into the folder being
-// left; after it the signed-in account's unfinished pins are fetched as at a
-// login (none in offline mode or signed out). A stopped fetch stays listed
-// with its reason.
+// SetMediaCacheDir moves the media cache to dir as Host.SetDir does, stopping fetches
+// during the move and resuming the account's unfinished pins afterwards. A stopped
+// fetch stays listed with its reason.
 func SetMediaCacheDir(dir string) error {
 	stop := func() {
 		for _, j := range dropJobs(func(j *offlineJob) bool { return j.running && !j.dropped }) {
@@ -566,6 +561,7 @@ type offlineJob struct {
 	user    string
 	client  *deezer.Client // nil when started in offline mode
 	running bool
+	netStop bool // stopped by a lost network: the next resume fetches it again
 	dropped bool // unpinned or cleared: leaves the list without an error
 	cancel  context.CancelFunc
 	done    chan struct{} // closed when runJob returns
@@ -580,10 +576,9 @@ var (
 	fetchStream = audio.Fetch
 )
 
-// startJob fetches coll's tracks and pictures in the background. It is the
-// collection's one job: one already listed for it (running, cancelled or
-// stopped) is stopped and leaves the list, and the new one starts fetching
-// once that one ended.
+// startJob fetches coll's tracks and pictures in the background as the collection's
+// only job: a listed job for it is stopped and removed, and the new one starts once
+// that one ended.
 func startJob(c *deezer.Client, coll offlineColl) {
 	jobMu.Lock()
 	startJobLocked(c, coll)
@@ -608,12 +603,9 @@ func startJobLocked(c *deezer.Client, coll offlineColl) {
 	go runJob(ctx, c, j, coll, prev)
 }
 
-// resumeJobs starts the fetch of every pin of the signed-in account that has
-// a track not stored and no fetch listed: one running, or one stopped (a full
-// disk, a cancel), which waits listed with its reason for the next pin, unpin
-// or cancel. Nothing in offline mode. The client is read under jobMu: offline
-// mode, a logout and another account's login change it before they stop the
-// listed fetches, so none started here runs on with a client no longer in use.
+// resumeJobs starts a fetch for each account pin with unstored tracks and no listed job,
+// a job a lost network stopped aside (nothing in offline mode). The client is read under jobMu, so no fetch started here
+// runs with a client that was replaced.
 func resumeJobs() {
 	mc := caches.Current()
 	jobMu.Lock()
@@ -633,7 +625,7 @@ func resumeJobs() {
 	offMu.Unlock()
 	for _, coll := range todo {
 		listed := slices.ContainsFunc(jobs, func(j *offlineJob) bool {
-			return !j.dropped && j.user == coll.User && j.Kind == coll.Kind && j.ID == coll.ID
+			return !j.dropped && !(j.netStop && !j.running) && j.user == coll.User && j.Kind == coll.Kind && j.ID == coll.ID
 		})
 		if !listed {
 			startJobLocked(c, coll)
@@ -641,10 +633,9 @@ func resumeJobs() {
 	}
 }
 
-// runJob waits for the jobs it replaces to end, then fetches coll's tracks,
-// at most len(fetchSlots) at a time over every job, then their pictures. A
-// write failure (a full disk) stops it with the reason; what was fetched
-// stays pinned.
+// runJob waits for the jobs it replaces, then fetches coll's tracks (at most
+// len(fetchSlots) across jobs) and their pictures. A write failure or a lost network
+// stops it with the reason; fetched tracks stay pinned.
 func runJob(ctx context.Context, c *deezer.Client, j *offlineJob, coll offlineColl, prev []*offlineJob) {
 	defer close(j.done)
 	for _, p := range prev {
@@ -671,9 +662,10 @@ loop:
 			case err == nil:
 				j.Done++
 			case ctx.Err() != nil:
-			case errors.Is(err, audio.ErrWrite), errors.Is(err, errSave):
+			case errors.Is(err, audio.ErrWrite), errors.Is(err, errSave), deezer.IsNoNetwork(err):
 				if j.Err == "" {
 					j.Err = err.Error()
+					j.netStop = deezer.IsNoNetwork(err)
 				}
 				j.cancel()
 			default:
@@ -688,7 +680,7 @@ loop:
 		storePictures(ctx, mc, coll) // after the tracks: a single track's metadata comes with its fetch
 	}
 	applyPins(caches.Current())
-	// The fetched tracks' stream meta, kept in the index until now.
+	// The fetched tracks' stream meta, kept in the index until this point.
 	serr := saveOffline()
 	jobMu.Lock()
 	if serr != nil && j.Err == "" {
@@ -696,7 +688,7 @@ loop:
 	}
 	j.running = false
 	if ctx.Err() != nil && j.Err == "" && !j.dropped {
-		j.Err = "cancelled"
+		j.Err = "canceled"
 	}
 	if j.Err == "" || j.dropped {
 		jobs = slices.DeleteFunc(jobs, func(x *offlineJob) bool { return x == j })
@@ -720,9 +712,8 @@ func (c pinningCache) Adopt(key, path string, size int64, meta mediacache.Stream
 // errSave stops a job: offline.json could not be written.
 var errSave = errors.New(offlineFileName + " could not be written")
 
-// fetchTrack stores track id for coll: nothing to do when its body is
-// stored; a copy cached at the quality coll was pinned at (or better) is
-// taken without a request; otherwise it is resolved and its stream fetched
+// fetchTrack stores track id for coll: nothing when its body is stored, a cached copy
+// at coll's quality or better is taken without a request, else the stream is fetched
 // into the cache, pinned.
 func fetchTrack(ctx context.Context, c *deezer.Client, mc *mediacache.Cache, coll offlineColl, id string) error {
 	if mc == nil {
@@ -774,10 +765,9 @@ func fetchTrack(ctx context.Context, c *deezer.Client, mc *mediacache.Cache, col
 	return fetchStream(ctx, plan, pinningCache{mc, pins})
 }
 
-// setTrackFetched records the stream meta of track id's body (before the body
-// lands, so the cache pins it from the start) and its metadata when the
-// store has none, and returns the pins of its entry and whether it recorded
-// metadata.
+// setTrackFetched records the stream meta of track id's body (before the body lands,
+// so it is pinned from the start) and missing metadata; it returns the entry's pins and
+// whether metadata was recorded.
 func setTrackFetched(id string, dto deezer.Track, m mediacache.StreamMeta) (pins []string, named bool) {
 	offMu.Lock()
 	defer offMu.Unlock()
@@ -793,8 +783,8 @@ func setTrackFetched(id string, dto deezer.Track, m mediacache.StreamMeta) (pins
 	return all[id+"."+m.Format], named
 }
 
-// storePictures stores coll's cover and its tracks' pictures, pinned.
-// Best-effort: a host shows the CDN URL of a picture not stored.
+// storePictures stores coll's cover and its tracks' pictures, pinned. A picture that
+// fails to store is shown from its CDN URL.
 func storePictures(ctx context.Context, mc *mediacache.Cache, coll offlineColl) {
 	offMu.Lock()
 	urls := []string{coll.Cover}
@@ -881,7 +871,7 @@ func dropJobs(match func(*offlineJob) bool) []*offlineJob {
 }
 
 // CancelOffline stops every fetch of the signed-in account; each stays
-// listed as cancelled until the next pin, unpin or cancel.
+// listed as canceled until the next pin, unpin or cancel.
 func CancelOffline() {
 	user := offlineUser()
 	clearStoppedJobs()

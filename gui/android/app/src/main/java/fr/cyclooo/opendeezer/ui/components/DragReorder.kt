@@ -23,7 +23,7 @@ import kotlinx.coroutines.channels.Channel
  * row's tap / swipe / long-press gestures.
  *
  * The reorder is split in two: [onMoveLive] shuffles a caller-owned display list
- * as the dragged row crosses its neighbours (smooth visuals, keyed items), while
+ * as the dragged row crosses its neighbors (smooth visuals, keyed items), while
  * [onMoveCommit] is fired once on release with the net (from, to) so the queue is
  * mutated a single time — here, via one Engine.queueMove that the poll re-adopts.
  */
@@ -124,7 +124,7 @@ fun Modifier.dragHandle(dragDropState: DragDropState, index: Int): Modifier =
     }
 
 /**
- * Wraps a LazyColumn item so the dragged row lifts above its neighbours and
+ * Wraps a LazyColumn item so the dragged row lifts above its neighbors and
  * tracks the finger, while the others animate into their new slots.
  */
 @Composable

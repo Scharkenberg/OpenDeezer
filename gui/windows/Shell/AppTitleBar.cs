@@ -1,5 +1,5 @@
 // The title bar, in the caption buttons' height: Back, the pane toggle, the app's icon and
-// name, the search box centred in the free space, and the trailing buttons right beside
+// name, the search box centered in the free space, and the trailing buttons right beside
 // the caption buttons. Everything that is not a control drags the window.
 
 using System;
@@ -63,7 +63,7 @@ internal sealed class AppTitleBar
             e.SizeChanged += (_, _) => Arrange();
         Root.Loaded += (_, _) => Root.XamlRoot.Changed += (_, _) => Arrange();
         // The caption buttons start at the visible frame's top edge, the client area one border
-        // lower: the bar moves up by that border so both centre on one line.
+        // lower: the bar moves up by that border so both center on one line.
         AlignWithCaption();
         window.AppWindow.Changed += (_, e) =>
         {
@@ -71,7 +71,7 @@ internal sealed class AppTitleBar
         };
     }
 
-    // The border between the visible frame and the client area, in DIPs (none when maximised:
+    // The border between the visible frame and the client area, in DIPs (none when maximized:
     // the client area then starts above the screen).
     private void AlignWithCaption()
     {
@@ -80,7 +80,8 @@ internal sealed class AppTitleBar
         if (NativeMethods.DwmGetWindowAttribute(hwnd, NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS, out var frame,
                 System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.RECT>()) != 0
             || !NativeMethods.ClientToScreen(hwnd, ref origin)) return;
-        double border = Math.Max(0, origin.Y - frame.Top) / (NativeMethods.GetDpiForWindow(hwnd) / 96.0);
+        double border = Math.Max(0, origin.Y - frame.Top) / Ui.DpiScale(hwnd);
+        if (Root.Margin.Top == -border) return;
         Root.Margin = new Thickness(0, -border, 0, 0);
         // The controls moved with the bar: their passthrough regions follow, from the new layout.
         Root.UpdateLayout();

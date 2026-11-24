@@ -1,17 +1,18 @@
 package deezer
 
-// Regression tests for the batch-download and tagging defect fixes:
-// ctx cancellation surfacing, unique + atomic filenames, album pagination,
-// strict playlist listing for downloads, atomic FLAC tagging, the
-// ErrPartialDownload double-wrap, and single plan resolution per batch track.
+// Tests for batch downloads and tagging: ctx cancellation, unique and atomic file
+// names, album pagination, strict playlist listing, atomic FLAC tagging, single
+// ErrPartialDownload wrapping, one plan resolution per batch track.
 
 import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -276,10 +279,8 @@ func TestCollectTrackPagesStrict(t *testing.T) {
 }
 
 func TestSavePlaylist_FailsOnMidFetchPageError(t *testing.T) {
-	// gw transport: page start=0 succeeds with a full page, page start=200
-	// fails at the transport level. The tolerant PlaylistTracks returns the
-	// partial page; SavePlaylist (strict) must fail instead of downloading a
-	// truncated playlist as success.
+	// gw transport: page start=0 returns a full page, page start=200 fails. PlaylistTracks
+	// returns the partial page; SavePlaylist (strict) must fail.
 	pageErr := errors.New("simulated page-2 network failure")
 	c := New("dummy")
 	loggedInPremium(c)
@@ -294,7 +295,7 @@ func TestSavePlaylist_FailsOnMidFetchPageError(t *testing.T) {
 		return nil, pageErr
 	})}
 
-	// Tolerant browse listing: partial set, nil error (unchanged behavior).
+	// Tolerant browse listing: partial set, nil error.
 	browse, err := c.PlaylistTracks("42")
 	if err != nil {
 		t.Fatalf("tolerant PlaylistTracks should absorb the page error, got %v", err)
@@ -325,9 +326,9 @@ func TestSavePlaylist_FailsOnMidFetchPageError(t *testing.T) {
 	}
 }
 
-// --- Cancellation surfaces and pre-cancelled ctx skips the listing ---
+// --- Cancellation surfaces and pre-canceled ctx skips the listing ---
 
-func TestSaveAlbum_PreCancelledContextSkipsListing(t *testing.T) {
+func TestSaveAlbum_PreCanceledContextSkipsListing(t *testing.T) {
 	listings := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		listings++
@@ -346,16 +347,16 @@ func TestSaveAlbum_PreCancelledContextSkipsListing(t *testing.T) {
 		t.Fatalf("SaveAlbum err = %v, want context.Canceled", err)
 	}
 	if listings != 0 {
-		t.Errorf("cancelled SaveAlbum still performed %d listing request(s)", listings)
+		t.Errorf("canceled SaveAlbum still performed %d listing request(s)", listings)
 	}
 }
 
-func TestSavePlaylist_PreCancelledContextSkipsListing(t *testing.T) {
+func TestSavePlaylist_PreCanceledContextSkipsListing(t *testing.T) {
 	c := New("dummy")
 	loggedInPremium(c)
 	// Any gw call would be a bug; make it observable without network.
 	c.http = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
-		return nil, errors.New("unexpected network call from a cancelled SavePlaylist")
+		return nil, errors.New("unexpected network call from a canceled SavePlaylist")
 	})}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -400,7 +401,7 @@ func TestSaveBatch_PartialErrorMatchesBothSentinels(t *testing.T) {
 	}
 }
 
-// --- A4: one PrepareStream per batched track ---
+// --- One PrepareStream per batched track ---
 
 func TestSaveBatch_ResolvesPlanOncePerTrack(t *testing.T) {
 	tmp := t.TempDir()
@@ -746,8 +747,8 @@ func podcastEpisodesPage(startID, n int, next string) []byte {
 	return []byte(sb.String())
 }
 
-func TestPlaylists_Paginates(t *testing.T) {
-	// Uses gw transport mock (pageProfile with index).
+// The profile's playlists tab comes whole in one gw call, with each playlist's owner.
+func TestPlaylistsOneRead(t *testing.T) {
 	calls := 0
 	c := New("dummy")
 	loggedInPremium(c)
@@ -760,11 +761,10 @@ func TestPlaylists_Paginates(t *testing.T) {
 			b, _ = io.ReadAll(r.Body)
 		}
 		calls++
-		// respond based on index in body
-		if strings.Contains(string(b), `"index":100`) {
-			return jsonResponse(gwPlaylistsPage(100, 30)), nil
+		if !strings.Contains(string(b), `"nb":10000`) {
+			return nil, fmt.Errorf("paged request %s", b)
 		}
-		return jsonResponse(gwPlaylistsPage(0, 100)), nil
+		return jsonResponse(gwPlaylistsPage(0, 130)), nil
 	})}
 
 	pls, err := c.Playlists()
@@ -777,8 +777,8 @@ func TestPlaylists_Paginates(t *testing.T) {
 	if pls[0].ID != "0" || pls[129].ID != "129" {
 		t.Errorf("order: first=%s last=%s", pls[0].ID, pls[129].ID)
 	}
-	if calls < 2 {
-		t.Errorf("expected >=2 gw calls for pagination, got %d", calls)
+	if calls != 1 || pls[7].OwnerID != "42" {
+		t.Errorf("%d gw calls, owner %q; want 1, 42", calls, pls[7].OwnerID)
 	}
 }
 
@@ -817,7 +817,7 @@ func gwPlaylistsPage(startID, n int) []byte {
 		if i > 0 {
 			sb.WriteByte(',')
 		}
-		fmt.Fprintf(&sb, `{"PLAYLIST_ID":"%d","TITLE":"Pl %d","NB_SONG":5,"PLAYLIST_PICTURE":"p"}`, startID+i, startID+i)
+		fmt.Fprintf(&sb, `{"PLAYLIST_ID":"%d","TITLE":"Pl %d","NB_SONG":5,"PLAYLIST_PICTURE":"p","PARENT_USER_ID":"42"}`, startID+i, startID+i)
 	}
 	sb.WriteString(`]}}}}`)
 	return []byte(sb.String())
@@ -884,47 +884,6 @@ func TestPrepareStream_Transient5xxRetried_NoPreviewFallback(t *testing.T) {
 	}
 }
 
-func TestPrepareStream_Entitlement_NoMedia_GivesPreview(t *testing.T) {
-	c := New("dummy")
-	loggedInPremium(c)
-	c.mu.Lock()
-	c.licenseToken = "lic-1"
-	c.userID = "1"
-	c.mu.Unlock()
-	c.restURLOverride = "http://rest.test"
-	c.http = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
-		var bb []byte
-		if r.Body != nil {
-			bb, _ = io.ReadAll(r.Body)
-			r.Body.Close()
-			r.Body = io.NopCloser(bytes.NewReader(bb))
-		}
-		q := r.URL.RawQuery
-		if strings.Contains(q, "method=deezer.getUserData") {
-			return loginResponseForTest(), nil
-		}
-		if strings.Contains(q, "method=song.getData") {
-			return jsonResponse([]byte(`{"error":{},"results":{"TRACK_TOKEN":"tok-xyz","GAIN":"0"}}`)), nil
-		}
-		if r.URL.Host == "media.deezer.com" || strings.Contains(r.URL.Path, "get_url") {
-			// entitlement rejection via deezer error envelope
-			return jsonResponse([]byte(`{"data":[{"errors":[{"code":4,"message":"no media"}]}]}`)), nil
-		}
-		if strings.HasPrefix(r.URL.Path, "/track/") {
-			return jsonResponse([]byte(`{"preview":"https://cdn/preview.mp3"}`)), nil
-		}
-		return nil, fmt.Errorf("unexpected test req: %s %s", r.Method, r.URL)
-	})}
-
-	plan, err := c.PrepareStream("123")
-	if err != nil {
-		t.Fatalf("expected preview fallback on entitlement, got err=%v", err)
-	}
-	if plan == nil || !plan.Preview || plan.CDNURL == "" {
-		t.Fatalf("expected preview plan, got %+v", plan)
-	}
-}
-
 // streamTestClient is a logged-in premium client whose gw answers song.getData
 // with songData (a 502 when empty), get_url with mediaBody, and counts logins.
 func streamTestClient(songData, mediaBody string, logins *int) *Client {
@@ -947,6 +906,9 @@ func streamTestClient(songData, mediaBody string, logins *int) *Client {
 			}
 			return jsonResponse([]byte(songData)), nil
 		case strings.Contains(r.URL.Path, "get_url"):
+			if b, _ := io.ReadAll(r.Body); strings.Contains(string(b), `"type":"PREVIEW"`) {
+				return jsonResponse([]byte(`{"data":[{"media":[{"format":"MP3_128","sources":[{"url":"https://cdn/preview.mp3"}]}]}]}`)), nil
+			}
 			return jsonResponse([]byte(mediaBody)), nil
 		case strings.HasPrefix(r.URL.Path, "/track/"):
 			return jsonResponse([]byte(`{"preview":"https://cdn/preview.mp3"}`)), nil
@@ -965,15 +927,14 @@ func TestPrepareStream_TokenFailureIsNoPreview(t *testing.T) {
 	}
 }
 
-// A refused track gets the preview and costs no re-login. A licence-token
-// rejection re-logs in once a minute; inside the minute it is an error, not
-// the preview a paid user is not meant to get.
+// A refused track gets the preview and costs no re-login. A license-token rejection
+// re-logs in once a minute; a license still refused, and any inside the minute, is an
+// error, not the preview a paid user is not meant to get.
 func TestPrepareStream_ReloginOnlyForLicenseToken(t *testing.T) {
 	const song = `{"error":{},"results":{"TRACK_TOKEN":"tok","GAIN":"0"}}`
-	refusal := func(msg string) string { return `{"data":[{"errors":[{"code":2002,"message":"` + msg + `"}]}]}` }
 
 	logins := 0
-	c := streamTestClient(song, refusal("Track token has no sufficient rights on requested media"), &logins)
+	c := streamTestClient(song, `{"data":[{"errors":[{"code":2002,"message":"Track token has no sufficient rights on requested media"}]}]}`, &logins)
 	for i := 0; i < 5; i++ {
 		if plan, err := c.PrepareStream("123"); err != nil || !plan.Preview {
 			t.Fatalf("refused track: plan %+v, err %v; want the preview", plan, err)
@@ -984,17 +945,14 @@ func TestPrepareStream_ReloginOnlyForLicenseToken(t *testing.T) {
 	}
 
 	logins = 0
-	c = streamTestClient(song, refusal("License token has expired"), &logins)
-	if plan, err := c.PrepareStream("123"); err != nil || !plan.Preview {
-		t.Fatalf("rejected after a re-login: plan %+v, err %v; want the preview", plan, err)
-	}
-	for i := 0; i < 4; i++ {
+	c = streamTestClient(song, `{"errors":[{"code":1001,"message":"Expired license token"}]}`, &logins)
+	for i := 0; i < 5; i++ {
 		if plan, err := c.PrepareStream("123"); err == nil || plan != nil {
-			t.Fatalf("rejected inside the minute: plan %+v, err %v; want an error", plan, err)
+			t.Fatalf("license rejection %d: plan %+v, err %v; want an error", i, plan, err)
 		}
 	}
 	if logins != 1 {
-		t.Errorf("licence rejections: %d logins, want 1", logins)
+		t.Errorf("license rejections: %d logins, want 1", logins)
 	}
 }
 
@@ -1003,8 +961,8 @@ func TestPrepareStream_ReloginOnlyForLicenseToken(t *testing.T) {
 // and metadata and carries the fallback's id, whose key decrypts the stream.
 func TestPrepareStream_RefusedTrackPlaysFallback(t *testing.T) {
 	logins := 0
-	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"123","SNG_TITLE":"Song","TRACK_TOKEN":"tok","GAIN":"-3",`+
-		`"FALLBACK":{"SNG_ID":"456","SNG_TITLE":"Song","TRACK_TOKEN":"fbtok"}}}`, "", &logins)
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"123","SNG_TITLE":"Song","TRACK_TOKEN":"tok","GAIN":"-3","ALB_PICTURE":"own",`+
+		`"FALLBACK":{"SNG_ID":"456","SNG_TITLE":"Song","TRACK_TOKEN":"fbtok","ALB_PICTURE":"fbpic"}}}`, "", &logins)
 	base := c.http.Transport
 	c.http.Transport = rtFunc(func(r *http.Request) (*http.Response, error) {
 		if !strings.Contains(r.URL.Path, "get_url") {
@@ -1018,11 +976,27 @@ func TestPrepareStream_RefusedTrackPlaysFallback(t *testing.T) {
 	})
 	plan, err := c.PrepareStream("123")
 	if err != nil || plan.Preview || plan.CDNURL != "https://cdn/fallback.mp3" || plan.TrackID != "123" || plan.KeyID != "456" ||
-		plan.Track.ID != "123" || plan.GainDB != -3 || !plan.Encrypted {
+		plan.Track.ID != "123" || plan.Track.ArtworkURL != gwImage("cover", "fbpic") || plan.GainDB != -3 || !plan.Encrypted {
 		t.Fatalf("plan %+v, err %v; want the fallback's full stream", plan, err)
 	}
 	if logins != 0 {
 		t.Errorf("%d logins, want 0", logins)
+	}
+}
+
+// A listed track with a fallback shows the fallback's cover, the version
+// that plays; Deezer gives the refused track a placeholder picture.
+func TestGwTrack_FallbackCover(t *testing.T) {
+	var ts []gwTrackDTO
+	if err := json.Unmarshal([]byte(`[{"SNG_ID":"1","ALB_PICTURE":"own"},`+
+		`{"SNG_ID":"2","ALB_PICTURE":"placeholder","FALLBACK":{"SNG_ID":"3","ALB_PICTURE":"real"}}]`), &ts); err != nil {
+		t.Fatal(err)
+	}
+	if got := ts[0].toTrack().ArtworkURL; got != gwImage("cover", "own") {
+		t.Errorf("track without a fallback: %q", got)
+	}
+	if got := ts[1].toTrack(); got.ID != "2" || got.ArtworkURL != gwImage("cover", "real") {
+		t.Errorf("track with a fallback: %+v; want id 2 with the fallback's cover", got)
 	}
 }
 
@@ -1062,8 +1036,8 @@ func TestPrepareStreamCached_KeepsKeyID(t *testing.T) {
 	}
 }
 
-// A licence-token rejection inside the re-login minute retries once with the
-// token another call's re-login brought meanwhile.
+// A license-token rejection inside the re-login minute retries once with the token
+// another call's re-login brought meanwhile.
 func TestPrepareStream_LicenseRejectionRetriesNewerToken(t *testing.T) {
 	logins := 0
 	c := streamTestClient(`{"error":{},"results":{"TRACK_TOKEN":"tok","GAIN":"0"}}`, "", &logins)
@@ -1080,7 +1054,7 @@ func TestPrepareStream_LicenseRejectionRetriesNewerToken(t *testing.T) {
 		c.mu.Lock()
 		c.licenseToken = "lic-2" // the other call's re-login lands
 		c.mu.Unlock()
-		return jsonResponse([]byte(`{"data":[{"errors":[{"code":2002,"message":"License token has expired"}]}]}`)), nil
+		return jsonResponse([]byte(`{"errors":[{"code":1001,"message":"Expired license token"}]}`)), nil
 	})
 	plan, err := c.PrepareStream("123")
 	if err != nil || plan.Preview || plan.CDNURL != "https://cdn/full.mp3" {
@@ -1128,7 +1102,7 @@ func TestPrepareStream_OneSongGetDataCarriesTrack(t *testing.T) {
 
 // Online, a cached copy plays only at the quality the plan would ask for or
 // better; offline, the best copy present plays.
-func TestPrepareStreamCached_HonoursQuality(t *testing.T) {
+func TestPrepareStreamCached_HonorsQuality(t *testing.T) {
 	mc, err := mediacache.New(t.TempDir(), 1<<20)
 	if err != nil {
 		t.Fatal(err)
@@ -1162,10 +1136,9 @@ func TestPrepareStreamCached_HonoursQuality(t *testing.T) {
 	}
 }
 
-// A plan records the format it asked for; a cached copy fetched while asking
-// for the format wanted now qualifies even when Deezer served a lower one (a
-// HiFi account and a track that exists only as MP3_320), so it is not
-// downloaded again on every play. A copy asked at a lower quality does not.
+// A plan records the format it asked for; a cached copy fetched asking for the wanted
+// format qualifies even when Deezer served a lower one, so it is not downloaded on
+// every play. A copy asked at a lower quality does not.
 func TestPrepareStreamCached_AskedFormatQualifies(t *testing.T) {
 	logins := 0
 	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"1","TRACK_TOKEN":"tok","GAIN":"0"}}`,
@@ -1208,7 +1181,7 @@ func loginResponseForTest() *http.Response {
 	return jsonResponse([]byte(`{"error":{},"results":{"checkForm":"api-t","USER":{"USER_ID":"1","BLOG_NAME":"t","OPTIONS":{"license_token":"lic-1","web_hq":true,"web_lossless":false,"mobile_hq":true,"mobile_lossless":false}},"OFFERS":[{"title":"P"}]}}`))
 }
 
-// --- Phase 3: robust download resume, short-file reject, bounded-concurrency batch ---
+// --- Download resume, short-file reject, bounded-concurrency batch ---
 
 func TestDownloadTrackContext_ResumesOnMidBodyDrop(t *testing.T) {
 	// Server serves partial on first GET (no Range), then full suffix on
@@ -1332,9 +1305,9 @@ func TestDownloadTrackContext_EncryptedShortBodyResumesIntact(t *testing.T) {
 // The stall time counts only while a body is read: headers that come late do
 // not end the download, and a body that stops delivering is resumed.
 func TestDownloadStallResumes(t *testing.T) {
-	prev := downloadStallTimeout
-	downloadStallTimeout = 200 * time.Millisecond
-	defer func() { downloadStallTimeout = prev }()
+	prev := StallTimeout
+	StallTimeout = 200 * time.Millisecond
+	defer func() { StallTimeout = prev }()
 	full := bytes.Repeat([]byte("od"), 100000)
 	var mu sync.Mutex
 	gets := 0
@@ -1370,6 +1343,227 @@ func TestDownloadStallResumes(t *testing.T) {
 	}
 	if !bytes.Equal(buf.Bytes(), full) {
 		t.Fatalf("resumed download is %d bytes, want %d", buf.Len(), len(full))
+	}
+}
+
+// A download whose connection is lost for 2 s waits for the network and
+// completes once it is back.
+func TestDownloadWaitsForNetwork(t *testing.T) {
+	full := bytes.Repeat([]byte("od"), 50000)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer ts.Close()
+	back := time.Now().Add(2 * time.Second)
+	inner := SetTransport(rtFunc(func(r *http.Request) (*http.Response, error) {
+		if time.Now().Before(back) {
+			return nil, &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
+		}
+		return http.DefaultTransport.RoundTrip(r)
+	}))
+	defer SetTransport(inner)
+	plan := &StreamPlan{CDNURL: ts.URL + "/a", TrackID: "net1", Format: "MP3_128"}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("downloaded %d bytes, want %d", buf.Len(), len(full))
+	}
+}
+
+// A source whose host fails gives way to the media service's next one.
+func TestDownloadTriesNextSource(t *testing.T) {
+	full := bytes.Repeat([]byte("od"), 50000)
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer bad.Close()
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer good.Close()
+	plan := &StreamPlan{CDNURL: bad.URL + "/a", AltURLs: []string{good.URL + "/a"}, TrackID: "src1", Format: "MP3_128"}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("downloaded %d bytes, want %d", buf.Len(), len(full))
+	}
+}
+
+// A source whose host refuses connections gives way to the next one at once,
+// without waiting for a network that is there.
+func TestDownloadLeavesUnreachableSource(t *testing.T) {
+	full := bytes.Repeat([]byte("od"), 50000)
+	gone := httptest.NewServer(http.NotFoundHandler())
+	goneURL := gone.URL + "/a"
+	gone.Close() // connection refused from now on
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer good.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	plan := &StreamPlan{CDNURL: goneURL, AltURLs: []string{good.URL + "/a"}, TrackID: "src2", Format: "MP3_128"}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(ctx, plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("downloaded %d bytes, want %d", buf.Len(), len(full))
+	}
+}
+
+// A refreshed URL brings the refreshed plan's other sources with it.
+func TestRefreshKeepsNewSources(t *testing.T) {
+	full := bytes.Repeat([]byte("od"), 50000)
+	expired := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer expired.Close()
+	busy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer busy.Close()
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer good.Close()
+	refreshes := 0
+	plan := &StreamPlan{CDNURL: expired.URL + "/a", AltURLs: []string{expired.URL + "/b"}, TrackID: "ref1", Format: "MP3_128"}
+	plan.Refresh = func() (*StreamPlan, error) {
+		refreshes++
+		return &StreamPlan{CDNURL: busy.URL + "/a", AltURLs: []string{good.URL + "/a"}, TrackID: "ref1", Format: "MP3_128"}, nil
+	}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("downloaded %d bytes, want %d", buf.Len(), len(full))
+	}
+	if refreshes != 1 {
+		t.Errorf("refreshes = %d, want 1", refreshes)
+	}
+}
+
+// A source that keeps resuming at the wrong offset gives way to the next one.
+func TestWrongResumeOffsetTriesNextSource(t *testing.T) {
+	full := bytes.Repeat([]byte("od"), 50000)
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") == "" { // half the body, then the connection drops
+			w.Header().Set("Content-Length", fmt.Sprint(len(full)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(full[:len(full)/2])
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(full)-1, len(full)))
+		w.Header().Set("Content-Length", fmt.Sprint(len(full)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(full)
+	}))
+	defer bad.Close()
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer good.Close()
+	plan := &StreamPlan{CDNURL: bad.URL + "/a", AltURLs: []string{good.URL + "/a"}, TrackID: "off1", Format: "MP3_128"}
+	var buf bytes.Buffer
+	if err := DownloadTrackContext(context.Background(), plan, &buf); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), full) {
+		t.Fatalf("downloaded %d bytes, want %d", buf.Len(), len(full))
+	}
+}
+
+// failOnceWriter fails its second write.
+type failOnceWriter struct {
+	bytes.Buffer
+	n int
+}
+
+func (w *failOnceWriter) Write(p []byte) (int, error) {
+	w.n++
+	if w.n == 2 {
+		return 0, errors.New("disk full")
+	}
+	return w.Buffer.Write(p)
+}
+
+// A write that fails ends the download with an error: the decryptor has already
+// taken the bytes, so a resume would write a corrupt file.
+func TestDownloadWriteErrorIsFatal(t *testing.T) {
+	full := make([]byte, StripeChunk*40)
+	for i := range full {
+		full[i] = byte(i*131 + i/7)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(full))
+	}))
+	defer ts.Close()
+	plan := &StreamPlan{CDNURL: ts.URL + "/a", TrackID: "wr1", Format: "MP3_320", Encrypted: true}
+	var w failOnceWriter
+	if err := DownloadTrackContext(context.Background(), plan, &w); err == nil {
+		want, _ := DecryptTrack("wr1", full)
+		t.Fatalf("no error after a failed write; output matches a full decrypt: %v", bytes.Equal(w.Bytes(), want))
+	}
+}
+
+// A method that keeps answering AUTH_REQUIRED re-logs in once a minute, not on
+// every call.
+func TestAuthRequiredReloginThrottled(t *testing.T) {
+	logins := 0
+	c := streamTestClient(`{"error":{"GATEWAY_ERROR":"AUTH_REQUIRED"},"results":{}}`, "", &logins)
+	for i := 0; i < 5; i++ {
+		if _, err := c.gw("song.getData", "{}"); err == nil {
+			t.Fatalf("call %d: no error", i)
+		}
+	}
+	if logins != 1 {
+		t.Errorf("%d logins, want 1", logins)
+	}
+}
+
+// Parallel calls that all meet AUTH_REQUIRED from one expired session are all
+// retried after the one login.
+func TestAuthRequiredParallelCallsRetried(t *testing.T) {
+	const n = 5
+	var (
+		logins   atomic.Int32
+		loggedIn atomic.Bool
+		arrived  sync.WaitGroup
+	)
+	arrived.Add(n)
+	c := New("dummy")
+	loggedInPremium(c)
+	c.http = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.RawQuery, "method=deezer.getUserData") {
+			logins.Add(1)
+			time.Sleep(100 * time.Millisecond)
+			loggedIn.Store(true)
+			return loginResponseForTest(), nil
+		}
+		if !loggedIn.Load() {
+			arrived.Done()
+			arrived.Wait() // every call meets the expired session
+			return jsonResponse([]byte(`{"error":{"GATEWAY_ERROR":"AUTH_REQUIRED"},"results":{}}`)), nil
+		}
+		return jsonResponse([]byte(`{"error":{},"results":{"OK":true}}`)), nil
+	})}
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() { _, err := c.gw("song.getData", "{}"); errs <- err }()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("call failed: %v", err)
+		}
+	}
+	if got := logins.Load(); got != 1 {
+		t.Errorf("%d logins, want 1", got)
 	}
 }
 

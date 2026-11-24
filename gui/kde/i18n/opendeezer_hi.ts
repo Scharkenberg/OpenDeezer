@@ -1309,7 +1309,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>व्यवहार</translation>
     </message>
     <message>
@@ -1424,18 +1424,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>विज्ञापन</translation>
+        <source>Play reporting</source>
+        <translation>प्ले रिपोर्टिंग</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>विज्ञापन बंद करें</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>मेरे प्ले रिपोर्ट न करें</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>Deezer Free विज्ञापनों पर आधारित है। आपके प्ले की रिपोर्ट करना — आधिकारिक ऐप की तरह — कलाकारों को श्रेय देता है और विज्ञापनों को चलाता है। इसे बंद करने से विज्ञापन हट जाते हैं लेकिन आपके प्ले की रिपोर्ट करना रुक जाता है, जिससे कलाकारों को उनकी प्ले संख्या नहीं मिलती और Deezer की उपयोग की शर्तें टूटती हैं। इसका उपयोग अपने जोखिम पर करें।</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।</translation>
     </message>
 </context>
 </TS>

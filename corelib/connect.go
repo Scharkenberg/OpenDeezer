@@ -15,34 +15,42 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
 )
 
-// DZSetClientInfo overrides the client id + device label this instance reports
-// over discovery and /whoami (e.g. "macos", "OpenDeezer for macOS"). Call it
-// BEFORE DZInit; it has no effect afterwards.
+// DZSetClientInfo overrides the client id and device label this instance reports over
+// discovery and /whoami (e.g. "macos", "OpenDeezer for macOS"). Call it before DZInit.
 //
 //export DZSetClientInfo
 func DZSetClientInfo(client, device *C.char) {
 	engine.SetClientInfo(C.GoString(client), C.GoString(device))
 }
 
-// DZNowPlayingJSON returns the track actually playing right now as a wire
-// track: when routed to a device it is the remote's current track (so the
-// controller's now-playing stays in sync); otherwise the local current track
-// (which also reflects tracks started via the control API). "{}" when nothing
-// is playing.
+// DZNowPlayingJSON returns the playing track as a wire track: the Connect device's
+// track when routed, else the local one (control API starts included). "{}" when
+// nothing plays.
 //
 //export DZNowPlayingJSON
 func DZNowPlayingJSON() *C.char { return C.CString(engine.NowPlayingJSON()) }
 
-// DZNowPlayingVersion returns a counter that moves exactly when the payload of
-// DZNowPlayingJSON changes (a new track, its metadata arriving, a Connect
-// device's track), so a host fetches DZNowPlayingJSON only then.
+// DZNowPlayingVersion returns a counter that changes exactly when DZNowPlayingJSON's
+// payload changes, so a host fetches DZNowPlayingJSON only then.
 //
 //export DZNowPlayingVersion
 func DZNowPlayingVersion() C.longlong { return C.longlong(engine.NowPlayingVersion()) }
 
-// DZDiscoverDevices broadcasts a LAN probe and returns the OpenDeezer devices
-// found, as a JSON array of {name, addr}. timeoutMS bounds the whole wait (~600ms
-// is a good default): the configured peers are probed alongside the broadcast.
+// DZElsewhereJSON returns what another session of the account plays, as {"track",
+// "sinceMs", "untilMs"} (untilMs: when it counts as ended). No "track" when that
+// session played an unnamed track; "{}" when nothing was announced since login.
+//
+//export DZElsewhereJSON
+func DZElsewhereJSON() *C.char { return C.CString(engine.ElsewhereJSON()) }
+
+// DZElsewhereVersion returns a counter that moves exactly when the payload of
+// DZElsewhereJSON changes.
+//
+//export DZElsewhereVersion
+func DZElsewhereVersion() C.longlong { return C.longlong(engine.ElsewhereVersion()) }
+
+// DZDiscoverDevices probes the LAN and the configured peers and returns the OpenDeezer
+// devices found as a JSON array of {name, addr}. timeoutMS bounds the wait (~600ms).
 //
 //export DZDiscoverDevices
 func DZDiscoverDevices(timeoutMS C.int) *C.char {

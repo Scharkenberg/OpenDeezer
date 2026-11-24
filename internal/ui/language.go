@@ -40,11 +40,9 @@ func currentLanguageName() string {
 	return languageName(config.LanguageSetting())
 }
 
-// cycleLanguage advances to the next language in languageOrder, persists it,
-// applies it live, and returns its native display name. It anchors on the menu's
-// persisted selection (config.LanguageSetting) rather than LoadLanguage so a set
-// $OPENDEEZER_LANG cannot freeze the cycle, and it names `next` directly so the
-// label always matches the locale applyLanguage just applied.
+// cycleLanguage switches to the next language in languageOrder, saves and applies it,
+// and returns its native name. It starts from config.LanguageSetting, so a set
+// $OPENDEEZER_LANG cannot freeze the cycle.
 func (m *Model) cycleLanguage() string {
 	cur := config.LanguageSetting()
 	idx := 0

@@ -11,7 +11,7 @@ func TestParseGwTrackListObjectEnvelope(t *testing.T) {
 		 "ART_ID":27,"ART_NAME":"Daft Punk","ALB_TITLE":"Discovery",
 		 "ALB_PICTURE":"abc123","EXPLICIT_LYRICS":"1"}
 	]}}`)
-	got := parseGwTrackList(body)
+	got, _ := parseGwTrackList(body)
 	if len(got) != 2 {
 		t.Fatalf("got %d tracks, want 2", len(got))
 	}
@@ -37,7 +37,7 @@ func TestParseGwTrackListBareArrayEnvelope(t *testing.T) {
 	body := []byte(`{"error":[],"results":[
 		{"SNG_ID":"1","SNG_TITLE":"A","DURATION":"10","ART_ID":"2","ART_NAME":"X"}
 	]}`)
-	got := parseGwTrackList(body)
+	got, _ := parseGwTrackList(body)
 	if len(got) != 1 || got[0].ID != "1" || got[0].Name != "A" {
 		t.Fatalf("got %+v, want one track id=1", got)
 	}
@@ -47,11 +47,18 @@ func TestParseGwTrackListEmpty(t *testing.T) {
 	for _, body := range []string{
 		`{"error":{},"results":{"data":[]}}`,
 		`{"error":{},"results":[]}`,
-		`{"error":{},"results":null}`,
-		`not json`,
 	} {
-		if got := parseGwTrackList([]byte(body)); got != nil {
-			t.Errorf("parseGwTrackList(%q) = %+v, want nil", body, got)
+		if got, err := parseGwTrackList([]byte(body)); got != nil || err != nil {
+			t.Errorf("parseGwTrackList(%q) = %+v, %v, want nil, nil", body, got, err)
+		}
+	}
+}
+
+// A reply of neither shape is an error, not an empty list (which ends a radio).
+func TestParseGwTrackListUnknownShapeFails(t *testing.T) {
+	for _, body := range []string{`{"error":{},"results":null}`, `not json`, `{"error":{},"results":{"tracks":[]}}`} {
+		if _, err := parseGwTrackList([]byte(body)); err == nil {
+			t.Errorf("parseGwTrackList(%q): no error", body)
 		}
 	}
 }

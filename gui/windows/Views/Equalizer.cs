@@ -11,7 +11,6 @@ namespace OpenDeezer;
 
 internal sealed class EqualizerView : View
 {
-
     private readonly Slider[] _bands = new Slider[Count.EqBands];
     private readonly TextBlock[] _labels = new TextBlock[Count.EqBands];
     private readonly ComboBox _preset;
@@ -33,6 +32,7 @@ internal sealed class EqualizerView : View
         });
         _mono = Ui.Switch(false, "EQ_MonoAudio", on => _ = Send(new JsonObject { ["mono"] = on }));
         _preset = Ui.Combo([], -1, OnPreset);
+        Ui.Name(_preset, Loc.S("EQ_Preset"));
         var reset = Ui.Button(Loc.S("EQ_Reset"), () => ApplyPreset("flat"));
         var preampPump = new LatestValuePump<double>(db => Send(new JsonObject { ["preampDb"] = db }));
         _preamp = Ui.Slider(-Steps.EqMaxDb, Steps.EqMaxDb, 0, "EQ_Preamp", preampPump.Post);
@@ -73,8 +73,7 @@ internal sealed class EqualizerView : View
             bandsCard,
             Ui.Setting("EQ_Preamp", null, Icons.Gain, _preamp),
             Ui.Setting("EQ_MonoAudio", null, Icons.Headphones, _mono));
-        var back = Ui.Link(Loc.S("Nav_Back"), () => Nav.Back());
-        _scroller = Ui.Page(Size.ContentMax, Ui.PageTitle(Loc.S("Settings_Equalizer"), back), page);
+        _scroller = Ui.Page(Size.ContentMax, Ui.PageTitle(Loc.S("Settings_Equalizer")), page);
     }
 
     public override async void Show(object? arg, bool isBack)
@@ -126,18 +125,14 @@ internal sealed class EqualizerView : View
 
     private async void ApplyPreset(string name)
     {
-        string payload = new JsonObject { ["preset"] = name }.ToJsonString();
-        var eq = await Task.Run(() =>
-        {
-            DeezerCore.DZSetEQJSON(payload);
-            return DeezerCore.EQ();
-        });
-        ShowBands(eq);
+        await Send(new JsonObject { ["preset"] = name });
+        ShowBands(await Task.Run(DeezerCore.EQ));
     }
 
-    private static Task Send(JsonObject change)
+    // A change the engine refuses is said, not dropped.
+    private static async Task Send(JsonObject change)
     {
         string payload = change.ToJsonString();
-        return Task.Run(() => DeezerCore.DZSetEQJSON(payload));
+        if (await Task.Run(() => DeezerCore.DZSetEQJSON(payload)) == 0) Toast.Error(Loc.S("EQ_Refused"), "");
     }
 }

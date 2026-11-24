@@ -150,3 +150,43 @@ func TestFailedReopenDoesNotRetryEachLine(t *testing.T) {
 
 // discardReset returns a throwaway writer to detach the test buffer.
 func discardReset() *bytes.Buffer { return &bytes.Buffer{} }
+
+// After a failed reopen the writes still count toward the next roll: another 512 KB brings
+// a second try, and the log is written again.
+func TestFailedReopenTriesAgainLater(t *testing.T) {
+	dir := t.TempDir()
+	tries := 0
+	rename = func(from, to string) error {
+		tries++
+		err := os.Rename(from, to)
+		if tries == 1 {
+			_ = os.Mkdir(from, 0o700) // the first time a folder blocks the reopen
+		}
+		return err
+	}
+	if err := OpenFile(dir); err != nil {
+		t.Fatal(err)
+	}
+	path := out.(*rollingFile).path
+	t.Cleanup(func() {
+		rename = os.Rename
+		mu.Lock()
+		_ = out.(*rollingFile).f.Close()
+		mu.Unlock()
+		SetOutput(discardReset())
+	})
+	line := strings.Repeat("x", 1000)
+	for range 600 {
+		Info("%s", line)
+	}
+	_ = os.Remove(path) // the folder goes; the next reopen works
+	for range 600 {
+		Info("%s", line)
+	}
+	if tries != 2 {
+		t.Fatalf("%d moves tried, want 2", tries)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.IsDir() || fi.Size() == 0 {
+		t.Fatalf("no log written after the second try: %v", err)
+	}
+}

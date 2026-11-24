@@ -1,12 +1,6 @@
-// Package discord publishes the now-playing track to Discord as Rich Presence
-// ("Listening to …") over Discord's local IPC socket. It needs a Discord
-// application client id (configure via $OPENDEEZER_DISCORD_APP_ID or
-// ~/.config/opendeezer/discord-app-id.txt); with none set it is a no-op.
-//
-// Connection is best-effort and lazy: all IPC work runs on a dedicated worker
-// goroutine fed by Update, so the caller (the Bubble Tea update loop) never
-// blocks on a dial or a wedged Discord. Works on macOS/Linux (unix socket);
-// Windows (named pipe) is currently a no-op.
+// Package discord shows the playing track as Discord Rich Presence over the local IPC
+// socket, given an app id ($OPENDEEZER_DISCORD_APP_ID or discord-app-id.txt). IPC runs
+// lazily on a worker goroutine (a Unix socket, or a named pipe on Windows).
 package discord
 
 import (
@@ -94,7 +88,7 @@ type richPresence struct {
 
 	// The following are owned by the worker goroutine (run/push/connect/shutdown)
 	// or, for conn writes, additionally guarded by wmu.
-	wmu         sync.Mutex // serialises writes to conn (worker + PONG from drain)
+	wmu         sync.Mutex // serializes writes to conn (worker + PONG from drain)
 	conn        net.Conn
 	dead        chan struct{} // closed by drain when conn fails (Discord quit or restarted)
 	nonce       int
@@ -400,8 +394,8 @@ func trim(s string, n int) string {
 	return s
 }
 
-// pad2 ensures a Discord string field is at least 2 chars (Discord rejects a
-// 1-char details/state, which would silently drop the whole SET_ACTIVITY).
+// pad2 pads a Discord string field to at least 2 chars (Discord rejects a 1-char
+// details/state, dropping the whole SET_ACTIVITY).
 func pad2(s string) string {
 	if utf8.RuneCountInString(s) == 1 {
 		return s + " "

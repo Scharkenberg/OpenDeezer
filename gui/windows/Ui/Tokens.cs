@@ -34,7 +34,7 @@ internal static class Pad
     public static readonly Thickness BandLabel = new(0, Space.S, 0, 0);
     public static readonly Thickness InlineEnd = new(0, 0, Space.S, 0);
     // The title bar: buttons from the window edge, the icon between them and the name,
-    // the search box kept off its neighbours, the trailing buttons just off the caption buttons.
+    // the search box kept off its neighbors, the trailing buttons just off the caption buttons.
     public static readonly Thickness TitleBarButton = new(Space.XS, 0, 0, 0);
     public static readonly Thickness TitleBarIcon = new(Space.S, 0, Space.S, 0);
     public static readonly Thickness TitleBarSearch = new(Space.M, 0, Space.M, 0);
@@ -68,8 +68,9 @@ internal static class Size
     public const double AppIcon = 64;
     public const double MenuRow = 36;
     public const double SignInColumn = 360;
-    // A state message's text, and a settings field that would otherwise grow with its longest item.
+    // A state message's text.
     public const double MessageMax = 360;
+    // A field that would otherwise grow with its content: a settings list, the title-bar search box.
     public const double FieldMax = 360;
     // The CDN image sizes artwork is requested at, ascending (Ui.Bitmap picks the smallest that
     // covers the decode size, else the largest).
@@ -84,7 +85,6 @@ internal static class Size
     public const double TitleBarIcon = 16;
     // A field in the title bar: 2 px of air above and below.
     public const double TitleBarField = 28;
-    public const double SearchBox = 360;
     public const double Toast = 560;
     public const float ToastRise = (float)Space.L;
     // The navigation pane: dragged between PaneMin and PaneMax (at most PaneMaxShare of the window).
@@ -92,18 +92,25 @@ internal static class Size
     public const double PaneMin = 180;
     public const double PaneMax = 400;
     public const double PaneMaxShare = 0.4;
+    // The collapsed pane: 46 centers its icons between the window edge and the page
+    // (NavigationView's 48 leaves them 1.4 px nearer the edge).
+    public const double Rail = 46;
     public const double Grip = 6;
     public const double QueuePane = 320;
     public const double VolumeSlider = 96;
     public const double FlyoutWidth = 280;
+    // A ComboBox's own width beside its text: the left padding, the chevron's column and the border.
+    public const double ComboChrome = 52;
     // A card's border (CardBorder in App.xaml), on each side.
     public const double CardBorder = 1;
     // The now-playing text never gets narrower than this; the bar drops other things first.
     public const double BarText = 140;
-    public const double BarCentreMin = 220;
+    public const double BarCenterMin = 220;
+    // On a narrow bar the center takes this much before the sides even out (the seek slider's room).
+    public const double BarCenterNarrow = 160;
     // The transport column's share of the bar against each side's one.
-    public const int BarCentreWeight = 2;
-    public const double BarCentreMax = 640;
+    public const int BarCenterWeight = 2;
+    public const double BarCenterMax = 640;
     public const double ContentMax = 1000;
     public const double ReadingMax = 720;
     // How far ascenders and descenders may draw outside a text box (a scrolling label's clip).
@@ -114,11 +121,17 @@ internal static class Size
     public const double EqBand = 160;
     public const double TimeText = 40;
     public const double DurationColumn = 56;
+    // The bar under an episode's title that shows how far the account got.
+    public const double EpisodeProgress = 2;
+    // The episode speed button in the player bar ("1.25×").
+    public const double SpeedButton = 48;
     public const double FieldMin = 220;
     public const double WindowMinWidth = 480;
     public const double WindowMinHeight = 520;
     public const double WindowWidth = 1180;
     public const double WindowHeight = 760;
+    // A saved window size past this is not a real one (a corrupt settings.json).
+    public const int SavedWindowMax = 32000;
 }
 
 internal static class Count
@@ -137,14 +150,21 @@ internal static class Count
     public const int CachedTracks = 10000;
     // Decoded pictures kept for reuse (Ui.Bitmap).
     public const int Bitmaps = 200;
-    public const int RecentRail = 20;
+    public const int RecentTiles = 20;
     public const int History = 100;
+    // Recent searches the search box offers.
+    public const int SearchHistory = 10;
     public const int StatsDays = 30;
     public const int RestorePasses = 20;
     public const int SkeletonTiles = 5;
     public const int SkeletonRows = 8;
+    // The player bar's right-hand buttons at the Small width: lyrics, queue, Connect, volume and More.
+    public const int SmallBarButtons = 5;
     // Failed plays in a row before the app stops skipping ahead.
     public const int PlayFailuresBeforeStop = 3;
+    // The control API's port on the local network, and a generated access token's random bytes.
+    public const int ControlPort = 7654;
+    public const int TokenBytes = 16;
     public const int EqBands = 10;
 }
 
@@ -165,7 +185,7 @@ internal static class Steps
     public const double EqDb = 0.5;
     // The stream cache's sizes, in GB (0 is off).
     public static readonly int[] CacheSizesGb = [0, 1, 2, 5, 10, 20];
-    // How long an unplayed song stays in the cache, in days (0 is for ever).
+    // How long an unplayed song stays in the cache, in days (0 is forever).
     public static readonly int[] CacheAgesDays = [0, 7, 30, 90, 180, 365];
 }
 
@@ -194,7 +214,7 @@ internal static class Timing
     // The position clock; it is re-based only when the engine's position is more than PositionDriftMs away.
     public const int PositionTickMs = 250;
     public const int PositionDriftMs = 250;
-    public const int PrevRestartsAfterMs = 3000;
+    public const int PrevRestartsAfterMs = 5000;
     public const int EngineStopWaitMs = 1500;
     public const int SmtcTimelineMs = 5000;
     public const int LyricsFollowPauseMs = 5000;
@@ -202,6 +222,8 @@ internal static class Timing
     public const int SearchDebounceMs = 300;
     public const int ToastMs = 5000;
     public const int SettingsSaveDebounceMs = 500;
+    // queue.json is written this long after the last queue, track or state change.
+    public const int QueueSaveDebounceMs = 2000;
     public const int CookieCheckMs = 2000;
     public const int DiscoverMs = 700;
     public const int CrossFadeMs = 150;
@@ -215,7 +237,7 @@ internal static class Timing
     // Home's greeting: morning until this hour, afternoon until the next, then evening.
     public const int MorningEndsHour = 12;
     public const int AfternoonEndsHour = 18;
-    public static readonly int[] SleepMinutes = [15, 30, 45, 60];
+    public static readonly int[] SleepMinutes = [5, 10, 20, 30, 45, 60];
     public static readonly int[] CrossfadePresetsMs = [0, 3000, 6000, 12000];
     // Deleting the web profile: the previous instance's msedgewebview2 can hold it for a moment.
     public const int WipeTries = 10;

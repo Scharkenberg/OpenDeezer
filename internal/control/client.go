@@ -127,10 +127,9 @@ func (c *Client) Whoami() (Whoami, error) {
 // Status returns the current playback snapshot.
 func (c *Client) Status() (State, error) { return c.state(http.MethodGet, "/status") }
 
-// EventsTyped subscribes to all recognized peer events. Events retain stream
-// order and include both complete State snapshots and natural-finish edges.
-// Callers should drain the channel promptly; backpressure affects only this
-// connection. The channel closes when ctx is cancelled or the peer disconnects.
+// EventsTyped subscribes to all recognized peer events in stream order: State snapshots
+// and natural-finish edges. Drain it promptly; it closes when ctx is canceled or the
+// peer disconnects.
 func (c *Client) EventsTyped(ctx context.Context) (<-chan Event, error) {
 	req, err := c.req(http.MethodGet, "/events")
 	if err != nil {
@@ -139,9 +138,8 @@ func (c *Client) EventsTyped(ctx context.Context) (<-chan Event, error) {
 	req = req.WithContext(ctx)
 	req.Header.Set("Accept", "text/event-stream")
 
-	// NewClient's regular HTTP client has a whole-request timeout. Streaming
-	// responses must instead live until ctx is cancelled, while retaining the
-	// configured transport, redirects and cookie jar.
+	// NewClient's HTTP client has a whole-request timeout; a stream lives until ctx is
+	// canceled and keeps the configured transport, redirects and cookie jar.
 	streamClient := &http.Client{
 		Transport:     c.http.Transport,
 		CheckRedirect: c.http.CheckRedirect,
@@ -162,9 +160,8 @@ func (c *Client) EventsTyped(ctx context.Context) (<-chan Event, error) {
 	return events, nil
 }
 
-// Events is the backward-compatible state-only view of EventsTyped. Finished
-// events are ignored; state snapshots retain the historical latest-wins
-// buffering behaviour for slow callers.
+// Events is the state-only view of EventsTyped: finished events are dropped and slow
+// callers get the latest state (latest wins).
 func (c *Client) Events(ctx context.Context) (<-chan State, error) {
 	events, err := c.EventsTyped(ctx)
 	if err != nil {
@@ -326,8 +323,8 @@ func offerLatestState(ctx context.Context, states chan State, state State) bool 
 	return true
 }
 
-// The transport / mutation commands below each return the post-command status
-// snapshot (which may lag the command by one tick on the server — see act docs).
+// Each transport and mutation command returns the status after the command, which may
+// lag it by one server tick (see act).
 
 // PlayPause toggles play/pause on the peer.
 func (c *Client) PlayPause() (State, error) { return c.state(http.MethodPost, "/playpause") }
@@ -451,9 +448,8 @@ func (c *Client) eqState(method, path string) (EQState, error) {
 // per-band gains, active preset and the preset/band lists).
 func (c *Client) EQ() (EQState, error) { return c.eqState(http.MethodGet, "/eq") }
 
-// SetEQ applies a partial equalizer update. params carries any of the POST /eq
-// query params — on=0|1, mono=0|1, preset=name, band=N&db=X, preamp=dB — and
-// the server applies whichever are present (at least one is required).
+// SetEQ applies a partial EQ update. params holds any of the POST /eq query params
+// (on=0|1, mono=0|1, preset=name, band=N&db=X, preamp=dB); at least one is required.
 func (c *Client) SetEQ(params url.Values) (EQState, error) {
 	return c.eqState(http.MethodPost, "/eq?"+params.Encode())
 }

@@ -43,10 +43,8 @@ func stopCountingServer(t *testing.T, stops *int32, hit chan<- struct{}) *httpte
 	}))
 }
 
-// TestRemoteEscDetachesWithoutStoppingPeer: leaving the remote screen
-// with esc must detach non-destructively — it must NOT send Stop to the peer
-// (disconnect != stop its music) and must not make a blocking HTTP call on the
-// update loop (esc returns nil, no cmd, and never hits the peer).
+// TestRemoteEscDetachesWithoutStoppingPeer: esc on the remote screen detaches without
+// sending Stop to the peer and without a blocking HTTP call (nil cmd).
 func TestRemoteEscDetachesWithoutStoppingPeer(t *testing.T) {
 	var stops int32
 	srv := stopCountingServer(t, &stops, nil)

@@ -1,10 +1,10 @@
 // Package connect implements OpenDeezer Connect: LAN discovery and remote
 // control of OpenDeezer devices, in both directions.
 //
-// OpenDeezer Connect is symmetric — this package exposes both sides:
+// OpenDeezer Connect is symmetric; this package exposes both sides:
 //
-//   - out — discover and control other devices: [Discover] + [RemoteClient]
-//   - in  — be discoverable and controllable:   [Host] (and the lower-level
+//   - out: discover and control other devices with [Discover] and [RemoteClient]
+//   - in: be discoverable and controllable with [Host] (and the lower-level
 //     [Advertise] if you manage your own control server)
 //
 // Transport: IPv4 UDP multicast (group 239.255.42.99, port 7655) with a

@@ -30,6 +30,7 @@ import fr.cyclooo.opendeezer.engine.ArtistStat
 import fr.cyclooo.opendeezer.engine.Engine
 import fr.cyclooo.opendeezer.engine.HistoryEntry
 import fr.cyclooo.opendeezer.engine.HistoryStats
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Track
 import fr.cyclooo.opendeezer.engine.TrackStat
 import fr.cyclooo.opendeezer.player.PlayerController
@@ -103,7 +104,8 @@ private fun HistoryContent(data: HistoryLoad, player: PlayerController) {
                 TrackRow(
                     track = track,
                     player = player,
-                    onClick = { player.playSingle(track) },
+                    context = ListenContext("history_song", ""),
+                    onClick = { player.playSingle(track, ListenContext("history_song", "")) },
                     onStartRadio = { player.startTrackRadio(track) },
                     trailing = {
                         Text(
@@ -130,7 +132,8 @@ private fun HistoryContent(data: HistoryLoad, player: PlayerController) {
                 TrackRow(
                     track = track,
                     player = player,
-                    onClick = { player.playSingle(track) },
+                    context = ListenContext("history_song", ""),
+                    onClick = { player.playSingle(track, ListenContext("history_song", "")) },
                     onStartRadio = { player.startTrackRadio(track) },
                 )
             }

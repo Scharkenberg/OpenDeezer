@@ -103,16 +103,9 @@ func TestControlSetShuffleMutatesQueueAndPublishes(t *testing.T) {
 	}
 }
 
-// TestControlQueueEditPublishesBeforeReply pins the ordering invariant of
-// handleControlQueueEdit: the refreshed control snapshot must be stored BEFORE
-// the reply is sent. The control HTTP handler serializes state as soon as its
-// queue-edit call returns, so if the reply were sent first it could observe
-// the pre-edit queue. The reply channel here is deliberately unbuffered so the
-// handler's send synchronizes with our receive: with the correct ordering the
-// snapshot check below is deterministic; with the reversed ordering it races
-// against a publish that has not happened yet. The "add" kind is used because
-// it is the one edit whose branch does not publish on its own (jump/remove/
-// move already publish inside their queue helpers).
+// TestControlQueueEditPublishesBeforeReply checks that handleControlQueueEdit stores
+// the snapshot before replying. The reply channel is unbuffered to make the order
+// observable; "add" is the one edit that does not publish on its own.
 func TestControlQueueEditPublishesBeforeReply(t *testing.T) {
 	m := interactionModel(screenList)
 	m.q.Set(testTracks(3), 0)

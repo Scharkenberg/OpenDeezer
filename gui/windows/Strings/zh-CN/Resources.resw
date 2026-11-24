@@ -68,13 +68,10 @@
     <value>导航</value>
   </data>
   <data name="Nav_LikedSongs" xml:space="preserve">
-    <value>喜欢的歌曲</value>
+    <value>喜欢的曲目</value>
   </data>
   <data name="Nav_Flow" xml:space="preserve">
     <value>Flow</value>
-  </data>
-  <data name="Nav_Playlists" xml:space="preserve">
-    <value>歌单</value>
   </data>
   <data name="Nav_Charts" xml:space="preserve">
     <value>排行榜</value>
@@ -95,7 +92,7 @@
     <value>下载</value>
   </data>
   <data name="Btn_NewPlaylist" xml:space="preserve">
-    <value>新建歌单</value>
+    <value>新建歌单…</value>
   </data>
   <data name="Btn_Cancel" xml:space="preserve">
     <value>取消</value>
@@ -176,10 +173,7 @@
     <value>喜欢</value>
   </data>
   <data name="Menu_AddToPlaylist" xml:space="preserve">
-    <value>添加到歌单…</value>
-  </data>
-  <data name="Menu_Rename" xml:space="preserve">
-    <value>重命名…</value>
+    <value>添加到歌单</value>
   </data>
   <data name="Menu_Delete" xml:space="preserve">
     <value>删除…</value>
@@ -232,9 +226,6 @@
   <data name="Dialog_PlaylistNamePlaceholder" xml:space="preserve">
     <value>歌单名称</value>
   </data>
-  <data name="Dialog_RenamePlaylistTitle" xml:space="preserve">
-    <value>重命名歌单</value>
-  </data>
   <data name="Dialog_DeletePlaylistTitle" xml:space="preserve">
     <value>删除歌单</value>
   </data>
@@ -245,31 +236,25 @@
     <value>无法创建歌单</value>
   </data>
   <data name="Dialog_CreateFailBody" xml:space="preserve">
-    <value>Deezer 未能创建歌单。再试一次。</value>
+    <value>Deezer 未能创建歌单。再试一次</value>
   </data>
   <data name="Dialog_AddFailTitle" xml:space="preserve">
     <value>无法添加到歌单</value>
   </data>
   <data name="Dialog_AddFailBody" xml:space="preserve">
-    <value>Deezer 未能添加此歌曲。再试一次。</value>
-  </data>
-  <data name="Dialog_RenameFailTitle" xml:space="preserve">
-    <value>无法重命名</value>
-  </data>
-  <data name="Dialog_RenameFailBody" xml:space="preserve">
-    <value>Deezer 未能重命名歌单。再试一次。</value>
+    <value>Deezer 未能添加此歌曲。再试一次</value>
   </data>
   <data name="Dialog_DeleteFailTitle" xml:space="preserve">
     <value>无法删除</value>
   </data>
   <data name="Dialog_DeleteFailBody" xml:space="preserve">
-    <value>Deezer 未能删除歌单。再试一次。</value>
+    <value>Deezer 未能删除歌单。再试一次</value>
   </data>
   <data name="Dialog_ConnectFailTitle" xml:space="preserve">
     <value>无法连接</value>
   </data>
   <data name="Dialog_ConnectFailBody" xml:space="preserve">
-    <value>设备没有响应。检查它是否在同一网络中。</value>
+    <value>设备没有响应。检查它是否在同一网络中</value>
   </data>
   <data name="NoInternet_Title" xml:space="preserve">
     <value>无网络连接</value>
@@ -398,7 +383,7 @@
     <value>跟随系统</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>重新启动 OpenDeezer 以应用新语言。</value>
+    <value>重新启动 OpenDeezer 以应用新语言</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>预设</value>
@@ -425,7 +410,7 @@
     <value>由 Cycl0o0 开发；Windows 应用由 Scharkenberg 开发。基于 AGPL-3.0 许可。</value>
   </data>
   <data name="Tracks_Other" xml:space="preserve">
-    <value>{0} 首歌曲</value>
+    <value>{0} 首曲目</value>
   </data>
   <data name="Episodes_Other" xml:space="preserve">
     <value>{0} 集</value>
@@ -461,16 +446,16 @@
     <value>下载失败</value>
   </data>
   <data name="Dialog_DownloadFailBody" xml:space="preserve">
-    <value>下载未完成。再试一次。</value>
+    <value>下载未完成。再试一次</value>
   </data>
   <data name="Preview_Badge" xml:space="preserve">
     <value>试听</value>
   </data>
   <data name="Settings_DisableAds" xml:space="preserve">
-    <value>关闭广告</value>
+    <value>不上报我的播放</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>去除广告，并停止向 Deezer 上报你的播放记录。艺人不会因这些播放获得计数，且这违反 Deezer 的使用条款。</value>
+    <value>不再向 Deezer 上报你的播放。这些播放不会计入艺人，并且违反 Deezer 的使用条款。无论如何，OpenDeezer 都不播放广告。</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>最近</value>
@@ -479,7 +464,7 @@
     <value>开始电台</value>
   </data>
   <data name="Radio_SongHeader" xml:space="preserve">
-    <value>单曲电台</value>
+    <value>曲目电台</value>
   </data>
   <data name="Radio_ArtistHeader" xml:space="preserve">
     <value>艺人电台</value>
@@ -488,7 +473,7 @@
     <value>无法开始电台</value>
   </data>
   <data name="Dialog_RadioFailBody" xml:space="preserve">
-    <value>Deezer 没有对应的电台。换一首歌曲或一位艺人试试。</value>
+    <value>Deezer 没有对应的电台。换一首歌曲或一位艺人试试</value>
   </data>
   <data name="Section_RecentlyPlayed" xml:space="preserve">
     <value>最近播放</value>
@@ -515,7 +500,7 @@
     <value>播放队列</value>
   </data>
   <data name="Queue_Clear" xml:space="preserve">
-    <value>清空</value>
+    <value>清空…</value>
   </data>
   <data name="Queue_Remove" xml:space="preserve">
     <value>从队列中移除</value>
@@ -569,13 +554,16 @@
     <value>切换账户</value>
   </data>
   <data name="Account_SignOut" xml:space="preserve">
+    <value>退出登录…</value>
+  </data>
+  <data name="Dialog_SignOutTitle" xml:space="preserve">
     <value>退出登录</value>
   </data>
   <data name="Account_SignOutConfirm" xml:space="preserve">
     <value>要在此电脑上退出登录吗？播放将停止。</value>
   </data>
   <data name="Account_UnknownTier" xml:space="preserve">
-    <value>无法加载你的订阅方案。加载完成前，下载和音质选项可能不准确。</value>
+    <value>无法加载你的订阅方案。加载完成前，下载、离线和音质选项可能不准确。</value>
   </data>
   <data name="Playback_FailTitle" xml:space="preserve">
     <value>播放失败</value>
@@ -584,16 +572,16 @@
     <value>无法播放这首曲目。</value>
   </data>
   <data name="Playback_Skipping" xml:space="preserve">
-    <value>正在跳到下一首。</value>
+    <value>正在跳到下一首</value>
   </data>
   <data name="Playback_StoppedBody" xml:space="preserve">
-    <value>连续多首歌曲无法播放。播放已停止。</value>
+    <value>连续多首歌曲无法播放。播放已停止</value>
   </data>
   <data name="Like_FailTitle" xml:space="preserve">
     <value>无法更新你的音乐库</value>
   </data>
   <data name="Like_FailBody" xml:space="preserve">
-    <value>Deezer 未接受此更改。稍后再试。</value>
+    <value>Deezer 未接受此更改。稍后再试</value>
   </data>
   <data name="Menu_Unlike" xml:space="preserve">
     <value>取消喜欢</value>
@@ -656,10 +644,10 @@
     <value>从此歌单中移除</value>
   </data>
   <data name="Playlist_RemoveFailBody" xml:space="preserve">
-    <value>Deezer 未能移除此歌曲。再试一次。</value>
+    <value>Deezer 未能移除此歌曲。再试一次</value>
   </data>
   <data name="Login_Busy" xml:space="preserve">
-    <value>登录正在进行中。</value>
+    <value>登录正在进行中</value>
   </data>
   <data name="Account_FreePlan" xml:space="preserve">
     <value>免费版 · 128 kbps</value>
@@ -686,7 +674,7 @@
     <value>音乐库</value>
   </data>
   <data name="Recent_ListenTimeLabel" xml:space="preserve">
-    <value>收听时长（最近 30 天）</value>
+    <value>收听时长（最近 {0} 天）</value>
   </data>
   <data name="Search_FilterAll" xml:space="preserve">
     <value>全部</value>
@@ -736,11 +724,8 @@
   <data name="Menu_NewPlaylist" xml:space="preserve">
     <value>新建歌单…</value>
   </data>
-  <data name="Menu_NoArtistPage" xml:space="preserve">
-    <value>此曲目没有艺人页面</value>
-  </data>
   <data name="Empty_Liked" xml:space="preserve">
-    <value>还没有喜欢的歌曲</value>
+    <value>还没有喜欢的曲目</value>
   </data>
   <data name="Empty_Playlist" xml:space="preserve">
     <value>此歌单为空</value>
@@ -834,7 +819,7 @@
     <value>清除缓存</value>
   </data>
   <data name="Settings_ClearCacheConfirm" xml:space="preserve">
-    <value>要移除播放缓存中保存的歌曲吗？除非一并移除，离线音乐会保留。</value>
+    <value>要移除播放缓存中保存的曲目吗？除非一并移除，离线音乐会保留。</value>
   </data>
   <data name="Btn_Clear" xml:space="preserve">
     <value>清除</value>
@@ -855,10 +840,10 @@
     <value>{0} GB</value>
   </data>
   <data name="Settings_CacheAge" xml:space="preserve">
-    <value>保留未播放的歌曲</value>
+    <value>保留未播放的曲目</value>
   </data>
   <data name="Settings_CacheAgeDesc" xml:space="preserve">
-    <value>超过此时长未播放的缓存歌曲会被移除。离线音乐会保留。</value>
+    <value>超过此时长未播放的缓存曲目会被移除。离线音乐会保留。</value>
   </data>
   <data name="Settings_CacheAge_0" xml:space="preserve">
     <value>永久</value>
@@ -882,13 +867,13 @@
     <value>{0} 天</value>
   </data>
   <data name="Error_FolderRefused" xml:space="preserve">
-    <value>无法使用此文件夹。请选择其他文件夹。</value>
+    <value>无法使用此文件夹。请选择其他文件夹</value>
   </data>
   <data name="Error_StorageFailed" xml:space="preserve">
-    <value>操作未成功。请重试。</value>
+    <value>无法完成此操作。请重试</value>
   </data>
   <data name="Settings_CacheFolderConfirm" xml:space="preserve">
-    <value>旧文件夹中缓存的歌曲将被移除。</value>
+    <value>旧文件夹中缓存的曲目将被移除。</value>
   </data>
   <data name="Btn_Change" xml:space="preserve">
     <value>更改</value>
@@ -903,7 +888,7 @@
     <value>{0}/{1}</value>
   </data>
   <data name="Offline_Songs" xml:space="preserve">
-    <value>歌曲</value>
+    <value>曲目</value>
   </data>
   <data name="Offline_Mode" xml:space="preserve">
     <value>离线模式</value>
@@ -912,18 +897,342 @@
     <value>你已离线</value>
   </data>
   <data name="Offline_YoureOfflineBody" xml:space="preserve">
-    <value>正在播放保存在此电脑上的音乐。联网后请重试登录。</value>
+    <value>正在播放你的离线音乐。联网后请重试登录。</value>
   </data>
   <data name="Offline_Empty" xml:space="preserve">
-    <value>设为可离线播放的专辑、歌单和歌曲会显示在这里。</value>
+    <value>设为可离线播放的专辑、歌单和曲目会显示在这里。</value>
   </data>
   <data name="Offline_Remove" xml:space="preserve">
     <value>从离线中移除</value>
   </data>
   <data name="Offline_FetchStopped" xml:space="preserve">
-    <value>离线下载已停止</value>
+    <value>无法获取离线音乐</value>
   </data>
   <data name="Offline_FailTitle" xml:space="preserve">
     <value>无法更改离线音乐</value>
+  </data>
+  <data name="Tooltip_PlayHere" xml:space="preserve">
+    <value>在此播放</value>
+  </data>
+  <data name="Tooltip_PlayingElsewhere" xml:space="preserve">
+    <value>正在其他播放器中播放</value>
+  </data>
+  <data name="Settings_SingleDevice" xml:space="preserve">
+    <value>一次一个播放器</value>
+  </data>
+  <data name="Settings_SingleDeviceOn" xml:space="preserve">
+    <value>账号的其他播放器开始播放时暂停；在此播放会暂停其他播放器</value>
+  </data>
+  <data name="Settings_SingleDeviceOff" xml:space="preserve">
+    <value>与账号的其他播放器同时播放</value>
+  </data>
+  <data name="Login_ExpiredTitle" xml:space="preserve">
+    <value>会话已过期</value>
+  </data>
+  <data name="Login_SignInAgain" xml:space="preserve">
+    <value>重新登录</value>
+  </data>
+  <data name="Offline_ExpiredBody" xml:space="preserve">
+    <value>Deezer 已结束你的会话。你的离线音乐仍可播放；重新登录以使用其余功能。</value>
+  </data>
+  <data name="Queue_TrackAdded" xml:space="preserve">
+    <value>已将曲目添加到队列</value>
+  </data>
+  <data name="Queue_TrackNext" xml:space="preserve">
+    <value>此曲目将在下一首播放</value>
+  </data>
+  <data name="Queue_AlbumAdded" xml:space="preserve">
+    <value>已将专辑添加到队列</value>
+  </data>
+  <data name="Queue_AlbumNext" xml:space="preserve">
+    <value>此专辑将在下一首播放</value>
+  </data>
+  <data name="Queue_PlaylistAdded" xml:space="preserve">
+    <value>已将歌单添加到队列</value>
+  </data>
+  <data name="Queue_PlaylistNext" xml:space="preserve">
+    <value>此歌单将在下一首播放</value>
+  </data>
+  <data name="Queue_PodcastNext" xml:space="preserve">
+    <value>此播客将在下一首播放</value>
+  </data>
+  <data name="Queue_PodcastAdded" xml:space="preserve">
+    <value>已将播客添加到队列</value>
+  </data>
+  <data name="Queue_AddFailed" xml:space="preserve">
+    <value>无法添加到队列</value>
+  </data>
+  <data name="Queue_ClearTitle" xml:space="preserve">
+    <value>清空队列？</value>
+  </data>
+  <data name="Queue_ClearBody" xml:space="preserve">
+    <value>这将清除队列中的所有曲目。</value>
+  </data>
+  <data name="Queue_ClearAll" xml:space="preserve">
+    <value>全部清除</value>
+  </data>
+  <data name="Btn_Open" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="Btn_OpenQueue" xml:space="preserve">
+    <value>打开队列</value>
+  </data>
+  <data name="Btn_Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Episode_MarkPlayed" xml:space="preserve">
+    <value>标记为已播放</value>
+  </data>
+  <data name="Episode_MarkUnplayed" xml:space="preserve">
+    <value>标记为未播放</value>
+  </data>
+  <data name="Episode_LearnMore" xml:space="preserve">
+    <value>了解更多…</value>
+  </data>
+  <data name="Episode_MarkFailTitle" xml:space="preserve">
+    <value>无法更改此单集</value>
+  </data>
+  <data name="Episode_MarkFailBody" xml:space="preserve">
+    <value>Deezer 未接受此更改。请重试</value>
+  </data>
+  <data name="Menu_CopyLink" xml:space="preserve">
+    <value>复制链接</value>
+  </data>
+  <data name="Tooltip_Speed" xml:space="preserve">
+    <value>播放速度</value>
+  </data>
+  <data name="Tooltip_SpeedFormat" xml:space="preserve">
+    <value>播放速度：{0}</value>
+  </data>
+  <data name="Sleep_Set" xml:space="preserve">
+    <value>已设置定时器</value>
+  </data>
+  <data name="Sleep_Off" xml:space="preserve">
+    <value>已关闭定时器</value>
+  </data>
+  <data name="Sleep_EndOfEpisode" xml:space="preserve">
+    <value>单集结束时</value>
+  </data>
+  <data name="Sleep_TurnOff" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Offline_Shuffle" xml:space="preserve">
+    <value>随机播放离线音乐</value>
+  </data>
+  <data name="Offline_StorageFormat" xml:space="preserve">
+    <value>此电脑上 {0}</value>
+  </data>
+  <data name="Offline_StorageUnknown" xml:space="preserve">
+    <value>… MB</value>
+  </data>
+  <data name="Offline_FailedFormat" xml:space="preserve">
+    <value>{0} 未完全可离线播放</value>
+  </data>
+  <data name="Offline_FailedTracksFormat" xml:space="preserve">
+    <value>不可离线播放的曲目：{0}</value>
+  </data>
+  <data name="List_Sort" xml:space="preserve">
+    <value>排序</value>
+  </data>
+  <data name="List_Search" xml:space="preserve">
+    <value>在此列表中搜索</value>
+  </data>
+  <data name="List_NoMatch" xml:space="preserve">
+    <value>没有符合搜索的内容。</value>
+  </data>
+  <data name="Sort_Default" xml:space="preserve">
+    <value>默认顺序</value>
+  </data>
+  <data name="Sort_Added" xml:space="preserve">
+    <value>最近添加</value>
+  </data>
+  <data name="Sort_TitleAz" xml:space="preserve">
+    <value>标题 A–Z</value>
+  </data>
+  <data name="Sort_ArtistAz" xml:space="preserve">
+    <value>艺人 A–Z</value>
+  </data>
+  <data name="Sort_AlbumAz" xml:space="preserve">
+    <value>专辑 A–Z</value>
+  </data>
+  <data name="Sort_NameAz" xml:space="preserve">
+    <value>名称 A–Z</value>
+  </data>
+  <data name="Filter_All" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Filter_ByYou" xml:space="preserve">
+    <value>你创建的</value>
+  </data>
+  <data name="Filter_ByOthers" xml:space="preserve">
+    <value>他人创建的</value>
+  </data>
+  <data name="Nav_Favorites" xml:space="preserve">
+    <value>收藏</value>
+  </data>
+  <data name="Empty_Favorites" xml:space="preserve">
+    <value>这里还没有内容。点击专辑、艺人或播客上的爱心即可收藏到这里。</value>
+  </data>
+  <data name="Menu_AddFavorite" xml:space="preserve">
+    <value>添加到收藏</value>
+  </data>
+  <data name="Menu_RemoveFavorite" xml:space="preserve">
+    <value>从收藏中移除</value>
+  </data>
+  <data name="Menu_SaveAsPlaylist" xml:space="preserve">
+    <value>另存为歌单…</value>
+  </data>
+  <data name="Playlist_Edit" xml:space="preserve">
+    <value>编辑歌单…</value>
+  </data>
+  <data name="Playlist_EditFailTitle" xml:space="preserve">
+    <value>无法编辑歌单</value>
+  </data>
+  <data name="Dialog_EditPlaylistTitle" xml:space="preserve">
+    <value>编辑歌单</value>
+  </data>
+  <data name="Playlist_Title" xml:space="preserve">
+    <value>标题</value>
+  </data>
+  <data name="Playlist_Description" xml:space="preserve">
+    <value>简介</value>
+  </data>
+  <data name="Playlist_Private" xml:space="preserve">
+    <value>私密</value>
+  </data>
+  <data name="Playlist_Collaborative" xml:space="preserve">
+    <value>协作</value>
+  </data>
+  <data name="Btn_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Dialog_SaveAsPlaylistTitle" xml:space="preserve">
+    <value>另存为歌单</value>
+  </data>
+  <data name="Dialog_SavedAsPlaylistFormat" xml:space="preserve">
+    <value>已保存为“{0}”</value>
+  </data>
+  <data name="Error_Generic" xml:space="preserve">
+    <value>出现错误</value>
+  </data>
+  <data name="Link_Copied_track" xml:space="preserve">
+    <value>已复制此曲目的链接</value>
+  </data>
+  <data name="Link_Copied_album" xml:space="preserve">
+    <value>已复制此专辑的链接</value>
+  </data>
+  <data name="Link_Copied_playlist" xml:space="preserve">
+    <value>已复制此歌单的链接</value>
+  </data>
+  <data name="Link_Copied_artist" xml:space="preserve">
+    <value>已复制此艺人的链接</value>
+  </data>
+  <data name="Link_Copied_show" xml:space="preserve">
+    <value>已复制此播客的链接</value>
+  </data>
+  <data name="Link_Copied_episode" xml:space="preserve">
+    <value>已复制此单集的链接</value>
+  </data>
+  <data name="Ban_Track" xml:space="preserve">
+    <value>不再推荐此曲目</value>
+  </data>
+  <data name="Ban_Artist" xml:space="preserve">
+    <value>不再推荐此艺人</value>
+  </data>
+  <data name="Ban_Done_track" xml:space="preserve">
+    <value>好的。我们不会再推荐此曲目</value>
+  </data>
+  <data name="Ban_Done_artist" xml:space="preserve">
+    <value>好的。我们不会再推荐此艺人</value>
+  </data>
+  <data name="Credit_Author" xml:space="preserve">
+    <value>作词</value>
+  </data>
+  <data name="Credit_Composer" xml:space="preserve">
+    <value>作曲</value>
+  </data>
+  <data name="Credit_Other" xml:space="preserve">
+    <value>其他贡献者</value>
+  </data>
+  <data name="Search_TopResult" xml:space="preserve">
+    <value>最佳结果</value>
+  </data>
+  <data name="Kind_Track" xml:space="preserve">
+    <value>曲目</value>
+  </data>
+  <data name="Kind_Artist" xml:space="preserve">
+    <value>艺人</value>
+  </data>
+  <data name="Kind_Episode" xml:space="preserve">
+    <value>单集</value>
+  </data>
+  <data name="Search_ClearRecent" xml:space="preserve">
+    <value>清除最近搜索…</value>
+  </data>
+  <data name="Dialog_ClearRecentTitle" xml:space="preserve">
+    <value>清除最近搜索</value>
+  </data>
+  <data name="Search_ClearRecentBody" xml:space="preserve">
+    <value>你的最近搜索将被清除。</value>
+  </data>
+  <data name="Search_RecentCleared" xml:space="preserve">
+    <value>已清除最近搜索</value>
+  </data>
+  <data name="Account_ManagePlan" xml:space="preserve">
+    <value>管理我的套餐</value>
+  </data>
+  <data name="Settings_Explicit" xml:space="preserve">
+    <value>露骨内容</value>
+  </data>
+  <data name="Explicit_Display" xml:space="preserve">
+    <value>显示露骨内容</value>
+  </data>
+  <data name="Explicit_NoRecommendation" xml:space="preserve">
+    <value>不推荐露骨内容</value>
+  </data>
+  <data name="Explicit_Hide" xml:space="preserve">
+    <value>隐藏露骨内容</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>主题</value>
+  </data>
+  <data name="Settings_ThemeSystem" xml:space="preserve">
+    <value>跟随 Windows</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="Lyrics_Translation" xml:space="preserve">
+    <value>翻译</value>
+  </data>
+  <data name="EQ_Refused" xml:space="preserve">
+    <value>均衡器未接受此更改</value>
+  </data>
+  <data name="Settings_DeviceRefused" xml:space="preserve">
+    <value>无法使用该输出设备</value>
+  </data>
+  <data name="Section_TopAlbums" xml:space="preserve">
+    <value>热门专辑</value>
+  </data>
+  <data name="Section_Pinned" xml:space="preserve">
+    <value>已置顶</value>
+  </data>
+  <data name="Pin_Add" xml:space="preserve">
+    <value>置顶到首页</value>
+  </data>
+  <data name="Pin_Remove" xml:space="preserve">
+    <value>从首页取消置顶</value>
+  </data>
+  <data name="Pin_Added" xml:space="preserve">
+    <value>已置顶到首页</value>
+  </data>
+  <data name="Pin_Removed" xml:space="preserve">
+    <value>已从首页取消置顶</value>
+  </data>
+  <data name="Pin_Full" xml:space="preserve">
+    <value>首页已满。请先取消置顶一项</value>
   </data>
 </root>

@@ -16,6 +16,10 @@ internal sealed class Library
     public const string LikedKey = "liked";
     public const string FlowKey = "flow";
     public const string ChartsKey = "charts";
+    // The favorite albums, artists and podcasts: Key(LibraryKind, "album"), ...
+    public const string LibraryKind = "library";
+    // What the account pinned to Home.
+    public const string PinnedKey = "pinned";
 
     private static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(Timing.LibraryMaxAgeMinutes);
 
@@ -47,6 +51,12 @@ internal sealed class Library
     public IReadOnlyList<Track>? LikedTracks => Peek<TracksReply>(LikedKey)?.Tracks;
 
     public bool IsLiked(string id) => _likedIds.Contains(id);
+
+    // A playlist is the account's own when its owner is the signed-in user.
+    public bool IsOwn(string ownerId) => ownerId.Length > 0 && App.Session.AccountKnown && ownerId == App.Session.Account.UserId;
+
+    // The owner of one of the user's playlists, for a page opened from where the owner is not named.
+    public string OwnerOf(string playlistId) => Playlists.FirstOrDefault(p => p.Id == playlistId)?.OwnerId ?? "";
 
     // The cached value at once (refreshed behind it when old), else a fetch; failures are never cached.
     public async Task<T> GetAsync<T>(string key, CancellationToken ct = default) where T : Reply
@@ -104,9 +114,11 @@ internal sealed class Library
         _recentOther.Remove(key);
     }
 
-    // Drops every collection of these kinds; a page showing one fetches it again, others at their next visit.
+    // Drops every collection of these kinds, and forgets their fetches under way; a page showing one
+    // fetches it again, others at their next visit.
     internal void Drop(params string[] kinds)
     {
+        foreach (var key in _inFlight.Keys.Where(k => kinds.Contains(Split(k).Kind)).ToList()) _inFlight.Remove(key);
         foreach (var key in _entries.Keys.Where(k => kinds.Contains(Split(k).Kind)).ToList())
         {
             Remove(key);
@@ -147,20 +159,26 @@ internal sealed class Library
         {
             task = FetchAndStore(key);
             _inFlight[key] = task;
+            Forget(key, task);
         }
         return task;
+    }
+
+    // A fetch leaves the list once it ended, unless a drop let a newer one take its key.
+    private async void Forget(string key, Task<Reply> task)
+    {
+        await Task.WhenAny(task);
+        if (_inFlight.TryGetValue(key, out var t) && t == task) _inFlight.Remove(key);
     }
 
     private async Task<Reply> FetchAndStore(string key)
     {
         int session = _session;
-        Reply reply;
-        try { reply = await Task.Run(() => Fetch(key)); }
-        finally
-        {
-            if (session == _session) _inFlight.Remove(key);
-        }
+        // Album and playlist replies differ between offline mode and online (pinned lists, online lists).
+        bool offline = App.Offline.Mode;
+        var reply = await Task.Run(() => FetchReply(key));
         if (session != _session || reply.Error.Length > 0) return reply;
+        if (offline != App.Offline.Mode && Split(key).Kind is "album" or "playlist") return reply;
         Store(key, reply, DateTime.UtcNow);
         Stored?.Invoke(key, reply);
         if (key == LikedKey)
@@ -174,6 +192,9 @@ internal sealed class Library
         int colon = key.IndexOf(':');
         return colon < 0 ? (key, "") : (key[..colon], key[(colon + 1)..]);
     }
+
+    // The engine read behind a fetch (the harness holds it).
+    internal Func<string, Reply> FetchReply = Fetch;
 
     // In offline mode collections come from what is pinned.
     private static Reply Fetch(string key)
@@ -194,6 +215,8 @@ internal sealed class Library
             "podcast" => DeezerCore.PodcastEpisodes(id),
             "artist" => DeezerCore.ArtistProfile(id),
             "lyrics" => DeezerCore.Lyrics(id),
+            LibraryKind => DeezerCore.LibraryList(id),
+            PinnedKey => DeezerCore.Pinned(),
             _ => throw new ArgumentException("unknown library key " + key),
         };
     }
@@ -301,31 +324,88 @@ internal sealed class Library
         return -1;
     }
 
-    public async Task<Playlist?> CreatePlaylistAsync(string name)
+    // `tracks`: the tracks it starts with (a mix or the queue saved), none for an empty one.
+    public async Task<Playlist?> CreatePlaylistAsync(string name, IReadOnlyList<Track>? tracks = null)
     {
         int session = _session;
-        var reply = await Task.Run(() => DeezerCore.CreatePlaylist(name));
+        var ids = tracks?.Where(t => !t.IsEpisode && t.Id.Length > 0).Select(t => t.Id).ToList();
+        var reply = await Task.Run(() => DeezerCore.CreatePlaylist(name, ids));
         if (reply.Id.Length == 0) return null;
-        var p = new Playlist { Id = reply.Id, Name = name };
+        var p = new Playlist { Id = reply.Id, Name = name, OwnerId = App.Session.Account.UserId };
         if (session == _session) EditPlaylists(list => list.Insert(0, p));
         return p;
     }
 
-    public async Task<bool> RenamePlaylistAsync(Playlist p, string name)
+    // Whether an album, artist, playlist or podcast is a favorite, from the kept lists; null when
+    // they are not loaded.
+    public bool? IsFavorite(string kind, string id)
+    {
+        if (kind == "playlist") return Peek<PlaylistsReply>(PlaylistsKey) is { } p ? p.Playlists.Any(x => x.Id == id) : null;
+        if (Peek<LibraryReply>(Key(LibraryKind, kind)) is not { } r) return null;
+        return r.Albums.Any(a => a.Id == id) || r.Artists.Any(a => a.Id == id) || r.Podcasts.Any(p => p.Id == id);
+    }
+
+    // Adds or removes a favorite.
+    public async Task<bool> SetFavoriteAsync(string kind, string id, bool on)
     {
         int session = _session;
-        bool ok = await Task.Run(() => DeezerCore.DZRenamePlaylist(p.Id, name) != 0);
-        if (ok && session == _session) EditPlaylist(p.Id, x => x with { Name = name });
+        bool ok = await Task.Run(() => DeezerCore.DZSetFavorite(kind, id, on ? 1 : 0) != 0);
+        if (ok && session == _session) KeepFavorite(kind, id, on);
         return ok;
     }
 
-    public async Task<bool> DeletePlaylistAsync(Playlist p)
+    // A removed favorite leaves the kept list at once; an added one drops the list, so its page
+    // reads it again. Either way the list's page hears it.
+    internal void KeepFavorite(string kind, string id, bool on)
+    {
+        string key = kind == "playlist" ? PlaylistsKey : Key(LibraryKind, kind);
+        if (!on && kind == "playlist") EditPlaylists(list => list.RemoveAll(p => p.Id == id));
+        else if (!on) Edit<LibraryReply>(key, r => r with
+        {
+            Albums = r.Albums.Where(a => a.Id != id).ToList(),
+            Artists = r.Artists.Where(a => a.Id != id).ToList(),
+            Podcasts = r.Podcasts.Where(p => p.Id != id).ToList(),
+        });
+        else
+        {
+            Remove(key);
+            Changed?.Invoke(key);
+        }
+    }
+
+    public bool IsPinned(string type, string id) => Peek<PinnedReply>(PinnedKey)?.Items.Any(i => i.Type == type && i.Id == id) == true;
+
+    // Pins an item to Home or unpins it: 1 done, 2 Home is full, 0 refused.
+    public async Task<int> SetPinnedAsync(SearchItem item, bool on)
+    {
+        int r = await Task.Run(() => DeezerCore.DZSetPinned(item.Type, item.Id, on ? 1 : 0));
+        if (r == 1) KeepPinned(item, on);
+        return r;
+    }
+
+    // The kept pins with the item added (with the title and picture its caller knew) or removed, so
+    // the menus and Home show it at once; Home reads them again at its next visit (kept as old).
+    internal void KeepPinned(SearchItem item, bool on)
+    {
+        if (Peek<PinnedReply>(PinnedKey) is not { } kept) return;
+        var items = kept.Items.Where(i => i.Type != item.Type || i.Id != item.Id).ToList();
+        if (on) items.Add(item);
+        Seed(PinnedKey, kept with { Items = items });
+    }
+
+    // A playlist renamed elsewhere (its edit dialog): the lists show the new name.
+    public void RenamedPlaylist(string id, string name) => EditPlaylist(id, x => x with { Name = name });
+
+    // A playlist's tracks changed order: its next visit fetches them again.
+    public void Reordered(string playlistId) => Remove(Key("playlist", playlistId));
+
+    public async Task<bool> DeletePlaylistAsync(string id)
     {
         int session = _session;
-        bool ok = await Task.Run(() => DeezerCore.DZDeletePlaylist(p.Id) != 0);
+        bool ok = await Task.Run(() => DeezerCore.DZDeletePlaylist(id) != 0);
         if (!ok || session != _session) return ok;
-        EditPlaylists(list => list.RemoveAll(x => x.Id == p.Id));
-        Remove(Key("playlist", p.Id));
+        EditPlaylists(list => list.RemoveAll(x => x.Id == id));
+        Remove(Key("playlist", id));
         return true;
     }
 

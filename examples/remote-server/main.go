@@ -5,9 +5,9 @@
 // Usage: DEEZER_ARL=<your_arl> go run ./examples/remote-server
 //
 // Once running:
-//   - GET  http://localhost:7654/whoami    — identity + auth mode (no auth)
-//   - GET  http://localhost:7654/status    — playback snapshot (needs token)
-//   - POST http://localhost:7654/playpause — toggle play/pause (needs token)
+//   - GET  http://localhost:7654/whoami: identity + auth mode (no auth)
+//   - GET  http://localhost:7654/status: playback snapshot (needs token)
+//   - POST http://localhost:7654/playpause: toggle play/pause (needs token)
 //
 // This example uses bearer-token auth with a hardcoded demo token. In
 // production, generate a random token or enable same-account / web-remote

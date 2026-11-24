@@ -1,12 +1,6 @@
-// Package i18n is a tiny gettext-style translation layer for the OpenDeezer TUI
-// and the shared status strings served by the control API. Catalogs are flat
-// JSON files (msgid -> translation) embedded at build time; the msgid is the
-// exact English source string, so an untranslated key falls back to readable
-// English automatically.
-//
-// The package is a leaf (no OpenDeezer imports) so any package can call T/Tf/Tn
-// without an import cycle. The active catalog is swapped atomically, so SetLocale
-// is safe to call from the UI thread while other goroutines read translations.
+// Package i18n is a gettext-style translation layer for the TUI and control API
+// status strings: embedded JSON catalogs keyed by the English source string, which is
+// also the fallback. SetLocale swaps the catalog atomically.
 package i18n
 
 import (
@@ -97,15 +91,9 @@ func Tf(key string, args ...any) string {
 	return fmt.Sprintf(T(key), args...)
 }
 
-// Tn returns a plural-aware translation. singular is the msgid (the English
-// singular source, e.g. "%d track"); plural is the English plural used as the
-// fallback when the catalog has no entry. The count n is applied as the first
-// format argument, so the placeholder for the number should come first in the
-// template; any extra args follow.
-//
-// Per-locale variants are stored under "<singular>|<category>" keys (category is
-// one of zero/one/two/few/many/other per the CLDR cardinal rules for the
-// locale). Missing entries fall back to the English one/other rule.
+// Tn returns a plural-aware translation of singular (falling back to plural with the
+// English rule); n is the first format argument. Variants are stored under
+// "<singular>|<category>" keys (CLDR cardinal categories).
 func Tn(singular, plural string, n int, args ...any) string {
 	cat := current.Load()
 	code := "en"
@@ -149,7 +137,7 @@ func pluralCategory(code string, n int) string {
 		}
 		return "other"
 	case "hi", "fr":
-		// one: i = 0 or n = 1  (fr: i = 0,1) — identical for non-negative ints.
+		// one: i = 0 or n = 1  (fr: i = 0,1), identical for non-negative ints.
 		if n == 0 || n == 1 {
 			return "one"
 		}
@@ -240,11 +228,9 @@ func DetectLocale() string {
 	return "en"
 }
 
-// parseLocale reduces a locale string ("fr_FR.UTF-8", "zh-Hans", "zh_CN", "es")
-// to a shipped language code, or "" when it names no shipped language. The
-// charset (.UTF-8) and modifier (@euro) suffixes are stripped; the primary
-// language subtag decides the result (all Chinese variants map to zh — the one
-// shipped Chinese catalog is Simplified).
+// parseLocale reduces a locale string ("fr_FR.UTF-8", "zh-Hans", "es") to a shipped
+// language code by its primary subtag, or "" when none matches. All Chinese variants
+// map to zh (Simplified).
 func parseLocale(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {

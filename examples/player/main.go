@@ -94,7 +94,7 @@ func run() error {
 	}
 
 	// The engine calls OnFinish from its own goroutine when a track ends
-	// naturally — with a preloaded next track it has already swapped to it
+	// naturally; with a preloaded next track it has already swapped to it
 	// gaplessly; without one it has stopped. Keep the callback non-blocking
 	// and do the network work (resolve/preload) back on the main goroutine.
 	finished := make(chan struct{}, 1)

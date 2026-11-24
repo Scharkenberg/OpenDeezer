@@ -214,8 +214,8 @@
 "Download failed." = "下载失败。";
 "Preview" = "试听";
 "Free account · standard quality (128 kbps)" = "免费账户 · 标准音质（128 kbps）";
-"Disable ads" = "关闭广告";
-"Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer's terms of use. Use at your own risk." = "Deezer Free 依靠广告支持。像官方应用一样上报你的播放记录，可为艺术家计入播放量并支撑广告投放。关闭此项会移除广告，但同时停止上报你的播放记录，从而使艺术家失去应得的播放量，并违反 Deezer 的使用条款。请自行承担风险。";
+"Don't report my plays" = "不上报我的播放";
+"OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk." = "OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。";
 
 /* Up Next / offline downloads / history / radio (3.x) */
 "%@ Radio" = "%@ 电台";

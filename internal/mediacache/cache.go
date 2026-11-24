@@ -1,77 +1,10 @@
-// Package mediacache implements an opt-in, on-disk, thread-safe LRU cache for
-// raw Deezer CDN stream payloads.
-//
-// Keys are of the form "trackID.format" (e.g. "12345.MP3_320" or "67890.FLAC").
-// The stored bytes are exactly the response body bytes fetched from the CDN
-// (stripe-encrypted ciphertext). The player decrypts as it reads; the cache
-// never stores plaintext audio.
-//
-// Persistence: entries survive process restarts. Get/Put bump an access
-// sequence and the last use, saved in index.json: at once by a commit or
-// PutMeta, within 30 s or at Close for a Get. Only a file the index does not
-// name (the index is missing or corrupt and the directory is scanned) takes
-// its order and last use from its mtime.
-//
-// On-disk filenames: every committed entry gets its OWN unique filename
-// (a hex-encoding of the key, a monotonic sequence and the body's size, all
-// hex, e.g. "31322e4d50335f333230-2a-4e2000"; files committed before the size
-// was in the name lack the last part and keep working as they are). The size
-// lets a recovery without index.json drop a damaged file. The actual path is
-// stored in the index entry
-// and Get opens exactly that path. Replacing a key never reuses or overwrites
-// the previous file — a new commit renames its temp to a brand-new name and
-// only then swaps the index pointer, leaving the old file to be reclaimed
-// best-effort. This is what makes replace/evict safe on Windows, where an open
-// file cannot be renamed over or deleted (see TestReplaceWhileReaderOpen).
-//
-// Atomicity: Put returns a WriteCloser that writes to a temp file; NewTemp
-// hands out such a file for a player to stream into. The entry only becomes
-// visible to Get (and is added to the LRU) when Close, or Adopt of a body of
-// its declared size, renames the temp to a fresh, unique final name. Partial
-// writes, crashes, or short bodies leave no visible entry (temps are cleaned on
-// New and on failed commits).
-//
-// Pins: an entry may carry pins (opaque strings the engine builds, such as
-// "album:123@456"): it is kept for offline use. Eviction and the age limit
-// never remove a pinned entry, and its bytes do not count against maxBytes
-// (PinnedBytes reports them). SetPins sets every entry's pins at once.
-//
-// Eviction: performed synchronously on successful Put commit. We evict the
-// least-recently-used *complete* unpinned entries until the unpinned bytes are
-// under maxBytes. We never evict
-// a key that currently has an in-progress Put (tracked cheaply via an
-// in-memory set). We do not track open Get readers (to avoid refcounting
-// overhead): Get and NewTemp open files so that they can be deleted while open
-// (on Windows too), and a deleted file stays readable through those handles
-// until they are closed. A file that still cannot be deleted (another program
-// holds it) is skipped as a victim, and a replaced entry's old file is then
-// left as an orphan; the next New reclaims it. This never blocks a commit or a
-// rename.
-//
-// Concurrency: all public methods are safe for concurrent use. The only
-// background work is the timer that writes a Get's recency.
-//
-// Recovery: New rebuilds the index from index.json (falling back to a
-// filesystem scan if it is missing or corrupt), drops entries whose file is
-// missing or size-mismatched, and reclaims (best-effort deletes) any data file
-// that is not referenced by a live index entry — orphans left by a crashed
-// replace or by a delete that a reader was blocking. An undeletable orphan is
-// left in place and retried on the next New.
-//
-// Ownership: the cache deletes only its own files in its folder: names
-// parseFileName accepts, index.json, and its temps (".tmp-" or
-// "index.json.tmp" followed by digits). Anything else there stays. The file
-// "lock" is held locked from New to Close: one cache per folder, across
-// processes.
-//
-// Use: the cache lives in the subfolder opendeezer-cache of the folder the
-// user picks (config.Media.CacheStoreDir) and is off by default (size 0). The player reads a hit's file directly and, on a
-// miss, streams the CDN body into a NewTemp file it then Adopts. Adopt stores
-// with the body the few stream fields (StreamMeta) that let
-// deezer.Client.PrepareStreamCached plan a cached track with no network.
+// Package mediacache is an opt-in, on-disk LRU cache of raw CDN stream bodies keyed
+// "trackID.format", stored as served (ciphertext). Entries commit atomically under
+// unique file names; pinned entries are never evicted. Safe for concurrent use.
 package mediacache
 
 import (
+	"cmp"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -93,11 +26,8 @@ import (
 // (e.g. a Windows sharing violation while a reader still has the file open).
 var removeFile = os.Remove
 
-// fileSep separates the hex-encoded key from the monotonic sequence in an
-// on-disk filename. Both sides are drawn from the hex alphabet ([0-9a-f]) plus
-// the sequence's decimal-less hex digits, so the separator is unambiguous and
-// no data filename can collide with "index.json", "index.json.tmp*" or
-// ".tmp-*" (temps used by CreateTemp), keeping the recovery scan simple.
+// fileSep separates the hex parts of a data file name; since both sides are hex, no
+// data name can collide with "index.json", "index.json.tmp*" or ".tmp-*".
 const fileSep = "-"
 
 // encodeKey hex-encodes an arbitrary cache key into a filesystem-safe token.
@@ -105,13 +35,9 @@ const fileSep = "-"
 // absent or corrupt) can recover the original key from the filename.
 func encodeKey(key string) string { return hex.EncodeToString([]byte(key)) }
 
-// parseFileName reverses the "<hexKey>-<hexSeq>-<hexSize>" scheme of
-// newFilePath: every part lower-case hex, and the key one the engine builds,
-// "<trackID>.<format>" (a track id of letters, digits, "_" and "-"; a format
-// of upper-case letters, digits and "_"). Files committed before the size was
-// part of the name are "<hexKey>-<hexSeq>"; for them size is -1 (unknown). ok
-// is false for names that are not ours (temps, index files, or anything not
-// matching the scheme).
+// parseFileName reverses newFilePath's "<hexKey>-<hexSeq>-<hexSize>" (lower-case hex,
+// key "<trackID>.<format>"); "<hexKey>-<hexSeq>" names have size -1. ok is false for
+// names that are not the cache's.
 func parseFileName(name string) (key string, seq uint64, size int64, ok bool) {
 	parts := strings.Split(name, fileSep)
 	if len(parts) < 2 || len(parts) > 3 {
@@ -145,11 +71,9 @@ func parseFileName(name string) (key string, seq uint64, size int64, ok bool) {
 	return string(kb), seq, size, true
 }
 
-// newFilePath allocates a fresh, unique on-disk path for a commit of key with
-// size bytes; the size in the name lets a recovery without index.json check
-// the file. It never returns the name of an existing file, so os.Rename onto
-// it can never overwrite (and thus never fail against) a file a reader
-// currently holds open.
+// newFilePath allocates a unique path for a commit of key with size bytes (the size
+// lets a recovery check the file). It never names an existing file, so a rename onto
+// it never hits an open file.
 func (c *Cache) newFilePath(key string, size int64) string {
 	enc := encodeKey(key)
 	for {
@@ -172,7 +96,7 @@ type Cache struct {
 	max     int64
 	lock    *os.File // the folder's lock file, held until Close
 	mu      sync.Mutex
-	closed  bool // set by Close: nothing is read or written any more
+	closed  bool // set by Close: nothing more is read or written
 	entries map[string]entry
 	total   int64
 	pinned  int64 // bytes of the pinned entries, part of total
@@ -274,11 +198,9 @@ func New(dir string, maxBytes int64) (*Cache, error) {
 	return c, nil
 }
 
-// Close writes recency still waiting for the index and releases the cache's
-// folder for another cache to open. After it the cache writes nothing more:
-// Get, Put, Adopt and PutMeta refuse, a Put begun before it commits nothing,
-// so a stream that started with this cache
-// plays uncached and its temp file goes when the stream closes.
+// Close writes pending recency to the index and releases the folder. Afterward Get,
+// Put, Adopt and PutMeta refuse and an open Put commits nothing; a stream started with
+// this cache plays uncached.
 func (c *Cache) Close() {
 	c.mu.Lock()
 	if c.dirty {
@@ -304,10 +226,8 @@ func (c *Cache) recover() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// One directory listing serves the whole recovery: the cache's own temps
-	// (".tmp-" or "index.json.tmp" and the digits os.CreateTemp adds) are
-	// removed, and the data files' sizes and mtimes come from it, with no stat
-	// per file.
+	// One directory listing serves the whole recovery: it finds the cache's temps to
+	// remove and the data files' sizes and mtimes, without a stat per file.
 	files := map[string]os.FileInfo{}
 	des, _ := os.ReadDir(c.dir)
 	for _, de := range des {
@@ -355,11 +275,9 @@ func (c *Cache) recover() {
 	c.reclaimOrphansLocked(files)
 }
 
-// reclaimOrphansLocked best-effort deletes every data file of the listing
-// (a name parseFileName accepts) that is not referenced by a live index
-// entry; other files are not the cache's and stay. An undeletable orphan (e.g. a
-// reader still holds it open on Windows) is left in place; the next New
-// retries it.
+// reclaimOrphansLocked tries to delete every data file in the listing that no index
+// entry references; other files stay. An undeletable orphan (open on Windows) is
+// retried by the next New.
 func (c *Cache) reclaimOrphansLocked(files map[string]os.FileInfo) {
 	live := make(map[string]struct{}, len(c.entries))
 	var maxSeq uint64
@@ -379,8 +297,8 @@ func (c *Cache) reclaimOrphansLocked(files map[string]os.FileInfo) {
 		if _, ok := live[name]; ok {
 			continue
 		}
-		// Orphan: best-effort delete. If a reader still holds it open (Windows)
-		// the remove fails and we simply leave it — the next New retries it.
+		// Orphan: try to delete it. If a reader holds it open (Windows) the remove fails and
+		// the next New retries.
 		_ = removeFile(filepath.Join(c.dir, name))
 	}
 	if maxSeq >= c.fileSeq {
@@ -420,9 +338,8 @@ func (c *Cache) loadIndexLocked(files map[string]os.FileInfo) (ents map[string]e
 		pth := filepath.Join(c.dir, ie.File)
 		fi, listed := files[ie.File]
 		if !listed || fi.Size() != ie.Size {
-			// Missing or size-mismatched: drop the entry. The (possibly
-			// corrupt) file is now unreferenced and reclaimOrphansLocked
-			// deletes it.
+			// Missing or size-mismatched: drop the entry. The file is then unreferenced and
+			// reclaimOrphansLocked deletes it.
 			continue
 		}
 		used := time.UnixMilli(ie.Used)
@@ -581,7 +498,7 @@ func sortedPins(pins []string) []string {
 
 func (c *Cache) saveIndexLocked() {
 	if c.closed {
-		return // the folder may belong to another cache now
+		return // the folder may belong to another cache
 	}
 	d := indexData{
 		Entries: make(map[string]indexEntry, len(c.entries)),
@@ -625,11 +542,9 @@ func (c *Cache) saveIndexLocked() {
 	}
 }
 
-// Get opens a cached entry's file (if present) for reading and returns it, its
-// size, and true. On Windows the handle lets the file be evicted while it is
-// read. A file whose size is not the recorded one is dropped and a miss. A hit
-// bumps the entry to most-recent and records its use (in memory, written with
-// the next index write). The caller must Close the file.
+// Get opens a cached entry's file and returns it, its size and true; the caller closes
+// it. A file of the wrong size is dropped as a miss. A hit becomes most recent, its use
+// written with the next index write.
 func (c *Cache) Get(key string) (*os.File, int64, bool) {
 	if key == "" {
 		return nil, 0, false
@@ -674,11 +589,8 @@ func (c *Cache) Get(key string) (*os.File, int64, bool) {
 	return f, sz, true
 }
 
-// Put returns a WriteCloser that receives the raw bytes. The bytes are written
-// to a temporary file. Only when Close returns nil is the entry atomically
-// renamed into place, added to the index, and made visible to Get. The caller
-// is responsible for calling Close. If Close is never called (or returns an
-// error) no partial entry is left.
+// Put returns a WriteCloser writing to a temp file. Only when Close returns nil is the
+// entry renamed into place and visible to Get; otherwise no partial entry is left.
 func (c *Cache) Put(key string) (io.WriteCloser, error) {
 	if key == "" {
 		return nil, errors.New("mediacache: empty key")
@@ -695,13 +607,9 @@ func (c *Cache) Put(key string) (io.WriteCloser, error) {
 	c.writing[key] = struct{}{}
 	c.mu.Unlock()
 
-	// Any previous complete entry for this key stays visible (and accounted)
-	// until the replacement commits in putWriter.Close, which renames its temp
-	// to a BRAND-NEW unique file and only then swaps the index pointer. The old
-	// file is never overwritten or deleted on this path (only best-effort
-	// afterwards), so an abandoned or failed rewrite never destroys a good
-	// cached copy and a reader holding the old file is never disturbed. The
-	// writing marker above keeps the old entry safe from eviction meanwhile.
+	// A previous entry for this key stays visible until the replacement commits under a
+	// new file name; the old file is never overwritten, so a failed rewrite loses nothing.
+	// The writing marker keeps the old entry safe from eviction.
 
 	tmp, err := os.CreateTemp(c.dir, ".tmp-")
 	if err != nil {
@@ -755,10 +663,9 @@ func (w *putWriter) Close() error {
 	return nil
 }
 
-// install makes the complete body at tmp (a file in the cache directory) the
-// entry for key, with meta as its stream fields when not nil and pins as its
-// pins (with those of the entry it replaces): renamed onto a brand-new unique
-// name, indexed, then the cache is trimmed to its limit.
+// install makes the complete body at tmp the entry for key, with meta (if not nil) and
+// pins (plus those of the replaced entry): renamed to a new unique name, indexed, then
+// trimmed to the limit.
 func (c *Cache) install(key, tmp string, size int64, meta *StreamMeta, pins []string) error {
 	// The body reaches the disk before its name says it is complete.
 	f, err := openShared(c.dir, filepath.Base(tmp), os.O_RDWR)
@@ -778,9 +685,8 @@ func (c *Cache) install(key, tmp string, size int64, meta *StreamMeta, pins []st
 		return err
 	}
 
-	// Swap the index pointer to the new file under lock; move the accounting.
-	// A cache closed meanwhile takes nothing: its folder may belong to
-	// another cache now.
+	// Swap the index pointer to the new file under lock; move the accounting. A cache
+	// closed meanwhile takes nothing: its folder may belong to another cache.
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
@@ -807,10 +713,8 @@ func (c *Cache) install(key, tmp string, size int64, meta *StreamMeta, pins []st
 	}
 	c.mu.Unlock()
 
-	// Best-effort remove the OLD file now that no live entry references it. A
-	// reader holding it open with plain sharing (not one of ours) makes this
-	// fail on Windows; the file is then left as an orphan for the next New's
-	// recover() to reclaim. Whatever the outcome we never fail the commit on it.
+	// Try to remove the old file, which no entry references. If a foreign reader holds it (Windows),
+	// it stays as an orphan for the next New; the commit never fails on it.
 	if hadOld && old.path != final {
 		_ = removeFile(old.path)
 	}
@@ -860,12 +764,9 @@ func CreateTemp(dir, pattern string) (*os.File, error) {
 	return shared, nil
 }
 
-// Adopt makes the file at path, a NewTemp file holding a complete body of
-// size bytes, the entry for key, with meta as its stream fields (written in
-// the same index write). A file of another size is refused (a short or torn
-// body never becomes an entry), and so is any body while the limit is 0 (it
-// would be evicted at once); the caller keeps the file then. The caller may
-// keep reading the file through its open handle.
+// Adopt makes the NewTemp file at path, holding size bytes, the entry for key with meta,
+// in one index write. Another size, or a limit of 0, is refused and the caller keeps
+// the file. The caller may go on reading it.
 func (c *Cache) Adopt(key, path string, size int64, meta StreamMeta) error {
 	return c.AdoptPinned(key, path, size, meta, nil)
 }
@@ -908,34 +809,26 @@ func (c *Cache) evictIfNeeded() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var stuck map[string]bool
-	for c.total-c.pinned > c.max && len(c.entries) > 0 {
-		var victim string
-		var victimSeq uint64
-		for k, e := range c.entries {
-			if _, busy := c.writing[k]; busy || stuck[k] || len(e.pins) > 0 {
-				continue
-			}
-			if victim == "" || e.accessSeq < victimSeq {
-				victim = k
-				victimSeq = e.accessSeq
-			}
+	if c.total-c.pinned <= c.max {
+		return
+	}
+	// The evictable entries once, least recent first.
+	victims := make([]string, 0, len(c.entries))
+	for k, e := range c.entries {
+		if _, busy := c.writing[k]; !busy && len(e.pins) == 0 {
+			victims = append(victims, k)
 		}
-		if victim == "" {
+	}
+	slices.SortFunc(victims, func(a, b string) int { return cmp.Compare(c.entries[a].accessSeq, c.entries[b].accessSeq) })
+	for _, victim := range victims {
+		if c.total-c.pinned <= c.max {
 			break
 		}
 		e := c.entries[victim]
 		if err := removeFile(e.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			// The file could not be deleted (e.g. Windows sharing violation
-			// while a reader has it open). Keep the entry and its accounting
-			// intact so the index never desyncs from disk — dropping only the
-			// bookkeeping would orphan the file and let recover() reload it
-			// past maxBytes. Go on with the next victim; the next Put commit
-			// retries this one.
-			if stuck == nil {
-				stuck = map[string]bool{}
-			}
-			stuck[victim] = true
+			// The file could not be deleted (Windows sharing violation). Keep the entry and its
+			// accounting so the index matches the disk, and go on with the next victim; the next
+			// commit retries this one.
 			continue
 		}
 		c.forgetLocked(victim, e)
@@ -973,11 +866,9 @@ func Purge(dir string) error {
 	return nil
 }
 
-// RemoveOldCaches removes the caches older versions kept outside an
-// opendeezer-cache folder: the default one in <config dir>/mediacache (then
-// that folder, when nothing else is left in it), and one kept directly in the
-// folder the user picked. It runs once: media.json records that it ran. Call
-// it at startup, before a cache opens.
+// RemoveOldCaches removes caches kept outside an opendeezer-cache folder: the default
+// <config dir>/mediacache and one directly in the chosen folder. It runs once
+// (recorded in media.json), at startup before a cache opens.
 func RemoveOldCaches() {
 	m := config.LoadMedia()
 	if m.OldCachesRemoved {
@@ -995,11 +886,9 @@ func RemoveOldCaches() {
 	_ = config.SaveMedia(m)
 }
 
-// removeOldCache removes the cache an older version kept in dir: the files
-// its index.json names, then that index.json. dir holds one only when its
-// index.json parses as a cache index whose every entry names a data file of
-// that entry's key; otherwise nothing in dir is touched. The lock, temps and
-// files the index does not name stay.
+// removeOldCache removes the files an old cache's index.json in dir names, then the
+// index, only when every entry names a data file of its key; otherwise dir is left
+// alone.
 func removeOldCache(dir string) {
 	index := filepath.Join(dir, "index.json")
 	b, err := os.ReadFile(index)
@@ -1050,10 +939,9 @@ func (c *Cache) PinnedBytes() int64 {
 	return c.pinned
 }
 
-// SetPins makes pins[key] the pins of every entry (an entry whose key is not
-// in it is pinned by nothing) and gives entries without stream meta theirs
-// from metas (an index rebuilt from the folder has none), in one index write.
-// The limit then applies to the entries no pin keeps any more.
+// SetPins makes pins[key] each entry's pins (absent keys: none) and gives entries
+// without stream meta theirs from metas, in one index write. The limit then applies to
+// unpinned entries.
 func (c *Cache) SetPins(pins map[string][]string, metas map[string]StreamMeta) {
 	c.mu.Lock()
 	changed := false
@@ -1188,8 +1076,8 @@ func (c *Cache) ClearUnpinned() error {
 	return nil
 }
 
-// Clear removes all entries (best-effort), pinned ones too, and resets the
-// cache. It does not remove the directory itself.
+// Clear removes all entries, pinned ones too (files that cannot be deleted stay), and
+// resets the cache. It does not remove the directory itself.
 func (c *Cache) Clear() error {
 	c.mu.Lock()
 	paths := make([]string, 0, len(c.entries))
@@ -1221,10 +1109,8 @@ func (c *Cache) Clear() error {
 	return nil
 }
 
-// PutMeta stores (or overwrites) the minimal stream metadata for a cache key.
-// It is persisted in index.json immediately. Safe with or without a body entry
-// for the same key. Callers should store the meta that was current when the
-// body was (or will be) cached.
+// PutMeta stores or overwrites the stream metadata for a key and writes index.json at
+// once, with or without a body entry. Store the meta current when the body is cached.
 func (c *Cache) PutMeta(key string, m StreamMeta) error {
 	if key == "" {
 		return errors.New("mediacache: empty key")

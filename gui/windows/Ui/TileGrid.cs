@@ -1,4 +1,4 @@
-// A virtualised grid of tiles that fills the width of the view's scroller,
+// A virtualized grid of tiles that fills the width of the view's scroller,
 // optionally limited to a number of rows ("Show all" lifts the limit).
 
 using System;
@@ -19,15 +19,22 @@ internal sealed class TileGrid<T> where T : class
 
     public Action<int, int>? ShownChanged { get; set; }
 
-    public TileGrid(Func<T, TileData> map, Action<T> open, Action<T>? play = null, Func<T, MenuFlyout?>? menu = null)
+    // menu fills the grid's one context menu for the tile it opens on.
+    public TileGrid(Func<T, TileData> map, Action<T> open, Action<T>? play = null, Action<IList<MenuFlyoutItemBase>, T>? menu = null)
     {
-        var recycler = new Recycler<MediaTile, T>(
-            () => new MediaTile(tile => open((T)tile.Item!), play == null ? null : tile => play((T)tile.Item!)),
-            (tile, item, _) =>
+        MenuFlyout? flyout = null;
+        if (menu != null)
+        {
+            var f = flyout = new MenuFlyout();
+            f.Opening += (_, _) =>
             {
-                tile.Bind(item, map(item));
-                if (menu != null) tile.ContextFlyout = menu(item);
-            });
+                f.Items.Clear();
+                if (f.Target is MediaTile { Item: T item }) menu(f.Items, item);
+            };
+        }
+        var recycler = new Recycler<MediaTile, T>(
+            () => new MediaTile(tile => open((T)tile.Item!), play == null ? null : tile => play((T)tile.Item!)) { ContextFlyout = flyout },
+            (tile, item, _) => tile.Bind(item, map(item)));
         Root = recycler.Attach(new ItemsRepeater
         {
             Layout = new UniformGridLayout

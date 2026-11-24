@@ -44,6 +44,7 @@ import fr.cyclooo.opendeezer.engine.Album
 import fr.cyclooo.opendeezer.engine.ArtistInfo
 import fr.cyclooo.opendeezer.engine.ArtistPage
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.player.PlayerController
 import fr.cyclooo.opendeezer.ui.components.Artwork
 import fr.cyclooo.opendeezer.ui.components.CenteredMessage
@@ -95,7 +96,7 @@ fun ArtistProfileScreen(
             val top = page?.top
             if (!top.isNullOrEmpty()) {
                 ExtendedFloatingActionButton(
-                    onClick = { player.playQueue(top, 0) },
+                    onClick = { player.playQueue(top, 0, ListenContext("artist_top", artistId)) },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     text = { Text(stringResource(R.string.action_play_all)) },
                 )
@@ -170,7 +171,8 @@ private fun ArtistProfileContent(
                 TrackRow(
                     track = track,
                     player = player,
-                    onClick = { player.playQueue(page.top, index) },
+                    context = ListenContext("artist_top", page.artist.id),
+                    onClick = { player.playQueue(page.top, index, ListenContext("artist_top", page.artist.id)) },
                     onStartRadio = { player.startTrackRadio(track) },
                 )
             }

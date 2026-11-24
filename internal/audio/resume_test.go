@@ -155,11 +155,8 @@ func TestDownloadRefreshOnExpiry(t *testing.T) {
 	}
 }
 
-// TestDownloadRefreshRejectsChangedPlan verifies that a 403-triggered Refresh
-// whose plan came back with a different stream identity (here: the format
-// changed at runtime) is NOT resumed into. The consumed offset and decryptor
-// belong to the old stream, so splicing the refreshed one would corrupt audio;
-// download must instead surface a clean error with nothing spliced.
+// TestDownloadRefreshRejectsChangedPlan checks that a refresh returning a different
+// stream (format changed) is not resumed into: download fails with nothing spliced.
 func TestDownloadRefreshRejectsChangedPlan(t *testing.T) {
 	body := make([]byte, 120000)
 	for i := range body {
@@ -223,9 +220,9 @@ func tornRawResponse(t *testing.T, w http.ResponseWriter, status, headers string
 // come) counts as a dropped connection after the stall time: the download
 // resumes from where it stopped and the track plays whole.
 func TestStalledBodyResumes(t *testing.T) {
-	prev := streamStallTimeout
-	streamStallTimeout = 200 * time.Millisecond
-	defer func() { streamStallTimeout = prev }()
+	prev := deezer.StallTimeout
+	deezer.StallTimeout = 200 * time.Millisecond
+	defer func() { deezer.StallTimeout = prev }()
 	for _, fx := range fixtures() {
 		t.Run(fx.format, func(t *testing.T) {
 			half := len(fx.cipher) / 2
@@ -270,11 +267,9 @@ func TestStalledBodyResumes(t *testing.T) {
 	}
 }
 
-// TestDownloadResumeRejectsWrongRangeStart verifies that a resume 206 whose
-// Content-Range does not start exactly at the consumed offset is treated as a
-// failed attempt (never spliced): the download retries and, with the server
-// persistently mispositioned, surfaces an error while the buffer holds only
-// the clean prefix.
+// TestDownloadResumeRejectsWrongRangeStart checks that a 206 not starting at the
+// consumed offset is never spliced: the download retries, then fails with only the
+// clean prefix buffered.
 func TestDownloadResumeRejectsWrongRangeStart(t *testing.T) {
 	body := make([]byte, 200000)
 	for i := range body {
@@ -315,11 +310,9 @@ func TestDownloadResumeRejectsWrongRangeStart(t *testing.T) {
 	}
 }
 
-// TestDownloadResumeEntityChanged verifies the If-Range/validator protection on
-// plain passthrough hosts: the first response carries an ETag; the host then
-// ignores Range on resume and answers a full 200 for a DIFFERENT entity (new
-// ETag). The old skip-splicing would silently mix two entities; now the resume
-// must send If-Range and the download must fail cleanly with nothing spliced.
+// TestDownloadResumeEntityChanged: the host ignores Range on resume and sends a full 200
+// of a different entity (new ETag). The resume must send If-Range and fail with nothing
+// spliced.
 func TestDownloadResumeEntityChanged(t *testing.T) {
 	bodyA := make([]byte, 150000)
 	bodyB := make([]byte, 150000)
@@ -359,11 +352,8 @@ func TestDownloadResumeEntityChanged(t *testing.T) {
 	}
 }
 
-// TestDownloadTrickleServerTerminates verifies the retry budget is only
-// refreshed by meaningful progress: a host that drips one byte per connection
-// and then drops must exhaust maxResumeAttempts and surface an error within a
-// bounded number of requests instead of looping forever (streamHTTPClient
-// deliberately has no overall timeout).
+// TestDownloadTrickleServerTerminates checks that a host dripping one byte per
+// connection exhausts deezer.MaxResumeAttempts within a bounded number of requests.
 func TestDownloadTrickleServerTerminates(t *testing.T) {
 	const total = 1 << 20
 	var reqs int32
@@ -397,8 +387,8 @@ func TestDownloadTrickleServerTerminates(t *testing.T) {
 	if s.lastErr() == "" {
 		t.Fatal("trickle download should surface an error")
 	}
-	if n := atomic.LoadInt32(&reqs); n > maxResumeAttempts+1 {
-		t.Fatalf("trickle server received %d requests, want at most %d", n, maxResumeAttempts+1)
+	if n := atomic.LoadInt32(&reqs); n > deezer.MaxResumeAttempts+1 {
+		t.Fatalf("trickle server received %d requests, want at most %d", n, deezer.MaxResumeAttempts+1)
 	}
 }
 

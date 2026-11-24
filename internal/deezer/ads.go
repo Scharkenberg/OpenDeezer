@@ -1,113 +1,75 @@
 package deezer
 
-import (
-	"encoding/json"
-	"fmt"
-)
+import "encoding/json"
 
-// AdCadence is Deezer's free-tier audio-ad schedule, read from the gw
-// deezer.adConfig method. On a paid (Premium/HiFi) account there are no audio
-// ads, so Enabled is false.
-type AdCadence struct {
-	Enabled  bool `json:"enabled"`  // account is ad-supported (Deezer Free)
-	Start    int  `json:"start"`    // first audio ad after this many tracks
-	Interval int  `json:"interval"` // one audio ad every this many tracks after that
-}
-
-// SetAdsDisabled turns off play-reporting (gw log.listen) and the ad cadence.
-//
-// This is an opt-out for FREE accounts only. Deezer's free tier is ad-supported:
-// reporting each play (like the official web player) is what lets Deezer count
-// listens — which credits artists and drives the ad schedule. Disabling it makes
-// playback ad-free but stops reporting plays, which denies artists their play
-// count and breaks Deezer's terms for the free tier. It is exposed only so the
-// user can make that choice explicitly, at their own risk. Paid accounts are
-// unaffected (they have no ads either way).
+// SetAdsDisabled turns off play reporting (gw log.listen), which credits artists and
+// drives free-tier ads. Disabling it breaks Deezer's free-tier terms; it exists so the
+// user can choose that explicitly, at their own risk.
 func (c *Client) SetAdsDisabled(disabled bool) { c.adsDisabled.Store(disabled) }
 
-// AdsDisabled reports whether play-reporting/ads are turned off.
+// AdsDisabled reports whether play reporting is turned off.
 func (c *Client) AdsDisabled() bool { return c.adsDisabled.Load() }
 
-// loadAdConfig fetches the free-tier audio-ad cadence (gw deezer.adConfig) once
-// per session. Best-effort: any failure leaves the cadence disabled.
-func (c *Client) loadAdConfig() {
-	b, err := c.gw("deezer.adConfig", "{}")
-	if err != nil {
-		return
-	}
-	var r struct {
-		Results struct {
-			Config struct {
-				Audio struct {
-					Start    int `json:"start"`
-					Interval int `json:"interval"`
-				} `json:"audio"`
-			} `json:"config"`
-		} `json:"results"`
-	}
-	if err := json.Unmarshal(b, &r); err != nil {
-		return
-	}
-	cad := AdCadence{
-		Start:    r.Results.Config.Audio.Start,
-		Interval: r.Results.Config.Audio.Interval,
-	}
-	// Ad-supported when Deezer returned an audio-ad cadence and the account isn't
-	// entitled to paid on-demand streaming.
-	cad.Enabled = cad.Start > 0 && !c.Account().Premium
-	c.adMu.Lock()
-	c.adCad = cad
-	c.adMu.Unlock()
+// ListenMedia names a track in the listen log: its id and its type ("song",
+// "episode").
+type ListenMedia struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
 }
 
-// AdCadenceInfo returns the current audio-ad schedule (lazily fetching it once).
-func (c *Client) AdCadenceInfo() AdCadence {
-	if !c.adsDisabled.Load() {
-		c.adOnce.Do(c.loadAdConfig)
-	}
-	c.adMu.Lock()
-	defer c.adMu.Unlock()
-	return c.adCad
-}
-
-// NowPlaying tells Deezer a track has started (gw log.listen), mirroring the web
-// player so plays are counted server-side — the free tier's ad accounting and
-// artist play-counts both depend on it. It also advances the local ad-cadence
-// counter. Fire-and-forget: the error is returned only for logging and must
-// never block playback. A no-op when the user has disabled ads/reporting.
-func (c *Client) NowPlaying(trackID string) error {
+// LogListen sends gw log.listen as Deezer's players do when a track starts: params is
+// the listen that ended, next the track that starts (each may be nil). It carries the
+// web player's build; a no-op when reporting is off.
+func (c *Client) LogListen(params json.RawMessage, next *ListenMedia) error {
 	if c.adsDisabled.Load() {
 		return nil
 	}
-	c.adOnce.Do(c.loadAdConfig)
-	c.adMu.Lock()
-	c.adPlays++
-	c.adMu.Unlock()
-	body := fmt.Sprintf(`{"next_media":{"media":{"id":%s,"type":"song"}}}`, jsonEsc(trackID))
-	_, err := c.gw("log.listen", body)
+	if params != nil {
+		params = withDev(params)
+	}
+	body := struct {
+		Params json.RawMessage `json:"params,omitempty"`
+		Next   *struct {
+			Media *ListenMedia `json:"media"`
+		} `json:"next_media,omitempty"`
+	}{Params: params}
+	if next != nil {
+		body.Next = &struct {
+			Media *ListenMedia `json:"media"`
+		}{next}
+	}
+	b, _ := json.Marshal(body)
+	_, err := c.gw("log.listen", string(b))
 	return err
 }
 
-// AdBreakDue reports whether an audio ad is scheduled before the current track,
-// per the free-tier cadence (deezer.adConfig). The audio-ad itself is served by
-// a third-party ad network, so OpenDeezer does not fetch or play it; this hook
-// exposes the schedule for a future ad-audio integration and for the UI. Always
-// false when ads are disabled or on a paid account.
-func (c *Client) AdBreakDue() bool {
-	if c.adsDisabled.Load() {
-		return false
+// LogListens sends listens that could not be sent when they ended (offline, or
+// the request failed) in one gw log.batch_listen. A no-op when the user has
+// turned reporting off.
+func (c *Client) LogListens(params []json.RawMessage) error {
+	if c.adsDisabled.Load() || len(params) == 0 {
+		return nil
 	}
-	c.adMu.Lock()
-	defer c.adMu.Unlock()
-	if !c.adCad.Enabled || c.adCad.Start <= 0 {
-		return false
+	withDevs := make([]json.RawMessage, len(params))
+	for i, p := range params {
+		withDevs[i] = withDev(p)
 	}
-	n := c.adPlays
-	if n < c.adCad.Start {
-		return false
+	b, _ := json.Marshal(struct {
+		Array []json.RawMessage `json:"array"`
+	}{withDevs})
+	_, err := c.gw("log.batch_listen", string(b))
+	return err
+}
+
+// withDev returns the listen params with the device Deezer's web player names
+// in it: its build, of type 0.
+func withDev(params json.RawMessage) json.RawMessage {
+	var p map[string]json.RawMessage
+	if json.Unmarshal(params, &p) != nil {
+		return params
 	}
-	if c.adCad.Interval <= 0 {
-		return n == c.adCad.Start
-	}
-	return (n-c.adCad.Start)%c.adCad.Interval == 0
+	release, _ := WebRelease()
+	p["dev"], _ = json.Marshal(map[string]any{"v": release, "t": 0})
+	b, _ := json.Marshal(p)
+	return b
 }

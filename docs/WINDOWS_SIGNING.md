@@ -47,7 +47,7 @@ Settings → Secrets and variables → Actions. The `windows-gui` job checks for
 | `TRUSTED_SIGNING_CERT_PROFILE` | the certificate profile name (step 4) |
 
 Cut the next tag and `OpenDeezer.exe` is Authenticode-signed + RFC-3161
-timestamped. SmartScreen recognises the Microsoft-rooted publisher; a brand-new
+timestamped. SmartScreen recognizes the Microsoft-rooted publisher; a brand-new
 identity may still accrue reputation over the first downloads, but the "unknown
 publisher" scare is gone.
 

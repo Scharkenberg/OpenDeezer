@@ -244,7 +244,7 @@ enum Core {
     }
     /// Creates an empty playlist; returns the new id (nil on failure).
     static func createPlaylist(_ title: String) -> String? {
-        decode(CreatedPlaylist.self, takeJSON(withC(title) { DZCreatePlaylist($0) }))?.id
+        decode(CreatedPlaylist.self, takeJSON(withC2(title, "") { DZCreatePlaylist($0, $1) }))?.id
     }
     @discardableResult
     static func renamePlaylist(_ playlistID: String, _ title: String) -> Bool {
@@ -258,7 +258,7 @@ enum Core {
     // MARK: Flow (v0.4)
 
     static func flow() -> [Track] {
-        decode(TracksResponse.self, takeJSON(DZFlowJSON()))?.tracks ?? []
+        decode(TracksResponse.self, takeJSON(withC("") { DZFlowJSON($0) }))?.tracks ?? []
     }
 
     // MARK: radio / mixes (v2.2)

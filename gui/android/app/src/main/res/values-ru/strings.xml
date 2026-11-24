@@ -240,9 +240,9 @@
     <string name="favorite_update_failed">Не удалось обновить «Нравится» — проверьте подключение.</string>
     <string name="preview_chip">Фрагмент</string>
     <string name="account_free_hint">Бесплатный аккаунт · стандартное качество (128 kbps)</string>
-    <string name="settings_ads">Реклама</string>
-    <string name="setting_disable_ads_title">Отключить рекламу</string>
-    <string name="setting_disable_ads_disclaimer">Deezer Free существует за счёт рекламы. Передача данных о прослушиваниях — как в официальном приложении — вознаграждает исполнителей и поддерживает показ рекламы. Отключение этой функции убирает рекламу, но прекращает передачу данных о прослушиваниях, лишая исполнителей учёта их прослушиваний и нарушая условия использования Deezer. Используйте на свой страх и риск.</string>
+    <string name="settings_ads">Учёт прослушиваний</string>
+    <string name="setting_disable_ads_title">Не сообщать о моих прослушиваниях</string>
+    <string name="setting_disable_ads_disclaimer">OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск.</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -278,8 +278,6 @@
     <string name="cd_downloaded">Скачано</string>
     <string name="cd_reorder">Изменить порядок</string>
     <string name="offline_ready">%1$s доступно офлайн</string>
-    <string name="offline_already">%1$s уже офлайн</string>
-    <string name="offline_needs_cache">Включите кэш потока в настройках, чтобы скачивать офлайн</string>
     <string name="device_self_phone">OpenDeezer (Android)</string>
     <string name="device_self_tv">OpenDeezer (Android TV)</string>
     <string name="settings_connect">OpenDeezer Connect</string>

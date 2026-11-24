@@ -125,8 +125,8 @@ func TestTrackInfoWire(t *testing.T) {
 		`"album":{"id":"302127","title":"Discovery","coverUrl":"https://img.example/1000.jpg","releaseDate":"2001-03-07","label":"Parlophone","trackCount":14,"genres":["Dance"]},` +
 		`"trackNumber":4,"diskNumber":1,"durationMs":224000,"releaseDate":"2001-03-07","bpm":123.4,"gain":-9.8,"isrc":"GBDUW0000059","explicit":true,` +
 		`"copyright":"(P) 2001 Daft Life Ltd.",` +
-		`"contributors":[{"roleKey":"composer","role":"Composer","names":["Thomas Bangalter"]},{"roleKey":"author","role":"Lyricist","names":["Edwin Birdsong"]},` +
-		`{"roleKey":"mixer","role":"Mixing engineer","names":["Thomas Bangalter"]},{"roleKey":"vocal_coach","role":"Vocal coach","names":["Someone"]}]}`
+		`"contributors":[{"roleKey":"composer","names":["Thomas Bangalter"]},{"roleKey":"author","names":["Edwin Birdsong"]},` +
+		`{"roleKey":"mixer","names":["Thomas Bangalter"]},{"roleKey":"vocal_coach","names":["Someone"]}]}`
 	if string(got) != want {
 		t.Fatalf("track info wire JSON changed\n got: %s\nwant: %s", got, want)
 	}

@@ -114,7 +114,7 @@ func TestRemoveUnderShuffleKeepsCycle(t *testing.T) {
 	q.SetShuffle(true)
 	q.Next()
 	cur := curID(q)
-	rm := 5 // remove some other track — never the current row
+	rm := 5 // remove some other track, never the current row
 	if q.Index() == rm {
 		rm = 4
 	}
@@ -155,7 +155,7 @@ func TestMoveRemapsCursorAndHistory(t *testing.T) {
 	if ids(q) != "cdbea" || curID(q) != "b" {
 		t.Fatalf("after move2: %q cur=%q", ids(q), curID(q))
 	}
-	// History still retraces to a wherever it lives now.
+	// History still retraces to a wherever it lives.
 	if !q.Prev() || curID(q) != "a" {
 		t.Fatalf("Prev after moves -> %q, want a", curID(q))
 	}

@@ -18,10 +18,8 @@ type Track struct {
 	ArtworkURL string
 	Explicit   bool // explicit lyrics/content (show an "E" badge)
 
-	// TrackNumber is the 1-based position of the track within its album, when
-	// known (from the album-tracks listing's track_position). Zero means
-	// unknown/not applicable (single-track lookups, playlist context) and the
-	// download tagger skips the ID3 TRCK / FLAC TRACKNUMBER field.
+	// TrackNumber is the 1-based position in the album (track_position), 0 when unknown;
+	// the tagger then skips TRCK / TRACKNUMBER.
 	TrackNumber int
 	// Year is the release year as a 4-digit string ("2021"), parsed from the
 	// track/album release_date when present. Empty means unknown and the
@@ -65,8 +63,9 @@ type ArtistPage struct {
 
 // LyricLine is one synced lyric line (TimeMS is the line's start offset).
 type LyricLine struct {
-	TimeMS int64
-	Text   string
+	TimeMS     int64
+	Text       string
+	Translated string // the line in the account's language, "" when Deezer has none
 }
 
 // Lyrics holds a track's plain text plus, when available, time-synced lines.
@@ -106,8 +105,8 @@ type Episode struct {
 	PodcastName string
 }
 
-// AsTrack adapts an episode to a Track so the existing queue/player/now-playing
-// paths can carry it (episodes play via a plain StreamPlan).
+// AsTrack adapts an episode to a Track for the queue, player and now-playing paths
+// (episodes play via a plain StreamPlan).
 func (e Episode) AsTrack() Track {
 	return Track{
 		ID:         e.ID,
@@ -124,6 +123,7 @@ type Playlist struct {
 	ID         string
 	Name       string
 	Owner      string
+	OwnerID    string
 	TrackCount int
 	ArtworkURL string
 }

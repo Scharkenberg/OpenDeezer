@@ -1,10 +1,12 @@
 // The header of a collection or artist: raised art, kind label, title, meta
 // line, actions. Below Narrow the art shrinks and the text stacks under it.
 
+using System;
 using System.Numerics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 
 namespace OpenDeezer;
@@ -57,13 +59,24 @@ internal sealed class Hero
         });
     }
 
-    // `generated` is a glyph shown on an accent tile instead of artwork (Liked songs, Flow).
-    public void Set(string kind, string title, string meta, string artUrl, string? generated = null)
+    // `generated` is a glyph shown on an accent tile instead of artwork (Liked songs, Flow);
+    // `openFirst` makes the meta line's first part (an album's artist) a link.
+    public void Set(string kind, string title, string meta, string artUrl, string? generated = null, Action? openFirst = null)
     {
         Ui.SetText(_kind, kind);
         _kind.Visibility = Ui.Show(kind.Length > 0);
         Ui.SetText(_title, title);
-        Ui.SetText(_meta, meta);
+        int cut = meta.IndexOf(" · ");
+        string first = cut < 0 ? meta : meta[..cut];
+        if (openFirst != null && first.Length > 0)
+        {
+            var link = new Hyperlink { Inlines = { new Run { Text = first } } };
+            link.Click += (_, _) => openFirst();
+            _meta.Inlines.Clear();
+            _meta.Inlines.Add(link);
+            _meta.Inlines.Add(new Run { Text = meta[first.Length..] });
+        }
+        else Ui.SetText(_meta, meta);
         _meta.Visibility = Ui.Show(meta.Length > 0);
         _art.Set(artUrl, title);
         _generated.Visibility = Ui.Show(generated != null);

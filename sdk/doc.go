@@ -1,13 +1,13 @@
-// Package sdk is the OpenDeezer public SDK — a curated Go API for third-party
+// Package sdk is the OpenDeezer public SDK, a curated Go API for third-party
 // developers who want to build on the OpenDeezer engine without forking the
 // application itself.
 //
 // # Sub-packages
 //
-//   - [sdk/deezer]  — Deezer API client (login, browse, stream resolution, decrypt)
-//   - [sdk/connect] — OpenDeezer Connect (LAN device discovery, remote playback)
-//   - [sdk/control] — control server + client (HTTP/JSON remote-control API)
-//   - [sdk/player]  — in-process audio playback (cgo required: miniaudio or oto)
+//   - [sdk/deezer]: Deezer API client (login, browse, stream resolution, decrypt)
+//   - [sdk/connect]: OpenDeezer Connect (LAN device discovery, remote playback)
+//   - [sdk/control]: control server + client (HTTP/JSON remote-control API)
+//   - [sdk/player]: in-process audio playback (cgo required: miniaudio or oto)
 //
 // # Install
 //

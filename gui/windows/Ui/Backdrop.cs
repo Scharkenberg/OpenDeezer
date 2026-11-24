@@ -1,5 +1,5 @@
 // A page over its own artwork: the picture fills the page behind an acrylic layer that blurs
-// it, so the page takes the artwork's colours (the track and artist pages). Without a picture
+// it, so the page takes the artwork's colors (the track and artist pages). Without a picture
 // the window's Mica shows through.
 
 using Microsoft.UI.Xaml;

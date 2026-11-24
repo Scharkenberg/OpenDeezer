@@ -6,8 +6,6 @@ package engine
 import (
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,6 +14,7 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
+	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
 )
 
 // ControlConfig returns the current remote-control settings for a settings
@@ -55,29 +54,23 @@ func resolveControlAddr(addr string) string {
 	}
 }
 
-// SetControlConfig persists the remote-control settings to the config files the
-// engine reads at startup (<user config dir>/opendeezer/{control.txt,
-// control-token.txt}) AND applies them live: (re)starts the control server when
-// enabled (LAN binds require same-account auth when no token is set), stops it
-// when disabled.
+// SetControlConfig saves the remote-control settings (control.txt, control-token.txt
+// in the config dir) and applies them: starts or restarts the control server when
+// enabled, stops it otherwise. LAN binds without a token need same-account auth.
 func SetControlConfig(on bool, addr, token string) {
 	a := strings.TrimSpace(addr)
 	tok := strings.TrimSpace(token)
 
-	// Persist for next launch (same files env/config provide today).
-	if base, err := os.UserConfigDir(); err == nil {
-		dir := filepath.Join(base, "opendeezer")
-		_ = os.MkdirAll(dir, 0o755)
-		val := ""
-		if on {
-			if a != "" {
-				val = a
-			} else {
-				val = "1"
-			}
-		}
-		_ = os.WriteFile(filepath.Join(dir, "control.txt"), []byte(val), 0o600)
-		_ = os.WriteFile(filepath.Join(dir, "control-token.txt"), []byte(tok), 0o600)
+	// Saved for the next launch: control.txt holds "" when off, else the address or "1".
+	saved := a
+	if saved == "" {
+		saved = "1"
+	}
+	if err := config.SaveControlEnabled(on, saved); err != nil {
+		odlog.Warn("control.txt: %v", err)
+	}
+	if err := config.SaveControlToken(tok); err != nil {
+		odlog.Warn("control-token.txt: %v", err)
 	}
 
 	// Apply live: tear down any running server, then start fresh if enabled.
@@ -100,13 +93,9 @@ var webRemotePrev *control.Config
 // lanHost is the host a LAN-reachable control server binds: every interface.
 var lanHost = "0.0.0.0"
 
-// WebRemoteSetEnabled turns the phone web remote on or off. On starts (or
-// rebinds) the control server on a LAN-reachable address (lanHost, same port)
-// with pairing active, so a phone on the same network can scan the QR code and
-// connect. Off ends pairing and the paired sessions and restores the server the
-// remote replaced (or none), so the LAN bind and its advertiser go away with
-// it; while the Connect host is on, the LAN server stays for it. Off by
-// default.
+// WebRemoteSetEnabled turns the phone web remote on or off. On binds the control
+// server to lanHost (same port) with pairing; off ends pairing and sessions and
+// restores the previous server, unless the Connect host needs it. Off by default.
 func WebRemoteSetEnabled(on bool) {
 	ctrlMu.Lock()
 	defer ctrlMu.Unlock()
@@ -148,12 +137,9 @@ func WebRemoteSetEnabled(on bool) {
 	}
 }
 
-// ensureLANServer returns the control server on a LAN-reachable address: one
-// already there stays (with webRemote, marked so a later rebuild keeps the web
-// remote on); otherwise one is started, or a loopback-only one rebound, on
-// lanHost with the same port, keeping the configured token and same-account
-// auth (always the latter with a Connect host switch, so devices of the
-// account can drive it). nil when no address binds. Caller holds ctrlMu.
+// ensureLANServer returns the control server on a LAN address, starting or rebinding
+// one on lanHost (same port) with the configured auth (same-account always with a
+// Connect host switch). nil when no address binds. Caller holds ctrlMu.
 func ensureLANServer(webRemote bool) *control.Server {
 	mu.Lock()
 	srv, cur := ctrlSrv, ctrlCfg
@@ -199,11 +185,8 @@ func webRemoteURL() (string, *control.Server) {
 	return fmt.Sprintf("http://%s:%d/remote", discovery.LANIPv4(), srvPort(srv)), srv
 }
 
-// WebRemoteInfo returns {"enabled":bool,"code":"123456",
-// "url":"http://<lanip>:<port>/remote","port":<int>}. enabled stays true while
-// the remote serves (a paired phone keeps control for its session after the
-// single-use code is spent); code is "" when no code is active, and code and
-// url are "" when the remote is off.
+// WebRemoteInfo returns {"enabled","code","url","port"}. enabled stays true while the
+// remote serves; code is "" when no code is active, and code and url are "" when off.
 func WebRemoteInfo() map[string]any {
 	url, srv := webRemoteURL()
 	if srv == nil {
@@ -231,21 +214,18 @@ func WebRemoteQRPNG() []byte {
 	return b
 }
 
-// SetConnectHostSwitch declares (on) that the host has a Connect host switch
-// (ConnectHostSetEnabled): its control server is advertised on the LAN only
-// while the switch is on, and a LAN server it starts always accepts devices of
-// the same account. Without it every LAN-bound server is advertised and auth
-// follows the control config. Call before Init.
+// SetConnectHostSwitch(true) declares a Connect host switch: the control server is
+// advertised only while it is on, and a LAN server it starts accepts the account's
+// devices. Without it auth follows the control config. Call before Init.
 func SetConnectHostSwitch(on bool) {
 	ctrlMu.Lock()
 	connectHostSwitch = on
 	ctrlMu.Unlock()
 }
 
-// ConnectHostSetEnabled makes this device a discoverable OpenDeezer Connect
-// target on the LAN (on), so other devices signed into the same Deezer account
-// find it in their device picker and drive its playback; or stops advertising
-// it (the control server stays). Idempotent.
+// ConnectHostSetEnabled(true) advertises this device on the LAN as a Connect target
+// for the account's other devices; false stops advertising (the control server
+// stays). Idempotent.
 func ConnectHostSetEnabled(on bool) {
 	ctrlMu.Lock()
 	defer ctrlMu.Unlock()

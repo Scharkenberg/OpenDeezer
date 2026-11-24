@@ -1,20 +1,11 @@
-// Package odmobile is the OpenDeezer engine (internal/engine) exposed for
-// gomobile (gobind), so a native Android (or iOS) app can drive the same
-// login/decrypt/decode/playback pipeline the desktop GUIs use. Build it with:
-//
-//	gomobile bind -target=android -androidapi 24 -o gui/android/app/libs/odmobile.aar ./mobile
-//
-// Every browse/list call returns a JSON string (the wire shape the GUIs already
-// use); mutations return bool/string. The app advances its own queue on
-// FinishedCount. This package only converts arguments and results.
+// Package odmobile exposes the OpenDeezer engine to gomobile for native Android and iOS
+// apps (gomobile bind -target=android ./mobile). Browse calls return JSON strings; the
+// app advances its own queue on FinishedCount.
 package odmobile
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"path/filepath"
 	"time"
 
@@ -36,42 +27,24 @@ func init() {
 	engine.SetConnectHostSwitch(true)
 }
 
-var errNotLoggedIn = fmt.Errorf("not logged in")
-
-func jstr(v any, err error) string {
-	if err != nil {
-		b, _ := json.Marshal(map[string]string{"error": err.Error()})
-		return string(b)
-	}
-	b, e := json.Marshal(v)
-	if e != nil {
-		eb, _ := json.Marshal(map[string]string{"error": e.Error()})
-		return string(eb)
-	}
-	return string(b)
-}
+func jstr(v any, err error) string { return string(engine.ReplyJSON(v, err)) }
 
 func ok(err error) bool { return err == nil }
 
 // ---- lifecycle ----
 
-// SetDataDir points the engine's config at dir — an app-private directory the
-// host guarantees is writable and persists across reboots (on Android:
-// context.getFilesDir(); on iOS: Application Support). os.UserConfigDir is not
-// such a path on Android, so the host calls this once at startup, before
-// Init — otherwise media.json (the stream-cache setting) is written somewhere
-// that isn't there next launch.
+// SetDataDir points the engine's config at dir, an app-private, persistent directory
+// (Android: getFilesDir(); iOS: Application Support). Call it once at startup before
+// Init, since os.UserConfigDir is not such a path on Android.
 func SetDataDir(dir string) {
 	if dir != "" {
 		config.SetBaseDir(filepath.Join(dir, "opendeezer"))
 	}
 }
 
-// SetCacheDir points the engine's stream temp files and default media cache
-// at dir/opendeezer — the app's cache directory (on Android:
-// context.getCacheDir()). os.UserCacheDir is not such a path on Android, so
-// the host calls this once at startup, before Init; on iOS the default
-// (Library/Caches) is already the app's.
+// SetCacheDir points stream temp files and the default media cache at dir/opendeezer,
+// the app's cache directory (Android: getCacheDir()). Call it at startup before Init on
+// Android; on iOS the default is already the app's.
 func SetCacheDir(dir string) {
 	if dir != "" {
 		config.SetCacheBaseDir(filepath.Join(dir, "opendeezer"))
@@ -89,10 +62,9 @@ func LoginErrorKind() int { return engine.LoginErrorKind() }
 // LoggedIn reports whether Init succeeded.
 func LoggedIn() bool { c := engine.Client(); return c != nil && c.LoggedIn() }
 
-// Logout tears the engine session down: stops playback, closes the control
-// server (dropping web-remote pairing sessions and the old account's
-// same-account auth), stops Connect-host advertising, and forgets the Deezer
-// client. A later Init starts services fresh for the new account.
+// Logout ends the engine session: stops playback, closes the control server (dropping
+// pairing sessions and same-account auth), stops Connect-host advertising and forgets
+// the client. A later Init starts the services again.
 func Logout() { engine.Logout() }
 
 // CheckUpdate checks GitHub for a newer release; returns JSON
@@ -105,11 +77,7 @@ func CheckUpdate() string {
 // ---- account / settings ----
 
 func Account() string {
-	c := engine.Client()
-	if c == nil {
-		return jstr(nil, errNotLoggedIn)
-	}
-	return jstr(c.Account(), nil)
+	return withClient(func(c *deezer.Client) (any, error) { return c.Account(), nil })
 }
 func UserID() string {
 	if c := engine.Client(); c != nil {
@@ -129,6 +97,26 @@ func SetGapless(on bool)    { engine.SetGapless(on) }
 func Gapless() bool         { return engine.Gapless() }
 func SetCrossfadeMS(ms int) { engine.SetCrossfadeMS(ms) }
 func CrossfadeMS() int      { return engine.CrossfadeMS() }
+
+// SetSingleDevice turns single-device playback on (default) or off and saves it: when
+// on, playback pauses as another session of the account starts a track, and local
+// starts are announced so those sessions pause.
+func SetSingleDevice(on bool) { engine.SetSingleDevice(on) }
+func SingleDevice() bool      { return engine.SingleDevice() }
+
+// SessionExpired reports that Deezer refused the signed-in account's ARL since
+// it signed in: the host asks for a new sign-in.
+func SessionExpired() bool { return engine.SessionExpired() }
+
+// SetListenContext sets the page type ("playlist_page", "album_page", ...) and id that
+// Deezer's listen log gets for every start until the next call; "" for both clears it.
+func SetListenContext(pageType, id string) { engine.SetListenContext(pageType, id) }
+
+// ElsewhereJSON returns what another session of the account plays as {"track",
+// "sinceMs", "untilMs"} ("{}" when none since login; no "track" for an unnamed track).
+// ElsewhereVersion changes exactly when that payload changes.
+func ElsewhereJSON() string   { return engine.ElsewhereJSON() }
+func ElsewhereVersion() int64 { return engine.ElsewhereVersion() }
 
 // SetSleepTimer arms the sleep timer: pause after `minutes` (with a fade-out), or
 // when the current track ends if endOfTrack != 0 (minutes ignored). minutes <= 0
@@ -162,13 +150,9 @@ func SleepRemainingMS() int64 {
 	return 0
 }
 
-// Preload asks for trackID to follow the current track gaplessly or with a
-// crossfade, with the length the synced queue has for it. It only records the
-// request: the engine resolves and downloads it once the current track has
-// max(30 s, crossfade + 20 s) left (at once when it is shorter or already
-// there). A new request replaces the recorded one; a request for the track
-// already recorded or preloaded changes nothing. No-op when routed to a
-// Connect device.
+// Preload records trackID to follow the current track (gapless or crossfade), with the
+// synced queue's length for it; it is fetched once max(30 s, crossfade + 20 s) remain.
+// A new request replaces it; no-op when routed.
 func Preload(id string) error {
 	if engine.ConnectedDevice() == "" && engine.Player() == nil {
 		return fmt.Errorf("engine not ready")
@@ -177,22 +161,14 @@ func Preload(id string) error {
 	return nil
 }
 
-// ClearPreload discards a preloaded next track. Call when the upcoming track is
-// no longer determined (shuffle/repeat toggled, queue edited after a preload
-// was armed) so a stale preload can't be gaplessly swapped in.
+// ClearPreload discards a preloaded next track. Call it when the upcoming track changes
+// (shuffle/repeat toggled, queue edited) so a stale preload is not swapped in.
 func ClearPreload() { engine.ClearPreload() }
 
 // ---- browse ----
 
-// withClient runs fn with the client for a request, or answers why there is
-// none (offline mode, no login).
-func withClient(fn func(c *deezer.Client) (any, error)) string {
-	c, err := engine.Online()
-	if err != nil {
-		return jstr(nil, err)
-	}
-	return jstr(fn(c))
-}
+// withClient is engine.OnlineJSON as a string.
+func withClient(fn func(c *deezer.Client) (any, error)) string { return string(engine.OnlineJSON(fn)) }
 
 func Favorites() string {
 	return withClient(func(c *deezer.Client) (any, error) {
@@ -201,26 +177,132 @@ func Favorites() string {
 	})
 }
 
-// FavoriteIDsJSON returns the account's liked (favorite) track ids as a JSON
-// array of strings, e.g. ["123","456"], so the app can render truthful "liked"
-// hearts across lists without a per-track lookup. Returns "[]" when not logged
-// in, in offline mode or on a fetch error.
-func FavoriteIDsJSON() string {
+// FavoriteIDsJSON returns the liked track ids, newest first, as a JSON array of strings
+// ("[]" when none, {"error"} without a client or on failure). Unchanged lists are
+// answered "Not modified", so frequent calls are cheap.
+func FavoriteIDsJSON() string { return withClient(bridge.FavoriteIDs) }
+
+// LibraryJSON returns the account's favorite albums ({"albums":[...]}),
+// artists ({"artists":[...]}) or podcasts ({"podcasts":[...]}) by kind
+// ("album", "artist", "podcast"), newest first.
+func LibraryJSON(kind string) string {
+	return withClient(func(c *deezer.Client) (any, error) { return bridge.Library(c, kind) })
+}
+
+// SetFavorite adds (on) or removes an album, artist, playlist or podcast (kind
+// "album", "artist", "playlist", "podcast") from the favorites.
+func SetFavorite(kind, id string, on bool) bool {
+	return clientOp(func(c *deezer.Client) error { return c.SetFavorite(kind, id, on) })
+}
+
+// SetRecommendationBan stops (on) or allows again a track ("track") or an
+// artist ("artist") in the account's recommendations.
+func SetRecommendationBan(kind, id string, on bool) bool {
+	return clientOp(func(c *deezer.Client) error { return c.SetRecommendationBan(kind, id, on) })
+}
+
+// SearchHistoryJSON returns the account's search history, newest first, at
+// most n: [{"type":"Track","id":"..."},...].
+func SearchHistoryJSON(n int) string {
+	return withClient(func(c *deezer.Client) (any, error) { return c.SearchHistory(n) })
+}
+
+// AddSearchHistory records that an item (type "Track", "Album", "Artist",
+// "Playlist", "Podcast", "PodcastEpisode", "Livestream") was picked from a
+// search.
+func AddSearchHistory(typ, id string) bool {
+	return clientOp(func(c *deezer.Client) error { return c.AddSearchHistory(deezer.SearchHistoryItem{Type: typ, ID: id}) })
+}
+
+// ClearSearchHistory empties the account's search history.
+func ClearSearchHistory() bool {
+	return clientOp(func(c *deezer.Client) error { return c.ClearSearchHistory() })
+}
+
+// EpisodeBookmarksJSON returns the account's podcast bookmarks by episode id:
+// {"<id>":{"offset":754,"heard":false},...} (seconds).
+func EpisodeBookmarksJSON() string {
+	return withClient(func(*deezer.Client) (any, error) { return engine.EpisodeBookmarks() })
+}
+
+// MarkEpisodePlayed marks an episode as played, or as not played.
+func MarkEpisodePlayed(id string, played bool) bool {
+	return clientOp(func(*deezer.Client) error { return engine.MarkEpisodePlayed(id, played) })
+}
+
+// SetPlaybackSpeed sets the speed episodes play at, from 0.5 to 2 (1 is
+// normal), at once when an episode plays; songs play at normal speed.
+func SetPlaybackSpeed(speed float64) { engine.SetPlaybackSpeed(speed) }
+
+// PlaybackSpeed returns the speed episodes play at.
+func PlaybackSpeed() float64 { return engine.PlaybackSpeed() }
+
+// PlaylistDetailsJSON returns a playlist's details:
+// {"id","title","description","isPrivate","isCollaborative","ownerId"}.
+func PlaylistDetailsJSON(id string) string {
+	return withClient(func(c *deezer.Client) (any, error) { return c.PlaylistDetails(id) })
+}
+
+// UpdatePlaylist changes a playlist the account owns: changeJSON holds the
+// fields to change ({"title","description","isPrivate","isCollaborative"}).
+func UpdatePlaylist(id, changeJSON string) bool {
+	var u deezer.PlaylistUpdate
+	if json.Unmarshal([]byte(changeJSON), &u) != nil {
+		return false
+	}
+	return clientOp(func(c *deezer.Client) error { return c.UpdatePlaylist(id, u) })
+}
+
+// ReorderPlaylist puts a playlist's tracks in the order of idsJSON (a JSON
+// array of track ids).
+func ReorderPlaylist(id, idsJSON string) bool {
+	var ids []string
+	if json.Unmarshal([]byte(idsJSON), &ids) != nil {
+		return false
+	}
+	return clientOp(func(c *deezer.Client) error { return c.ReorderPlaylist(id, ids) })
+}
+
+// BestResultJSON returns a search's best result, {"type","id","title",
+// "subtitle","picture"}, or {} when it has none.
+func BestResultJSON(query string) string { return string(engine.BestResultJSON(query)) }
+
+// PinnedJSON returns what the account pinned to Home, in its order:
+// {"items":[{"type","id","title","subtitle","picture"},...]}.
+func PinnedJSON() string { return withClient(bridge.Pinned) }
+
+// SetPinned pins an item to Home or unpins it (type "Album", "Artist",
+// "Playlist", "Podcast", "Track"): 1 on success, 2 when Home holds no more,
+// 0 on another failure.
+func SetPinned(typ, id string, on bool) int {
 	c, err := engine.Online()
 	if err != nil {
-		return "[]"
+		return 0
 	}
-	ts, err := c.Favorites()
+	return bridge.SetPinned(c, typ, id, on)
+}
+
+// IsFavorite reports whether an album, artist, playlist or podcast (kind
+// "album", "artist", "playlist", "podcast") is among the favorites: 1 yes,
+// 0 no, -1 unknown (the request failed).
+func IsFavorite(kind, id string) int {
+	c, err := engine.Online()
 	if err != nil {
-		return "[]"
+		return -1
 	}
-	ids := make([]string, 0, len(ts))
-	for _, t := range ts {
-		if t.ID != "" {
-			ids = append(ids, t.ID)
-		}
-	}
-	return jstr(ids, nil)
+	return bridge.IsFavorite(c, kind, id)
+}
+
+// ExplicitJSON returns the account's explicit-content setting:
+// {"level":"explicit_display","available":[...],"canEdit":true}.
+func ExplicitJSON() string {
+	return withClient(func(c *deezer.Client) (any, error) { return c.Explicit(), nil })
+}
+
+// SetExplicitLevel changes the account's explicit-content level (one of
+// ExplicitJSON's available).
+func SetExplicitLevel(level string) bool {
+	return clientOp(func(c *deezer.Client) error { return c.SetExplicitLevel(level) })
 }
 func Playlists() string {
 	return withClient(func(c *deezer.Client) (any, error) {
@@ -242,9 +324,12 @@ func AlbumTracks(id string) string {
 	ts, err := engine.AlbumTracks(id)
 	return jstr(map[string]any{"tracks": bridge.FromTracks(ts)}, err)
 }
-func Flow() string {
+
+// Flow returns a batch of the account's Flow, or of one of its moods (a
+// FlowMoodsJSON id; "" for Flow itself): {tracks:[...]}.
+func Flow(mood string) string {
 	return withClient(func(c *deezer.Client) (any, error) {
-		ts, err := c.Flow()
+		ts, err := c.Flow(mood)
 		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
 	})
 }
@@ -256,6 +341,11 @@ func TrackMixJSON(id string) string {
 		ts, err := c.TrackMix(id)
 		return map[string]any{"tracks": bridge.FromTracks(ts)}, err
 	})
+}
+
+// FlowMoodsJSON lists Flow's moods: [{"id","title"},...].
+func FlowMoodsJSON() string {
+	return withClient(func(c *deezer.Client) (any, error) { return c.FlowMoods() })
 }
 
 // ArtistMixJSON returns an "artist radio" mix seeded from an artist:
@@ -273,55 +363,18 @@ func ArtistTop(id string) string {
 	})
 }
 func ArtistProfile(id string) string {
-	return withClient(func(c *deezer.Client) (any, error) { return c.ArtistProfile(id) })
+	return withClient(func(c *deezer.Client) (any, error) { return bridge.ArtistProfile(c, id) })
 }
 func Lyrics(id string) string {
-	return withClient(func(c *deezer.Client) (any, error) { return c.Lyrics(id) })
+	return withClient(func(c *deezer.Client) (any, error) { return bridge.Lyrics(c, id) })
 }
 
-func Search(q string) string {
-	return withClient(func(c *deezer.Client) (any, error) {
-		r, err := c.Search(q)
-		if err != nil {
-			return nil, err
-		}
-		return searchResult(r.Tracks, r.Albums, r.Artists, r.Playlists), nil
-	})
-}
-func Charts() string {
-	return withClient(func(c *deezer.Client) (any, error) {
-		ch, err := c.Charts("0")
-		if err != nil {
-			return nil, err
-		}
-		return searchResult(ch.Tracks, ch.Albums, ch.Artists, ch.Playlists), nil
-	})
-}
+func Search(q string) string { return string(engine.SearchJSON(q)) }
+func Charts() string         { return string(engine.ChartsJSON()) }
 
-// Home aggregates the Home-screen sections (charts top tracks/albums + the
-// user's playlists) in one call, mirroring corelib DZHomeJSON. Best-effort.
-func Home() string {
-	return withClient(func(c *deezer.Client) (any, error) {
-		var tracks []deezer.Track
-		var albums []deezer.Album
-		if ch, err := c.Charts("0"); err == nil && ch != nil {
-			tracks, albums = ch.Tracks, ch.Albums
-		}
-		ps, _ := c.Playlists()
-		return map[string]any{
-			"topTracks": bridge.FromTracks(tracks),
-			"topAlbums": bridge.FromAlbums(albums),
-			"playlists": bridge.FromPlaylists(ps),
-		}, nil
-	})
-}
-
-func searchResult(tracks []deezer.Track, albums []deezer.Album, artists []deezer.ArtistInfo, playlists []deezer.Playlist) map[string]any {
-	return map[string]any{
-		"tracks": bridge.FromTracks(tracks), "albums": bridge.FromAlbums(albums),
-		"artists": bridge.FromArtistInfos(artists), "playlists": bridge.FromPlaylists(playlists),
-	}
-}
+// Home returns the Home sections (chart top tracks and albums, the user's playlists) in
+// one call, like corelib DZHomeJSON. A section that fails comes back empty.
+func Home() string { return string(engine.HomeJSON()) }
 
 // ---- podcasts ----
 
@@ -343,10 +396,9 @@ func PodcastEpisodes(id string) string {
 // as Play does.
 func PlayEpisode(id string) int { return PlayEpisodeMS(id, 0) }
 
-// PlayEpisodeMS resolves + plays a podcast episode (plain stream). Sets the
-// episode as the current track immediately (id + duration, the player never
-// derives duration from the stream), then asynchronously enriches title /
-// podcast name / artwork via REST /episode. Returns as Play does.
+// PlayEpisodeMS plays a podcast episode (plain stream), setting it as the current track
+// at once with id and duration, then adding title and artwork from REST /episode in the
+// background. Returns as Play does.
 func PlayEpisodeMS(id string, durationMS int64) int { return int(engine.PlayEpisode(id, durationMS)) }
 
 // ---- library writes ----
@@ -370,11 +422,11 @@ func AddToPlaylist(playlistID, trackID string) bool {
 func RemoveFromPlaylist(playlistID, trackID string) bool {
 	return clientOp(func(c *deezer.Client) error { return c.RemoveFromPlaylist(playlistID, trackID) })
 }
-func CreatePlaylist(title string) string {
-	return withClient(func(c *deezer.Client) (any, error) {
-		id, err := c.CreatePlaylist(title, nil)
-		return map[string]string{"id": id}, err
-	})
+
+// CreatePlaylist creates a playlist with the tracks of idsJSON (a JSON array
+// of ids; "" or "[]" for none) and returns {"id":"..."}.
+func CreatePlaylist(title, idsJSON string) string {
+	return withClient(func(c *deezer.Client) (any, error) { return bridge.CreatePlaylist(c, title, idsJSON) })
 }
 func RenamePlaylist(id, title string) bool {
 	return clientOp(func(c *deezer.Client) error { return c.RenamePlaylist(id, title) })
@@ -392,10 +444,9 @@ func Play(trackID string, durationMS int64) int { return int(engine.Play(trackID
 
 // ---- downloads (premium-only, full track to disk) ----
 
-// DownloadTrack downloads trackID to a file in destDir and returns JSON
-// {"path":"..."} on success or {"error":"..."} on failure. Pass "" for destDir
-// to use the shared default folder (DownloadDir). Blocking — call it off the UI
-// thread. Downloads are premium-only; a free account gets an error.
+// DownloadTrack saves trackID into destDir ("" = DownloadDir) and returns
+// {"path":"..."} or {"error":"..."}. It blocks, so call it off the UI thread. Premium
+// only.
 func DownloadTrack(trackID, destDir string) string {
 	path, err := engine.DownloadTrack(trackID, destDir)
 	if err != nil {
@@ -404,13 +455,9 @@ func DownloadTrack(trackID, destDir string) string {
 	return jstr(map[string]string{"path": path}, nil)
 }
 
-// DownloadAlbum downloads every track of albumID to the shared download folder
-// (DownloadDir), skipping files already there, and returns the batch summary
-// {"saved":N,"failed":N,"dir":"...","error":""}. Blocking and premium-only, the
-// same gate + folder DownloadTrack uses — call it off the UI thread. On a
-// partial download "failed" counts the per-track failures and "error" carries
-// the batch message; a free account yields saved:0,failed:0 with the premium
-// error.
+// DownloadAlbum saves every track of albumID not yet in DownloadDir and returns
+// {"saved":N,"failed":N,"dir":"...","error":""}. It blocks (call it off the UI thread)
+// and is premium only, like DownloadTrack.
 func DownloadAlbum(id string) string { return jstr(engine.DownloadAlbum(id)) }
 
 // DownloadPlaylist downloads every track of playlistID to the shared download
@@ -427,28 +474,23 @@ func SetDownloadDir(path string) bool { return ok(config.SaveDownloadDir(path)) 
 // (media.json; 0 = cache disabled, the default).
 func MediaCacheMB() int { return config.LoadMedia().MediaCacheMB }
 
-// SetMediaCacheMB persists the raw-stream cache budget in megabytes and
-// applies it at once: a lower budget evicts the least recent tracks, 0 (or a
-// negative value) removes every cached track not pinned, also from a folder
-// not opened in this session, and stops caching. Pinned tracks are outside
-// the budget.
+// SetMediaCacheMB saves the cache budget in MB and applies it: a lower budget evicts
+// the least recent tracks, <= 0 removes all unpinned tracks and stops caching. Pinned
+// tracks are outside the budget.
 func SetMediaCacheMB(mb int) bool { return ok(engine.Caches().SetMB(mb)) }
 
 // MediaCacheMaxAgeDays returns how many days a cached track may go unplayed
 // before it is removed (media.json; 0 = kept at any age, the default).
 func MediaCacheMaxAgeDays() int { return config.LoadMedia().MediaCacheMaxAgeDays }
 
-// SetMediaCacheMaxAgeDays persists that age (0 or a negative value keeps
-// tracks at any age) and applies it at once: cached tracks not played or
-// downloaded for longer are removed now, and then at most once an hour while
-// tracks play.
+// SetMediaCacheMaxAgeDays saves that age (<= 0: no limit) and applies it: tracks not
+// played or downloaded for longer are removed at once, then at most hourly during
+// playback.
 func SetMediaCacheMaxAgeDays(days int) bool { return ok(engine.Caches().SetMaxAgeDays(days)) }
 
-// MediaCacheStatsJSON returns the media cache's state:
-// {"entries":int,"bytes":int64,"pinnedBytes":int64,"maxBytes":int64,"dir":string}.
-// bytes counts every stored track, pinnedBytes those kept for offline use;
-// maxBytes is the budget (0 = off); dir is the folder
-// picked (the cache lives in its subfolder opendeezer-cache), also while off.
+// MediaCacheStatsJSON returns {"entries","bytes","pinnedBytes","maxBytes","dir"}: bytes
+// includes pinned tracks, maxBytes 0 means off, dir is the chosen folder (the cache is
+// its opendeezer-cache subfolder).
 func MediaCacheStatsJSON() string { return jstr(engine.Caches().Stats(), nil) }
 
 // ClearMediaCache removes every cached track not pinned; includePinned also
@@ -469,22 +511,18 @@ func MediaCacheDir() string {
 	return dir
 }
 
-// SetMediaCacheDir moves the media cache to the subfolder opendeezer-cache of
-// dir, an absolute path ("" = the default folder), and returns {"error":""}
-// or {"error":"reason"}. The pinned tracks are copied there, then the old
-// cache is cleared; offline fetches stop for the move and go on in the new
-// folder. A relative path or a file is refused; on any error (a copy too) the
-// old folder stays in use.
+// SetMediaCacheDir moves the cache to dir/opendeezer-cache (dir absolute, "" =
+// default), copying pinned tracks first, and returns {"error":""} or {"error":"reason"}.
+// On any error the old folder stays in use.
 func SetMediaCacheDir(dir string) string { return errorReply(engine.SetMediaCacheDir(dir)) }
 
 // IsPreview reports whether the current track is Deezer's 30-second preview (the
 // free-account fallback) rather than the full stream.
 func IsPreview() bool { return engine.IsPreview() }
 
-// SetAdsDisabled turns Deezer Free's play-reporting/ads off/on and persists it.
-// FREE accounts only: reporting plays (log.listen) credits artists and drives the
-// ad schedule; disabling it is ad-free but stops reporting — the user's
-// at-own-risk choice. Paid accounts are unaffected.
+// SetAdsDisabled turns free-tier play reporting (log.listen) off or on and saves it.
+// Reporting credits artists and drives the ad schedule; disabling it is the user's own
+// risk. Paid accounts are unaffected.
 func SetAdsDisabled(disabled bool) bool {
 	if c := engine.Client(); c != nil {
 		c.SetAdsDisabled(disabled)
@@ -505,9 +543,9 @@ func Resume()      { engine.Resume() }
 func TogglePause() { engine.TogglePause() }
 func Stop()        { engine.Stop() }
 
-// SetOutputSuspended suspends (true) or resumes (false) the local OS audio
-// device without touching playback state — for audio-focus/route handling on
-// mobile. Local-only: it never routes to a Connect device.
+// SetOutputSuspended suspends (true) or resumes (false) the local audio device while
+// keeping playback state, for audio-focus handling. It never routes to a Connect
+// device.
 func SetOutputSuspended(on bool) {
 	if p := engine.Player(); p != nil {
 		_ = p.SetOutputSuspended(on)
@@ -516,11 +554,16 @@ func SetOutputSuspended(on bool) {
 func Seek(ms int64)       { engine.Seek(ms) }
 func SetVolume(v float64) { engine.SetVolume(v) }
 func Volume() float64     { return engine.Volume() }
-func State() int          { return engine.State() }
-func PositionMS() int64   { return engine.PositionMS() }
-func DurationMS() int64   { return engine.DurationMS() }
-func Format() string      { return engine.Format() }
-func FinishedCount() int  { return engine.FinishedCount() }
+
+// LastErrorJSON is {"error":"...","network":bool}, as corelib's DZLastErrorJSON.
+func LastErrorJSON() string { return string(engine.LastErrorJSON()) }
+
+// State is the playback state: 0 stopped, 1 loading, 2 playing, 3 paused, 4 errored.
+func State() int         { return engine.State() }
+func PositionMS() int64  { return engine.PositionMS() }
+func DurationMS() int64  { return engine.DurationMS() }
+func Format() string     { return engine.Format() }
+func FinishedCount() int { return engine.FinishedCount() }
 
 // NowPlaying returns the track actually playing (remote when routed, else
 // local), "{}" when nothing plays.
@@ -532,21 +575,14 @@ func NowPlayingVersion() int64 { return engine.NowPlayingVersion() }
 
 // ---- engine queue sync (app queue -> engine) ----
 
-// SetQueueJSON replaces the engine-side playback queue with the app's queue so
-// remote controllers see it on /status and /next + /prev walk it. js is a JSON
-// array of tracks in the same wire shape every list call returns
-// ({id,name,durationMs,artistLine,artistId,artists,albumName,artworkUrl,
-// explicit}); only id is required, but durationMs should be set so controllers'
-// end-of-track detection works. The cursor resets to 0 — follow with
-// SetQueueIndex to point it at the playing row. Pass "[]" to clear. Returns an
-// error on a parse failure.
+// SetQueueJSON replaces the engine queue with the app's (a JSON array of wire tracks,
+// "[]" clears) and resets the cursor to 0; follow with SetQueueIndex. Returns an error
+// on a parse failure.
 func SetQueueJSON(js string) error { return engine.QueueSet(js) }
 
-// AppendQueueJSON adds tracks to the end of the engine queue ("Add to queue")
-// without resending the queue: js is a JSON array in SetQueueJSON's shape. The
-// cursor stays where it is; QueueVersion bumps when at least one track was
-// added. A preloaded next is dropped only when the track after the cursor
-// changed. Returns an error on a parse failure (the queue is left as it was).
+// AppendQueueJSON adds a JSON array of tracks to the end of the engine queue; the
+// cursor stays and QueueVersion bumps when anything was added. Returns an error on a
+// parse failure (queue unchanged).
 func AppendQueueJSON(js string) error { return engine.QueueAppend(js) }
 
 // SetQueueIndex aligns the engine queue's cursor to i (clamped; no-op when the
@@ -559,10 +595,8 @@ func SetQueueIndex(i int) { engine.QueueSetIndex(i) }
 // /next|/prev, gapless promote).
 func QueueIndex() int { return engine.QueueIndex() }
 
-// QueueVersion returns a counter bumped on every engine-queue CONTENT change
-// (SetQueueJSON, remote /queue/add|remove|move, /play/album, /play/mix/{track,artist}) —
-// cursor moves don't bump it. The app polls this cheaply and pulls QueueJSON
-// only when a remote controller actually edited the queue.
+// QueueVersion returns a counter bumped on every engine-queue content change (not on
+// cursor moves), so the app pulls QueueJSON only after a remote edit.
 func QueueVersion() int64 { return int64(engine.QueueVersion()) }
 
 // QueueJSON returns the engine queue as {"version":N,"index":I,"tracks":[..]}
@@ -591,22 +625,12 @@ func QueueInsertNext(trackJSON string) { engine.QueueInsertNext(trackJSON) }
 
 // ---- network helper (cover art) ----
 
-// Fetch downloads raw bytes (e.g. cover art) using a browser User-Agent.
+// Fetch downloads raw bytes (e.g. cover art); nil on any failure and in offline mode.
 func Fetch(url string) []byte {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	b, err := engine.Fetch(url)
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 OpenDeezer")
-	resp, err := deezer.HTTPClient(15 * time.Second).Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	return b
 }
 
@@ -635,11 +659,8 @@ func DisconnectDevice() { engine.DisconnectDevice() }
 // ConnectedDevice returns the connected device address ("" if local).
 func ConnectedDevice() string { return engine.ConnectedDevice() }
 
-// SetRepeat sets the repeat mode (mode: 0=off, 1=all, 2=one). The mode is
-// recorded on the engine-side queue — /status reports it and the engine queue
-// honors it when it advances. It is NOT forwarded to a connected remote device:
-// while casting, the controller keeps repeat local so the host's single-
-// track queue never loops the current track.
+// SetRepeat sets the repeat mode (0 off, 1 all, 2 one) on the engine queue. It is not
+// forwarded to a Connect device, whose single-track queue would loop.
 func SetRepeat(mode int) { engine.SetRepeat(mode) }
 
 // GetRepeat returns the engine queue's repeat mode ("off"|"all"|"one"), also
@@ -658,11 +679,9 @@ func SetShuffle(on int) { engine.SetShuffle(on != 0) }
 
 // ---- Web remote (pairing-based phone remote) ----
 
-// WebRemoteSetEnabled enables (on!=0) or disables (on==0) the web remote. When
-// enabling, the control server is started on a LAN-reachable address if it is
-// not already, and pairing is activated so a phone can scan the QR and connect.
-// Disabling ends pairing and restores the server the remote replaced, unless
-// the Connect host is on.
+// WebRemoteSetEnabled turns the web remote on (on!=0) or off. On starts the control
+// server on a LAN address if needed and activates pairing; off ends pairing and
+// restores the previous server unless the Connect host is on.
 func WebRemoteSetEnabled(on int) { engine.WebRemoteSetEnabled(on != 0) }
 
 // WebRemoteInfo returns a JSON string:
@@ -676,11 +695,9 @@ func WebRemoteQRPNG() []byte { return engine.WebRemoteQRPNG() }
 
 // ---- OpenDeezer Connect host (make this device controllable) ----
 
-// ConnectHostSetEnabled makes this device a discoverable OpenDeezer Connect
-// target on the LAN (on!=0), so other devices signed into the same Deezer
-// account can find it in their device picker and drive its playback; or stops
-// advertising it (on==0). The control server runs on a LAN address with
-// same-account auth. Idempotent.
+// ConnectHostSetEnabled(on!=0) advertises this device on the LAN as a Connect target
+// for the account's other devices (control server on a LAN address, same-account
+// auth); 0 stops advertising. Idempotent.
 func ConnectHostSetEnabled(on int) { engine.ConnectHostSetEnabled(on != 0) }
 
 // ConnectHostInfo returns a JSON string:
@@ -701,23 +718,15 @@ func EQJSON() string {
 	return jstr(st, nil)
 }
 
-// SetEQJSON applies a partial EQ update. Recognized keys (all optional):
-// enabled (bool), mono (bool), preampDb (number), gainsDb ([10]number),
-// preset (string), band ({"index":N,"gainDb":X}). Returns false if any present
-// key failed to apply.
+// SetEQJSON applies a partial EQ update with optional keys enabled, mono, preampDb,
+// gainsDb ([10]), preset, band ({"index","gainDb"}). False when a key fails.
 func SetEQJSON(js string) bool { return engine.SetEQJSON(js) }
 
 // ---- local listening history ----
 
-// HistoryRecentJSON returns the newest n entries of the machine-local listening
-// history as a JSON array (newest first, the same stable shape the control API's
-// /history/recent serves); n <= 0 returns all. Empty/unavailable history yields
-// "[]".
-//
-// Each entry is {trackId,title,artist,album?,kind?,startedAt,durationPlayedSec,
-// artworkUrl?,durationMs?}. "kind" is omitted or "track" for a song and
-// "episode" for a podcast episode — an app routes replay on it: episode ->
-// PlayEpisodeMS(trackId), else Play.
+// HistoryRecentJSON returns the newest n local history entries (n <= 0: all, "[]" when
+// none), as /history/recent serves them. "kind" "episode" marks a podcast episode
+// (replay with PlayEpisodeMS).
 func HistoryRecentJSON(n int) string {
 	entries, err := engine.HistoryRecent(n)
 	if err != nil {
@@ -726,15 +735,9 @@ func HistoryRecentJSON(n int) string {
 	return jstr(entries, nil)
 }
 
-// HistoryStatsJSON returns local listening stats over the last sinceDays
-// (sinceDays <= 0 = all history) as
-// {topTracks:[{trackId,title,artist,plays,totalSec}],
-//
-//	topArtists:[{artist,plays,totalSec}], totalSeconds:N}. Empty/unavailable
-//
-// history yields the same shape with empty arrays and totalSeconds:0. topTracks
-// and topArtists are music-only (podcast episodes excluded); totalSeconds counts
-// all listening time.
+// HistoryStatsJSON returns {topTracks, topArtists, totalSeconds} over the last
+// sinceDays (<= 0: all). Podcast episodes count only in totalSeconds; no history gives
+// empty arrays.
 func HistoryStatsJSON(sinceDays int) string { return jstr(engine.HistoryStats(sinceDays), nil) }
 
 // ---- offline music ----
@@ -748,23 +751,18 @@ func errorReply(err error) string {
 	return jstr(map[string]string{"error": msg}, nil)
 }
 
-// PinOffline pins a track, an album or a playlist (kind "track", "album" or
-// "playlist"; episodes are refused) for the signed-in account and fetches it
-// in the background (OfflineProgressJSON). An album's or a playlist's track
-// list is fetched first; offline it must be stored already. Returns
-// {"error":""} or {"error":"reason"}.
+// PinOffline pins a track, album or playlist (episodes are refused) for the account and
+// fetches it in the background (OfflineProgressJSON); offline, a collection's list must
+// be stored already. Returns {"error":""} or {"error":"reason"}.
 func PinOffline(kind, id string) string { return errorReply(engine.PinOffline(kind, id)) }
 
-// UnpinOffline removes the account's pin of kind and id (kind "track" with id
-// "": every single-track pin of the account); a track also pinned through a
-// collection stays pinned through it. Returns {"error":""} or
-// {"error":"reason"}.
+// UnpinOffline removes the account's pin of kind and id (kind "track", id "": every
+// single-track pin); tracks pinned through a collection stay. Returns {"error":...}.
 func UnpinOffline(kind, id string) string { return errorReply(engine.UnpinOffline(kind, id)) }
 
-// OfflineProgressJSON returns the fetches of the account's pins:
-// {"active":bool,"jobs":[{"kind","id","done","total","failed","error"}],"error":""}.
-// A job is listed while it runs; one that stopped (a full disk, a cancel)
-// stays with its reason until the next pin, unpin or cancel.
+// OfflineProgressJSON returns {"active","jobs":[{"kind","id","done","total","failed",
+// "error"}],"error"}. A stopped job keeps its reason until the next pin, unpin or
+// cancel.
 func OfflineProgressJSON() string {
 	active, jobs := engine.OfflineProgress()
 	return jstr(map[string]any{"active": active, "jobs": jobs, "error": ""}, nil)
@@ -773,10 +771,9 @@ func OfflineProgressJSON() string {
 // CancelOffline stops the account's fetches.
 func CancelOffline() { engine.CancelOffline() }
 
-// OfflineCollectionsJSON returns the account's pins (offline: the last account
-// that signed in), newest first: {"collections":[{"kind","id","title","cover",
-// "trackCount","fetched","pinnedAt"}],"error":""}. All single-track pins are
-// one entry of kind "track" with id "". cover is a local file once stored.
+// OfflineCollectionsJSON returns the account's pins newest first as {"collections":
+// [{"kind","id","title","cover","trackCount","fetched","pinnedAt"}]}. Single-track pins
+// form one entry (kind "track", id ""); cover is a local file once stored.
 func OfflineCollectionsJSON() string {
 	return jstr(map[string]any{"collections": engine.OfflineCollections(), "error": ""}, nil)
 }

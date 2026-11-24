@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import fr.cyclooo.opendeezer.R
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Track
 import fr.cyclooo.opendeezer.player.PlayerController
 import fr.cyclooo.opendeezer.ui.components.CenteredMessage
@@ -51,6 +52,7 @@ import fr.cyclooo.opendeezer.ui.components.TrackRow
 fun TrackListScreen(
     title: String,
     player: PlayerController,
+    context: ListenContext,
     onBack: () -> Unit,
     onBulkDownload: (() -> Unit)? = null,
     bulkDownloadLabel: String? = null,
@@ -84,20 +86,20 @@ fun TrackListScreen(
             val list = tracks
             if (!list.isNullOrEmpty()) {
                 ExtendedFloatingActionButton(
-                    onClick = { player.playQueue(list, 0) },
+                    onClick = { player.playQueue(list, 0, context) },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     text = { Text(stringResource(R.string.action_play_all)) },
                 )
             }
         },
     ) { padding ->
-        TrackList(tracks, player, Modifier.fillMaxSize().padding(padding))
+        TrackList(tracks, player, context, Modifier.fillMaxSize().padding(padding))
     }
 }
 
 /** Track list body (spinner / empty message / rows), reusable in fold-aware layouts. */
 @Composable
-fun TrackList(tracks: List<Track>?, player: PlayerController, modifier: Modifier = Modifier) {
+fun TrackList(tracks: List<Track>?, player: PlayerController, context: ListenContext, modifier: Modifier = Modifier) {
     Box(modifier) {
         when (val list = tracks) {
             null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -111,7 +113,8 @@ fun TrackList(tracks: List<Track>?, player: PlayerController, modifier: Modifier
                         TrackRow(
                             track = track,
                             player = player,
-                            onClick = { player.playQueue(list, index) },
+                            context = context,
+                            onClick = { player.playQueue(list, index, context) },
                             onStartRadio = if (track.isEpisode) null else { { player.startTrackRadio(track) } },
                         )
                     }

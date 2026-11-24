@@ -6,13 +6,8 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
 )
 
-// StreamCache is an optional on-disk cache of raw CDN stream bodies, keyed by
-// "trackID.format" (e.g. "12345.MP3_320"). The stored bytes are exactly what
-// the CDN served (still stripe-encrypted ciphertext for tracks), so nothing
-// decrypted ever lands on disk; the player decrypts as it reads.
-// *mediacache.Cache satisfies this interface; the audio package uses only
-// the interface and mediacache's StreamMeta, so the cache stays a pluggable
-// opt-in.
+// StreamCache is an optional on-disk cache of raw CDN bodies keyed "trackID.format",
+// stored as served (ciphertext for tracks). *mediacache.Cache implements it.
 type StreamCache interface {
 	// Get opens the cached body's file and returns it with its size when key
 	// is present. The caller must close the file and must not delete it.
@@ -29,11 +24,9 @@ type StreamCache interface {
 // cacheRef holds the attached StreamCache for an atomic.Pointer.
 type cacheRef struct{ c StreamCache }
 
-// SetStreamCache attaches an optional raw-stream cache used by every source
-// created afterwards (Play/Preload). nil (the default) disables caching.
-// Only full encrypted track streams are cached; previews and plain passthrough
-// streams (podcasts) never touch the cache. Safe at any time, also while a
-// track plays: that track keeps the cache it started with.
+// SetStreamCache sets the raw-stream cache for sources created afterwards (nil turns it
+// off). Only full encrypted tracks are cached. A playing track keeps the cache it
+// started with.
 func (p *Player) SetStreamCache(c StreamCache) {
 	if c == nil {
 		p.streamCache.Store(nil)

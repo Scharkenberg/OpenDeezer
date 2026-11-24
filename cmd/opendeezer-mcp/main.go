@@ -1,16 +1,6 @@
-// Command opendeezer-mcp is a Model Context Protocol (MCP) server that lets an
-// AI agent control an OpenDeezer client's playback. It speaks JSON-RPC 2.0 over
-// stdio (newline-delimited) and drives the running client through its control API
-// (see internal/control). Point it at the client with $OPENDEEZER_CONTROL_URL
-// (default http://127.0.0.1:7654); authenticate with $OPENDEEZER_CONTROL_TOKEN
-// or $OPENDEEZER_CONTROL_ACCOUNT.
-//
-// Tools: get_status, play_pause, next, prev, stop, restart, cycle_repeat,
-// toggle_shuffle, set_repeat, set_shuffle, set_volume, seek, search,
-// list_playlists, play_track, play_playlist, play_album, play_mix_track,
-// play_mix_artist, queue_add, queue_jump, queue_remove, queue_move,
-// history_recent, get_eq, set_eq, set_sleep_timer, cancel_sleep_timer, whoami,
-// list_devices, select_device.
+// Command opendeezer-mcp is an MCP server (JSON-RPC 2.0 over stdio) that drives the
+// OpenDeezer client at $OPENDEEZER_CONTROL_URL (default http://127.0.0.1:7654) through
+// its control API, authenticated by $OPENDEEZER_CONTROL_TOKEN or _CONTROL_ACCOUNT.
 package main
 
 import (
@@ -27,19 +17,13 @@ import (
 
 var version = version_.Number
 
-// protocolVersion is the MCP revision this server was written against. Later
-// revisions we have verified compatibility with (for the feature subset used
-// here: stdio transport, tools/list + tools/call, text content) are listed in
-// compatibleProtocolVersions and echoed back when a client requests them.
+// protocolVersion is the MCP revision this server was written against; the later
+// revisions in compatibleProtocolVersions are echoed back when a client asks for them.
 const protocolVersion = "2024-11-05"
 
-// compatibleProtocolVersions are the MCP protocol revisions this server can
-// honestly claim. 2025-03-26 and 2025-06-18 only ADD features on top of what
-// we use (tool annotations, structured content, elicitation, …), so echoing
-// the client's requested version — as the spec's version-negotiation rules
-// prefer — is safe. Unknown/future versions fall back to our pinned baseline
-// and the client decides whether to proceed. Keep this list conservative:
-// only append a revision after checking its changelog against this server.
+// compatibleProtocolVersions lists the MCP revisions echoed back on request: they only
+// add features this server does not use. Other versions get protocolVersion. Append a
+// revision only after checking its changelog against this server.
 var compatibleProtocolVersions = map[string]bool{
 	"2024-11-05": true,
 	"2025-03-26": true,
@@ -95,10 +79,8 @@ type server struct {
 	out    *bufio.Writer
 }
 
-// maxLineBytes caps a single JSON-RPC request line. A bufio.Scanner would hard
-// error (bufio.ErrTooLong) on a line past its token limit and end the loop; a
-// line longer than this instead draws a JSON-RPC parse error and the loop keeps
-// going, so one oversized message never takes the whole server down.
+// maxLineBytes caps one JSON-RPC request line; a longer line draws a parse error
+// and the read loop goes on with the next line.
 const maxLineBytes = 8 << 20 // 8 MiB
 
 func (s *server) serve(in io.Reader, out io.Writer) {
@@ -131,11 +113,9 @@ func (s *server) serve(in io.Reader, out io.Writer) {
 	}
 }
 
-// readLine reads one '\n'-terminated line from r and returns it (the trailing
-// newline is left on; callers trim). When appending the line would exceed max
-// bytes, readLine drains the rest of that line and returns tooLong=true with a
-// nil line, so the caller can answer a parse error and resume at the next line.
-// The final line need not end in '\n'; it is then returned with err==io.EOF.
+// readLine reads one line from r, trailing '\n' included. A line over max bytes is
+// drained and reported as tooLong with a nil line. A final line without '\n' comes
+// back with err == io.EOF.
 func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
 	for {
 		frag, e := r.ReadSlice('\n')
@@ -156,11 +136,8 @@ func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
 func (s *server) dispatch(req rpcReq) {
 	switch req.Method {
 	case "initialize":
-		// Version negotiation: echo the client's requested version when it is
-		// one we are known-compatible with; otherwise answer with our pinned
-		// baseline (per spec, the server then offers its latest supported
-		// version and the client decides). serve() is single-goroutine, so
-		// storing the result on s needs no locking.
+		// Echo the client's version when it is compatible, else answer the pinned baseline
+		// and let the client decide. serve() runs on one goroutine, so no lock is needed.
 		var p struct {
 			ProtocolVersion string `json:"protocolVersion"`
 		}

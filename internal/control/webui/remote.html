@@ -766,7 +766,7 @@ function startStateUpdates() {
   };
 
   // A connection can remain stuck in CONNECTING without firing an error on
-  // some browsers/networks. Preserve the old remote behaviour in that case.
+  // some browsers/networks. Preserve the old remote behavior in that case.
   eventConnectTimer = setTimeout(function() {
     fallbackToPolling(source);
   }, 5000);

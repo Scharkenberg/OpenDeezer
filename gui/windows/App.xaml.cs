@@ -22,6 +22,7 @@ public partial class App : Application
     internal static Offline Offline { get; } = new(s_dq, Library);
     internal static Session Session { get; } = new(s_dq, Settings, Library, Player, Offline);
     internal static Navigator Navigator { get; } = new();
+
     internal static IntPtr WindowHandle => s_window == null ? IntPtr.Zero : WinRT.Interop.WindowNative.GetWindowHandle(s_window);
 
     public App()

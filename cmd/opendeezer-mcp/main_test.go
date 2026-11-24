@@ -363,10 +363,9 @@ func TestSelectDevice(t *testing.T) {
 	}
 }
 
-// TestParseErrorRecovery verifies the read loop never dies on a bad input line:
-// a garbled (non-JSON) line and an oversized line (past maxLineBytes) each draw
-// a JSON-RPC -32700 parse error with a null id, and the server keeps serving —
-// the valid requests before and after both dispatch.
+// TestParseErrorRecovery checks that a garbled line and an oversized line each draw
+// a -32700 parse error with a null id while the valid requests around them still
+// dispatch.
 func TestParseErrorRecovery(t *testing.T) {
 	base, r := startControl(t)
 	oversized := strings.Repeat("A", maxLineBytes+1024) // one line past the cap

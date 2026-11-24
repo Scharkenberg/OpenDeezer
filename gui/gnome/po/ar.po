@@ -321,7 +321,7 @@ msgid "Crossfade"
 msgstr "التلاشي المتقاطع"
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr "السلوك"
 
 #: src/main.c:1857
@@ -393,11 +393,11 @@ msgid "Removed from Liked Songs"
 msgstr "تمت الإزالة من الأغاني المفضلة"
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr "تعذّرت الإضافة إلى المفضلة"
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr "تعذّرت الإزالة من المفضلة"
 
 #: src/main.c:2238 src/main.c:3702
@@ -975,24 +975,16 @@ msgid "Preview only — a 30-second clip"
 msgstr "مقتطف فقط — مقطع مدته 30 ثانية"
 
 #: src/main.c:1836
-msgid "Ads"
-msgstr "الإعلانات"
+msgid "Play reporting"
+msgstr "الإبلاغ عن الاستماع"
 
 #: src/main.c:1839
-msgid "Disable ads"
-msgstr "تعطيل الإعلانات"
+msgid "Don't report my plays"
+msgstr "لا تبلّغ عن استماعي"
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
-msgstr ""
-"يعتمد Deezer Free على الإعلانات. الإبلاغ عن مرات تشغيلك — مثل التطبيق الرسمي "
-"— يمنح الفنانين حقوقهم ويموّل الإعلانات. تعطيل هذا الخيار يزيل الإعلانات لكنه "
-"يوقف أيضًا الإبلاغ عن مرات تشغيلك، مما يحرم الفنانين من عدد مرات التشغيل "
-"ويخالف شروط استخدام Deezer. استخدمه على مسؤوليتك الخاصة."
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك."
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3
 msgid "OpenDeezer"

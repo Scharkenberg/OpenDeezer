@@ -10,6 +10,7 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -83,10 +84,9 @@ func (m *Model) navCmd(c tea.Cmd) tea.Cmd {
 	return func() tea.Msg { return navMsg{gen: gen, msg: c()} }
 }
 
-// Update handles all messages. A screen change makes pending navigation
-// results stale, drops a delete confirmation and detaches from a peer the new
-// screen does not drive. The spinner ticks only while something is loading,
-// the UI tick only while a track is loaded or playing or a peer is driven.
+// Update handles all messages. A screen change makes pending navigation results stale,
+// drops a delete confirmation and detaches from a peer the new screen does not drive.
+// Spinner and UI ticks run only while needed.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	prev := m.screen
 	_, cmd := m.update(msg)
@@ -122,6 +122,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if p, ok := msg.msg.(playNowMsg); ok && len(p.tracks) > 0 {
 			m.q.Set(p.tracks, 0)
 			m.episodeMode = p.episodes
+			m.playCtx = p.ctx
 			return m, m.playCurrent()
 		}
 		return m, nil
@@ -154,6 +155,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.acct = m.client.Account()
 		m.publishAccount()                                // identity snapshot for the control API (race-free read)
 		m.client.SetAdsDisabled(config.LoadAdsDisabled()) // free-tier ads opt-out
+		target := m.client.GainTarget()
+		m.player.SetReplayGainTarget(target)
+		m.savePlayback(func(pb *config.Playback) { pb.GainTarget = target })
+		m.listens.Flush() // listens kept while offline
 		m.showMenu()
 		if m.acct.Name != "" {
 			m.status = i18n.Tf("Logged in as %s · %s", m.acct.Name, m.acct.Offer)
@@ -162,8 +167,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case !m.acct.Premium:
-			// Free account: streams full tracks at 128 kbps (ad-supported, like
-			// Deezer's web player); 320/FLAC and downloads need a paid plan. A track
+			// Free account: streams full tracks at 128 kbps, as Deezer's web player
+			// does; 320/FLAC and downloads need a paid plan. A track
 			// with no full-length source falls back to a 30-second preview.
 			m.status += "  " + i18n.T("(free account · 128 kbps; downloads need a paid plan)")
 		case (m.client.Quality() == 2 && !m.acct.CanHiFi) || (m.client.Quality() == 1 && !m.acct.CanHQ):
@@ -171,11 +176,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status += "  " + i18n.T("(plan can't stream that quality — will fall back)")
 		}
 		// Seed the liked-ids cache in the background so the 'f' toggle knows the
-		// current state before the Liked Songs view is ever opened.
-		return m, m.likedIDsCmd()
+		// current state before the Liked Songs view is ever opened; learn the web
+		// player's build for the next start.
+		return m, tea.Batch(m.likedIDsCmd(), m.webReleaseCmd())
 
 	case likedIDsMsg:
 		m.likedIDs = msg.ids
+		return m, nil
+	case radioMoreMsg:
+		if msg.ctx == m.playCtx { // else another list is playing
+			m.q.Append(msg.tracks...)
+		}
 		return m, nil
 
 	case tracksMsg:
@@ -190,7 +201,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Browsing must not touch the live play queue: hold the tracks aside and
 		// only commit to the queue on an explicit play (see activate).
-		m.browse = msg.tracks
+		m.browse, m.browseCtx = msg.tracks, msg.ctx
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
 		m.setList(msg.title, items)
@@ -222,7 +233,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Only the top tracks are the playable context (playBrowsed maps rows to
 		// the browse slice by id, so header/album/artist rows never shift plays).
-		m.browse = p.Top
+		m.browse, m.browseCtx = p.Top, listens.Context{Type: "artist_top", ID: p.Artist.ID}
 		m.ownPlaylists = false
 		m.pageArtist = p.Artist // 'm' with no seed row starts this artist's radio
 		m.setList("♪ "+p.Artist.Name, items)
@@ -255,7 +266,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			browse[i] = e.AsTrack()
 		}
 		// Held aside until the user plays a row: see tracksMsg.
-		m.browse = browse
+		m.browse, m.browseCtx = browse, msg.ctx
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
 		m.setList(msg.title, items)
@@ -365,7 +376,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items = append(items, playlistRow(p))
 		}
 		// Tracks are the playable context, held aside until an explicit play.
-		m.browse = msg.results.Tracks
+		m.browse, m.browseCtx = msg.results.Tracks, msg.ctx
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
 		m.setList(i18n.T("Results"), items)
@@ -412,10 +423,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.playing = true
 		m.status = ""
 		cmd := m.onTrackChanged(msg.track)
-		// Ask for the next track for a gapless/crossfaded transition, and report
-		// the play to Deezer (log.listen) unless the user disabled ads/reporting.
+		// Ask for the next track for a gapless/crossfaded transition.
 		m.requestPreload()
-		return m, tea.Batch(cmd, m.nowPlayingCmd(msg.track.ID))
+		return m, cmd
 
 	case devicesMsg:
 		m.openPicker(screenDevices)
@@ -456,11 +466,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// A pick is still resolving: it decides what plays next.
 			return m, m.waitFinish()
 		case msg.swapped && m.player.State() != audio.Stopped:
-			// The player gaplessly swapped in the preloaded next, which is always
-			// the deterministic linear next (PeekNext). Advance the cursor to that
-			// same track: NOT via Next(), which would re-evaluate shuffle/repeat at
-			// finish time and could jump to a different track than the audio. No
-			// re-Play(), so a user pause survives the transition.
+			// The player swapped in the preloaded linear next (PeekNext). Move the cursor to that
+			// track, not via Next(), which could pick another under shuffle; no re-Play, so a pause
+			// survives.
 			m.histMarkFull() // the outgoing track played to its natural end
 			m.q.AdvanceLinear()
 			m.playing = true
@@ -481,10 +489,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.loading = false
-		// A browse/stream call failed because the network dropped: take over with
-		// the No-Internet screen (remembering where to return) instead of leaving a
-		// cryptic error in the footer. The session stays valid, so retry can just
-		// go back once connectivity returns.
+		// A call failed because the network dropped: show the No-Internet screen (remembering
+		// where to return) instead of an error in the footer. The session stays valid.
 		if errors.Is(msg.err, deezer.ErrNoNetwork) && m.screen != screenNoInternet {
 			m.prevScreen = m.screen
 			m.screen = screenNoInternet
@@ -495,9 +501,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case updateCheckMsg:
-		// Capture whether this reply answers a manual re-check before clearing the
-		// flag: the status line is now localized, so it can't be compared against a
-		// fixed English "Checking…" literal to tell manual from silent checks.
+		// Note whether this reply answers a manual re-check before clearing the flag; the
+		// status line is localized, so it cannot be compared with "Checking…".
 		wasManual := m.updateChecking
 		m.updateChecking = false
 		m.updateChecked = true
@@ -598,8 +603,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.srv != nil {
 			m.webRemoteSrv = msg.srv
 		}
+		if msg.enabled && msg.replacedCtrl {
+			m.webRemoteRebound = true
+		}
+		if msg.closed {
+			// The LAN server is gone: the loopback API comes back as configured.
+			m.ctrl, m.webRemoteSrv, m.webRemoteRebound = nil, nil, false
+			if m.ctrlSend != nil {
+				_ = m.StartControl(m.ctrlSend)
+			}
+		}
 		m.webRemoteActive = msg.enabled
-		m.webRemoteCode = msg.code
 		m.webRemoteURL = msg.url
 		m.webRemoteQR = msg.qr
 		if msg.enabled {
@@ -722,6 +736,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.q.Set(msg.tracks, 0)
 		m.browse = msg.tracks // keep row activation consistent with the shown list
+		m.browseCtx, m.playCtx = msg.ctx, msg.ctx
 		m.episodeMode = msg.episodes
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
@@ -732,6 +747,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statsMsg:
 		m.loading = false
 		m.browse = nil // stats rows play by id, not through the browse slice
+		m.browseCtx = listens.Context{}
 		m.ownPlaylists = false
 		m.pageArtist = deezer.ArtistInfo{}
 		m.setList("📊 "+i18n.T("Stats"), statsItems(msg))
@@ -772,11 +788,9 @@ func (m *Model) delegate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// openPicker snapshots the list a picker (devices, add-to-playlist) is about to
-// replace and remembers the return screen, but only when not already on that
-// picker, so re-opening it can't overwrite either with picker rows. An overlay
-// is not recorded as prevScreen (mirrors toggleScreen) to avoid an esc
-// self-loop when the picker is opened from another overlay.
+// openPicker saves the list a picker is about to replace and the return screen, unless
+// already on that picker. An overlay is not recorded as prevScreen, to avoid an esc
+// loop.
 func (m *Model) openPicker(s screen) {
 	if m.screen == s {
 		return
@@ -798,10 +812,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// No-Internet screen: retry re-establishes the session (a fresh login round-
-	// trip doubles as a connectivity probe); on success loginDoneMsg lands us back
-	// in the app. If the session is still valid (in-session drop), retry still just
-	// re-logs in: cheap and it confirms the network is back.
+	// No-Internet screen: retry logs in again, which doubles as a connectivity check; on
+	// success loginDoneMsg returns to the app.
 	if m.screen == screenNoInternet {
 		switch msg.String() {
 		case "r", "enter":
@@ -1066,8 +1078,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.status = i18n.Tf("Repeat: %s", i18n.T(m.q.CycleRepeat().String()))
 		m.publishControl()
-		// The upcoming track may have changed; drop the stale linear preload and
-		// re-preload for the new mode (no-op preload when now non-deterministic).
+		// The upcoming track may have changed: drop the stale linear preload and preload again
+		// for the new mode (nothing when it is not deterministic).
 		m.invalidatePreload()
 		return m, nil
 	case "z":
@@ -1388,12 +1400,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// startRadio handles the 'm' key: pick a mix seed from context and start it.
-// On a browse list the selected row decides (track row → song radio, artist
-// row → artist radio, stats row → song radio); with no seed row on an artist
-// page, the page's artist seeds. On the queue view the cursor row seeds; on
-// now-playing (and anywhere else) the current track does. Podcast episodes
-// have no mixes.
+// startRadio handles 'm': the selected track or artist row seeds a song or artist
+// radio; otherwise the artist page's artist, the queue cursor row or the current track
+// does. Podcast episodes have no mixes.
 func (m *Model) startRadio() (tea.Model, tea.Cmd) {
 	radio := func(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 		m.loading = true
@@ -1475,7 +1484,7 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 			m.status = i18n.T("Scanning…")
 			return m, m.navCmd(m.discoverDevicesCmd())
 		case actWebRemote:
-			m.webCtrlCfg = LoadControl()
+			m.webCtrlCfg = config.LoadControl()
 			m.screen = screenWebRemote
 			m.status = ""
 			return m, nil
@@ -1502,6 +1511,7 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 				m.q.Set([]deezer.Track{r.Track()}, 0)
 				m.episodeMode = r.Episode
 				m.resumeID, m.resumeMS = r.ID, r.PositionMS
+				m.playCtx = listens.Context{}
 				return m, m.playCurrent()
 			}
 			return m, nil
@@ -1564,11 +1574,9 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// playBrowsed replaces the play queue with the browsed list, positioned at the
-// activated row (mapped by the visible index, falling back to an ID search when
-// filtering or non-track rows shift it), and sets the episode mode. A row whose
-// track is not in the browsed list plays alone. Called only on an explicit play
-// so browsing never clobbers the live queue.
+// playBrowsed replaces the queue with the browsed list at the activated row (by index,
+// else by ID when filtering shifts rows) and sets the episode mode. A row not in the
+// list plays alone. Only an explicit play calls it.
 func (m *Model) playBrowsed(t deezer.Track, episodes bool) {
 	idx := m.list.Index()
 	if idx < 0 || idx >= len(m.browse) || m.browse[idx].ID != t.ID {
@@ -1580,6 +1588,7 @@ func (m *Model) playBrowsed(t deezer.Track, episodes bool) {
 		m.q.Set(m.browse, idx)
 	}
 	m.episodeMode = episodes
+	m.playCtx = m.browseCtx
 }
 
 func (m *Model) findInBrowse(id string) int {
@@ -1672,7 +1681,7 @@ func (m *Model) playTrackByIDCmd(id string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return playNowMsg{tracks: []deezer.Track{t}}
+		return playNowMsg{tracks: []deezer.Track{t}, ctx: listens.Context{Type: "track_page", ID: id}}
 	}
 }
 
@@ -1683,7 +1692,7 @@ func (m *Model) playPlaylistByIDCmd(id string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return playNowMsg{tracks: ts}
+		return playNowMsg{tracks: ts, ctx: listens.Context{Type: "playlist_page", ID: id}}
 	}
 }
 
@@ -1796,7 +1805,15 @@ func (m *Model) next() tea.Cmd {
 	return nil
 }
 
+// prevRestartMS is where Previous restarts the track instead of going back, as
+// the engine and Deezer's Android app do.
+const prevRestartMS = 5000
+
 func (m *Model) prev() tea.Cmd {
+	// While a pick resolves, the position is the outgoing track's: step back.
+	if !m.resolving && m.player != nil && m.player.PositionMS() >= prevRestartMS {
+		return m.seekCmd(0)
+	}
 	if m.q.Prev() {
 		return m.playCurrent()
 	}
@@ -1809,8 +1826,7 @@ func (m *Model) advance() tea.Cmd {
 		return m.playCurrent()
 	}
 	m.playing = false
-	m.saveResume()
-	// End of the queue: nothing new will flush the session, so record it now
+	// End of the queue: nothing else will flush the session, so record it here
 	// (histMarkFull already ran on the finish message).
 	return m.historyFlushCmd()
 }
@@ -1821,6 +1837,7 @@ func (m *Model) advance() tea.Cmd {
 func (m *Model) onTrackChanged(t deezer.Track) tea.Cmd {
 	flush := m.historyFlushCmd() // record the outgoing track (if any)
 	m.histStartSession(t)
+	m.listens.Started(listens.Start{ID: t.ID, Episode: m.episodeMode, Context: m.playCtx, Shuffle: m.q.Shuffle(), Repeat: int(m.q.Repeat())})
 	m.status = ""
 	m.publishMedia()
 	m.publishControl()
@@ -1839,7 +1856,19 @@ func (m *Model) onTrackChanged(t deezer.Track) tea.Cmd {
 	if artworkSupported() && t.ArtworkURL != "" {
 		cover = m.coverCmd(t.ID, t.ArtworkURL)
 	}
-	return tea.Batch(flush, cover, lyrics)
+	// A queue played from Flow or a mix is topped up as it runs low.
+	var radio tea.Cmd
+	if left := m.q.Len() - m.q.Index() - 1; m.q.Len() > 0 && left <= 4 && deezer.IsRadio(m.playCtx.Type) && m.peer() == nil {
+		ctx, queued := m.playCtx, append([]deezer.Track(nil), m.q.Tracks()...)
+		radio = func() tea.Msg {
+			more := m.radio.More(m.client, ctx.Type, ctx.ID, left, func() []deezer.Track { return queued })
+			if len(more) == 0 {
+				return nil
+			}
+			return radioMoreMsg{ctx: ctx, tracks: more}
+		}
+	}
+	return tea.Batch(flush, cover, lyrics, radio)
 }
 
 // toggleScreen flips to dst (remembering the screen to return to) or back.

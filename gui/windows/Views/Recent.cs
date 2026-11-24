@@ -11,7 +11,7 @@ internal sealed class RecentView : View
 {
     internal readonly TextBlock _total = Ui.Text("", TextKind.SectionTitle);
     private readonly SelectorBar _filters = new();
-    internal readonly TrackList _recent = new(), _top = new();
+    internal readonly TrackList _recent = new() { Context = new("history_song", "") }, _top = new() { Context = new("history_song", "") };
     // History has no artist id or picture: initials, and a click searches the name.
     private readonly TileGrid<ArtistStat> _artists = new(
         a => new TileData(a.Artist, Loc.Plural("Plays", a.Plays), "", Round: true),
@@ -29,7 +29,7 @@ internal sealed class RecentView : View
             _filters.Items.Add(new SelectorBarItem { Text = Loc.S(key) });
         _filters.SelectedItem = _filters.Items[0];
         _filters.SelectionChanged += (_, _) => ApplyFilter();
-        var headline = Ui.Stack(0, _total, Ui.Text(Loc.S("Recent_ListenTimeLabel"), TextKind.SecondaryCaption));
+        var headline = Ui.Stack(0, _total, Ui.Text(Loc.Format("Recent_ListenTimeLabel", Count.StatsDays), TextKind.SecondaryCaption));
         headline.Margin = Pad.Header;
         _filters.Margin = Pad.Header;
         var lists = new Grid();

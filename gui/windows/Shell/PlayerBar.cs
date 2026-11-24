@@ -1,5 +1,5 @@
-// The player bar: now playing on the left, transport and seek in the centre, lyrics, queue,
-// Connect, volume and More on the right. It only follows Player.
+// The player bar: now playing on the left, transport and seek in the center, an episode's speed,
+// lyrics, queue, Connect, volume and More on the right. It only follows Player.
 
 using System;
 using Microsoft.UI.Dispatching;
@@ -15,7 +15,7 @@ internal sealed class PlayerBar
     private static Player Player => App.Player;
 
     private readonly Art _art = new(ArtShape.Small, Size.BarArt);
-    private readonly Button _artButton = new() { Style = Ui.Styles.Subtle, Padding = new Thickness(0) };
+    private readonly Button _artButton = new() { Style = Ui.Styles.SubtleFlush };
     private readonly TextBlock _title = Ui.Text("", TextKind.Strong);
     private readonly Border _explicit = Ui.ExplicitChip();
     private readonly TextBlock _artistText = Ui.Text("", TextKind.SecondaryCaption);
@@ -24,7 +24,17 @@ internal sealed class PlayerBar
     private readonly Border _format;
     private readonly Button _like;
     private readonly FrameworkElement _nowPlaying, _idle;
-    private double _leftMin, _rightMin;
+    internal readonly FrameworkElement _elsewhere;
+    private readonly Art _elsewhereArt = new(ArtShape.Small, Size.BarArt);
+    private readonly TextBlock _elsewhereTitle = Ui.Text("", TextKind.Strong);
+    internal readonly TextBlock _elsewhereArtist = Ui.Text("", TextKind.SecondaryCaption);
+    internal readonly FrameworkElement _elsewhereTitleLine;
+    internal readonly Button _playHere;
+    private readonly DispatcherQueueTimer _elsewhereEnds;
+    private double _leftMin, _rightMin, _centerWant;
+    // The transport buttons, and the center column: the buttons with the times at its ends, over the slider.
+    internal readonly StackPanel _transport;
+    private readonly StackPanel _center;
 
     private readonly ToggleButton _shuffle;
     private readonly Button _prev, _next, _play;
@@ -36,7 +46,8 @@ internal sealed class PlayerBar
     internal readonly Slider _seek;
 
     private readonly ToggleButton _lyrics, _queue;
-    private readonly Button _connect, _volumeButton, _more;
+    private readonly Button _connect, _volumeButton, _more, _speed;
+    private readonly TextBlock _speedText = Ui.Text("");
     private readonly Slider _volume, _flyoutVolume;
     private readonly Flyout _volumeFlyout, _connectFlyout, _sleepFlyout;
     private readonly StackPanel _devices = Ui.Stack(0);
@@ -80,8 +91,7 @@ internal sealed class PlayerBar
         // The title opens the track's overview page.
         var title = new Button
         {
-            Style = Ui.Styles.Subtle,
-            Padding = new Thickness(0),
+            Style = Ui.Styles.SubtleFlush,
             HorizontalAlignment = HorizontalAlignment.Left,
             Content = new MarqueeText { PlayOnTap = false, Children = { _title } },
         };
@@ -105,8 +115,8 @@ internal sealed class PlayerBar
         _play.Click += (_, _) => Player.TogglePlayPause();
         _repeat = Ui.IconToggle(Icons.Repeat, "Tooltip_RepeatOff", _ => CycleRepeat());
         _repeat.Content = _repeatIcon;
-        var transport = Ui.Row(Space.S, _shuffle, _prev, _play, _next, _repeat);
-        transport.HorizontalAlignment = HorizontalAlignment.Center;
+        _transport = Ui.Row(Space.S, _shuffle, _prev, _play, _next, _repeat);
+        _transport.HorizontalAlignment = HorizontalAlignment.Center;
         _seek = Ui.Slider(0, 1, 0, "Tooltip_Seek", v =>
         {
             Ui.SetText(_pos, Fmt.Time((long)v));
@@ -128,13 +138,15 @@ internal sealed class PlayerBar
         }), true);
         _seek.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => EndSeek()), true);
         _seek.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => EndSeek()), true);
-        _pos.MinWidth = Size.TimeText;
-        _pos.TextAlignment = TextAlignment.Right;
+        // The times sit above the slider's ends, beside the buttons: showing them never takes the
+        // slider's width. They show when the column has room beside the buttons; the thumb's tooltip
+        // has the time anyway.
         _pos.VerticalAlignment = VerticalAlignment.Center;
-        _dur.MinWidth = Size.TimeText;
         _dur.VerticalAlignment = VerticalAlignment.Center;
-        var centre = Ui.Stack(0, transport, Ui.Grid("auto * auto", Space.S, _pos, _seek, _dur));
-        centre.VerticalAlignment = VerticalAlignment.Center;
+        _dur.HorizontalAlignment = HorizontalAlignment.Right;
+        _center = Ui.Stack(0, Ui.Grid("* auto *", Space.S, _pos, _transport, _dur), _seek);
+        _center.VerticalAlignment = VerticalAlignment.Center;
+        _center.SizeChanged += (_, _) => RenderTimes();
 
         _lyrics = Ui.IconToggle(Icons.Lyrics, "Tooltip_Lyrics", on => LyricsToggled?.Invoke(on));
         _queue = Ui.IconToggle(Icons.Queue, "Tooltip_Queue", on => QueueToggled?.Invoke(on));
@@ -155,7 +167,16 @@ internal sealed class PlayerBar
         var moreMenu = new MenuFlyout();
         moreMenu.Opening += (_, _) => FillMore(moreMenu);
         _more.Flyout = moreMenu;
-        var right = Ui.Row(0, _lyrics, _queue, _connect, _volumeButton, _volume, _more);
+        // Episodes only, as in Deezer's app: each click moves on through its speeds.
+        _speed = Ui.IconButton(Icons.Clock, "Tooltip_Speed", () =>
+        {
+            Episodes.NextSpeed();
+            RenderSpeed();
+        });
+        _speedText.VerticalAlignment = VerticalAlignment.Center;
+        _speed.Content = _speedText;
+        _speed.Width = Size.SpeedButton;
+        var right = Ui.Row(0, _speed, _lyrics, _queue, _connect, _volumeButton, _volume, _more);
         right.HorizontalAlignment = HorizontalAlignment.Right;
         right.VerticalAlignment = VerticalAlignment.Center;
 
@@ -164,13 +185,33 @@ internal sealed class PlayerBar
         var idle = Ui.Row(Space.S, Ui.Icon(Icons.Flow), Ui.Text(Loc.S("Bar_NothingPlaying"), TextKind.SecondaryBody));
         idle.VerticalAlignment = VerticalAlignment.Center;
         _idle = idle;
+        // While nothing plays here, the track another player of the account plays, marked by the
+        // speakers glyph, to play here; a track it did not name shows as the glyph and its label.
+        var playingThere = Ui.Icon(Icons.Speakers, IconSize.Small, accent: true);
+        playingThere.VerticalAlignment = VerticalAlignment.Center;
+        _elsewhereTitleLine = new MarqueeText { PlayOnTap = false, Children = { _elsewhereTitle } };
+        var elsewhereLines = Ui.Stack(0, _elsewhereTitleLine,
+            Ui.Grid("auto *", Space.XS, playingThere, new MarqueeText { PlayOnTap = false, Children = { _elsewhereArtist } }));
+        elsewhereLines.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Name(elsewhereLines, Loc.S("Tooltip_PlayingElsewhere"));
+        _playHere = Ui.IconButton(Icons.Play, "Tooltip_PlayHere", () =>
+        {
+            if (Player.Elsewhere.Track is { } t) Player.Play((Track[])[t], 0, ListenContext.None);
+        });
+        _elsewhere = Ui.Grid("auto * auto", Space.M, _elsewhereArt.Root, elsewhereLines, _playHere);
+        _elsewhere.VerticalAlignment = VerticalAlignment.Center;
+        // Deezer announces no pause: the track counts as playing there until its end.
+        _elsewhereEnds = dq.CreateTimer();
+        _elsewhereEnds.IsRepeating = false;
+        _elsewhereEnds.Tick += (_, _) => RenderSlot();
         var slot = new Grid();
         slot.Children.Add(_nowPlaying);
         slot.Children.Add(idle);
+        slot.Children.Add(_elsewhere);
         var card = new Border { Style = Ui.Styles.Get("NowPlayingCard"), Child = slot };
-        Root = Ui.Grid($"* {Size.BarCentreWeight}* *", Space.M, card, centre, right);
-        Root.ColumnDefinitions[1].MinWidth = Size.BarCentreMin;
-        Root.ColumnDefinitions[1].MaxWidth = Size.BarCentreMax;
+        Root = Ui.Grid($"* {Size.BarCenterWeight}* *", Space.M, card, _center, right);
+        Root.ColumnDefinitions[1].MinWidth = Size.BarCenterMin;
+        Root.ColumnDefinitions[1].MaxWidth = Size.BarCenterMax;
         Root.Style = Ui.Styles.Bar;
         Root.Padding = Pad.Bar;
         Ui.OnWidthClass(Root, ApplyWidth);
@@ -184,12 +225,15 @@ internal sealed class PlayerBar
         Player.StateChanged += RenderTransport;
         Player.VolumeChanged += RenderVolume;
         Player.CastChanged += RenderCast;
+        Player.ElsewhereChanged += RenderSlot;
         Player.PositionChanged += RenderPosition;
         Player.QueueChanged += _ => RenderEnabled();
         Player.LikeChanged += id =>
         {
             if (id.Length == 0 || id == Player.Current?.Id) RenderLike();
         };
+        // The heart and the artist link follow offline mode.
+        App.Offline.Changed += RenderNowPlaying;
         RenderTrack();
         RenderTransport();
         RenderVolume();
@@ -204,7 +248,8 @@ internal sealed class PlayerBar
     {
         if (!_seeking) return;
         _seeking = false;
-        if (_seek.Value != _pressedAt) Player.Seek((long)Math.Round(_seek.Value));
+        // A slider disabled meanwhile (a new track loading) belongs to another stream: no seek.
+        if (_seek.IsEnabled && _seek.Value != _pressedAt) Player.Seek((long)Math.Round(_seek.Value));
     }
 
     // Every position tick: the thumb and the elapsed time; the length only when it changes.
@@ -236,12 +281,22 @@ internal sealed class PlayerBar
         string id = Player.Current?.Id ?? "";
         bool fade = id.Length > 0 && _shownId.Length > 0 && id != _shownId;
         _shownId = id;
-        _nowPlaying.Visibility = Ui.Show(Player.Current != null);
-        _idle.Visibility = Ui.Show(Player.Current == null);
+        RenderSlot();
         if (fade) Ui.CrossFade(_nowPlaying, RenderNowPlaying);
         else RenderNowPlaying();
         RenderEnabled();
         RenderFormat();
+        RenderSpeed();
+    }
+
+    // In the bar from the medium width up; below, in More (the bar could not narrow past it).
+    private bool SpeedShown(WidthClass c) => Player.Current is { IsEpisode: true } && c >= WidthClass.Medium;
+
+    internal void RenderSpeed()
+    {
+        Ui.SetText(_speedText, Episodes.SpeedText(Episodes.Speed));
+        Ui.Name(_speed, Loc.Format("Tooltip_SpeedFormat", Episodes.SpeedText(Episodes.Speed)));
+        if (Ui.Show(SpeedShown(_width)) != _speed.Visibility) ApplyWidth(_width);
     }
 
     private void RenderNowPlaying()
@@ -252,16 +307,39 @@ internal sealed class PlayerBar
             Ui.SetText(_title, t.Name);
             _explicit.Visibility = Ui.Show(t.IsExplicit);
             Ui.SetText(_artistText, t.ArtistLine);
-            _artist.IsEnabled = t.ArtistId.Length > 0;
+            _artist.IsEnabled = t.ArtistId.Length > 0 && !App.Offline.Mode;
         }
         RenderLike();
+    }
+
+    // The card shows now playing, else another session's track while it plays there and nothing
+    // plays here, else the idle line.
+    private void RenderSlot()
+    {
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var away = Player.Elsewhere;
+        bool here = Player.State is PlayState.Playing or PlayState.Loading || Player.IsCasting;
+        bool showAway = !here && away.PlayingAt(now);
+        _elsewhere.Visibility = Ui.Show(showAway);
+        _nowPlaying.Visibility = Ui.Show(!showAway && Player.Current != null);
+        _idle.Visibility = Ui.Show(!showAway && Player.Current == null);
+        _elsewhereEnds.Stop();
+        if (!showAway) return;
+        var t = away.Track;
+        _elsewhereArt.Set(t?.ArtworkUrl ?? "");
+        _elsewhereTitleLine.Visibility = Ui.Show(t != null);
+        _playHere.Visibility = Ui.Show(t != null);
+        Ui.SetText(_elsewhereTitle, t?.Name ?? "");
+        Ui.SetText(_elsewhereArtist, t?.ArtistLine ?? Loc.S("Tooltip_PlayingElsewhere"));
+        _elsewhereEnds.Interval = TimeSpan.FromMilliseconds(away.UntilMs - now);
+        _elsewhereEnds.Start();
     }
 
     private void RenderLike()
     {
         var t = Player.Current;
         bool liked = t != null && Player.IsLiked(t.Id);
-        _like.IsEnabled = t is { IsEpisode: false, Id.Length: > 0 };
+        _like.IsEnabled = t is { IsEpisode: false, Id.Length: > 0 } && !App.Offline.Mode;
         Ui.ShowLiked(_like, liked);
     }
 
@@ -274,6 +352,7 @@ internal sealed class PlayerBar
         _playRing.IsActive = loading;
         _playRing.Visibility = Ui.Show(loading);
         Ui.Name(_play, Loc.S(playing ? "Tooltip_Pause" : "Tooltip_Play"));
+        RenderSlot();
         Ui.Quietly(_shuffle, () => _shuffle.IsChecked = Player.Shuffle);
         Ui.Name(_shuffle, Loc.S(Player.Shuffle ? "Tooltip_ShuffleOn" : "Tooltip_ShuffleOff"));
         Ui.Quietly(_repeat, () => _repeat.IsChecked = Player.Repeat != RepeatMode.Off);
@@ -321,34 +400,56 @@ internal sealed class PlayerBar
         _width = c;
         bool narrow = c == WidthClass.Narrow;
         _artButton.Visibility = Ui.Show(!narrow);
+        _elsewhereArt.Root.Visibility = Ui.Show(!narrow);
         _lyrics.Visibility = Ui.Show(!narrow);
         _connect.Visibility = Ui.Show(!narrow);
-        // The card: its padding and border on both sides.
-        _leftMin = (narrow ? 0 : Size.BarArt + Space.M) + Size.BarText + Space.M + Size.IconButton + 2 * (Space.S + Size.CardBorder);
-        // Narrow: the centre needs only Previous, Play and Next; it takes whatever else is left.
-        Root.ColumnDefinitions[1].MinWidth = narrow ? 2 * Size.IconButton + Size.PlayButton + 2 * Space.S : Size.BarCentreMin;
+        _leftMin = LeftMin(narrow);
+        // Narrow: the center needs only Previous, Play and Next, and wants room for the slider first,
+        // up to what it has at the next width class (Small), so widening across it never narrows it.
+        double gaps = 2 * Root.ColumnSpacing + Root.Padding.Left + Root.Padding.Right;
+        double smallCenter = Breakpoint.Narrow - gaps - LeftMin(narrow: false) - Count.SmallBarButtons * Size.IconButton;
+        Root.ColumnDefinitions[1].MinWidth = narrow ? 2 * Size.IconButton + Size.PlayButton + 2 * Space.S : Size.BarCenterMin;
+        Root.ColumnDefinitions[1].MaxWidth = narrow ? smallCenter : Size.BarCenterMax;
+        _centerWant = narrow ? Size.BarCenterNarrow : Math.Max(Size.BarCenterMin, smallCenter);
         _volume.Visibility = Ui.Show(c >= WidthClass.Medium);
+        _speed.Visibility = Ui.Show(SpeedShown(c));
         _shuffle.Visibility = Ui.Show(!narrow);
         _repeat.Visibility = Ui.Show(!narrow);
-        // The right group's own minimum: the Grid hands the centre its star share first.
+        // The right group's own minimum: the Grid hands the center its star share first.
         int buttons = 0;
         foreach (var b in new Control[] { _lyrics, _queue, _connect, _volumeButton, _more })
             if (b.Visibility == Visibility.Visible) buttons++;
-        _rightMin = buttons * Size.IconButton + (_volume.Visibility == Visibility.Visible ? Size.VolumeSlider : 0);
+        _rightMin = buttons * Size.IconButton + (_volume.Visibility == Visibility.Visible ? Size.VolumeSlider : 0)
+            + (_speed.Visibility == Visibility.Visible ? Size.SpeedButton : 0);
         Balance((Root.Parent as FrameworkElement)?.ActualWidth ?? 0);
         RenderVolumeName();
         RenderFormat();
+        RenderTimes();
     }
 
-    // The two sides get the same width whenever the bar has room, so the transport row sits at
-    // the window's centre; only a window too narrow for that lets each side keep its own minimum.
+    // Now playing's minimum: the art (but on a narrow bar), the title's room, Like, and the card's
+    // padding and border on both sides.
+    private static double LeftMin(bool narrow) =>
+        (narrow ? 0 : Size.BarArt + Space.M) + Size.BarText + Space.M + Size.IconButton + 2 * (Space.S + Size.CardBorder);
+
+    private void RenderTimes()
+    {
+        bool fits = _center.ActualWidth >= _transport.DesiredSize.Width + 2 * (Size.TimeText + Space.S);
+        _pos.Visibility = Ui.Show(fits);
+        _dur.Visibility = Ui.Show(fits);
+    }
+
+    // The center first gets the width it wants (_centerWant); what is left past that evens out the
+    // sides, the smaller growing to the larger, so the transport row moves to the window's center;
+    // beyond that the star shares share the rest. So the center never narrows as the window widens.
     private void Balance(double width)
     {
-        double side = Math.Max(_leftMin, _rightMin);
-        double fixedPart = Root.ColumnDefinitions[1].MinWidth + 2 * Root.ColumnSpacing + Root.Padding.Left + Root.Padding.Right;
-        bool even = width >= 2 * side + fixedPart;
-        Root.ColumnDefinitions[0].MinWidth = even ? side : _leftMin;
-        Root.ColumnDefinitions[2].MinWidth = even ? side : _rightMin;
+        double room = width - 2 * Root.ColumnSpacing - Root.Padding.Left - Root.Padding.Right - _centerWant;
+        double big = Math.Max(_leftMin, _rightMin), small = Math.Min(_leftMin, _rightMin);
+        double grown = Math.Clamp(room - big, small, big);
+        bool leftBig = _leftMin >= _rightMin;
+        Root.ColumnDefinitions[0].MinWidth = leftBig ? big : grown;
+        Root.ColumnDefinitions[2].MinWidth = leftBig ? grown : big;
     }
 
     // Wide: the button mutes. Narrow: it opens the volume flyout.
@@ -388,7 +489,14 @@ internal sealed class PlayerBar
                 Menus.Item("Tooltip_Lyrics", Icons.Lyrics, () => LyricsToggled?.Invoke(true)),
                 Menus.Item("Tooltip_Connect", Icons.Cast, () => _connectFlyout.ShowAt(_more)));
         }
-        if (Player.Current is { IsEpisode: false, Id.Length: > 0 } t) Menus.Track(menu.Items, t, new TrackMenu(Bar: true));
+        if (Player.Current is { IsEpisode: true } && !SpeedShown(_width))
+            Menus.Group(menu.Items, Menus.Item("Tooltip_Speed", Icons.Clock, () =>
+            {
+                Episodes.NextSpeed();
+                RenderSpeed();
+                Toast.Info(Loc.Format("Tooltip_SpeedFormat", Episodes.SpeedText(Episodes.Speed)), "");
+            }));
+        if (Player.Current is { Id.Length: > 0 } t) Menus.Track(menu.Items, t, new TrackMenu(Bar: true));
         Menus.Group(menu.Items, Menus.Item("Settings_SleepTimer", Icons.Sleep, () => _sleepFlyout.ShowAt(_more)));
     }
 
@@ -430,24 +538,30 @@ internal sealed class PlayerBar
         if (!ok) Toast.Error(Loc.S("Dialog_ConnectFailTitle"), Loc.S("Dialog_ConnectFailBody"));
     }
 
+    // Deezer's presets, then the end of the track (of the episode, for one), then off; each confirms
+    // with Deezer's toast.
     private StackPanel BuildSleep(DispatcherQueue dq)
     {
         var tick = dq.CreateTimer();
         tick.Interval = TimeSpan.FromMilliseconds(Timing.SleepRefreshMs);
         tick.Tick += (_, _) => RefreshSleep();
-        var panel = Ui.Stack(0, _sleepStatus);
-        void Choice(string text, Func<System.Threading.Tasks.Task> apply) =>
-            panel.Children.Add(Ui.FlyoutRow(Icons.Sleep, text, null, false, async () =>
+        var choices = Ui.Stack(0);
+        var panel = Ui.Stack(0, _sleepStatus, choices);
+        void Choice(string text, bool on, Func<System.Threading.Tasks.Task> apply) =>
+            choices.Children.Add(Ui.FlyoutRow(Icons.Sleep, text, null, false, async () =>
             {
+                _sleepFlyout.Hide();
                 await apply();
-                RefreshSleep();
+                Toast.Info(Loc.S(on ? "Sleep_Set" : "Sleep_Off"), "");
             }));
-        foreach (int m in Timing.SleepMinutes)
-            Choice(Loc.Plural("Minutes", m), () => Player.SetSleepTimerAsync(m, endOfTrack: false));
-        Choice(Loc.S("Settings_EndOfTrack"), () => Player.SetSleepTimerAsync(0, endOfTrack: true));
-        Choice(Loc.S("Common_Off"), Player.CancelSleepTimerAsync);
         panel.Loaded += (_, _) =>
         {
+            choices.Children.Clear();
+            foreach (int m in Timing.SleepMinutes)
+                Choice(Loc.Plural("Minutes", m), true, () => Player.SetSleepTimerAsync(m, endOfTrack: false));
+            Choice(Loc.S(Player.Current is { IsEpisode: true } ? "Sleep_EndOfEpisode" : "Settings_EndOfTrack"), true,
+                () => Player.SetSleepTimerAsync(0, endOfTrack: true));
+            Choice(Loc.S("Sleep_TurnOff"), false, Player.CancelSleepTimerAsync);
             RefreshSleep();
             tick.Start();
         };

@@ -70,9 +70,7 @@ func (c *linuxController) spec() map[string]map[string]*prop.Prop {
 	em := func(v interface{}) *prop.Prop { return &prop.Prop{Value: v, Writable: false, Emit: prop.EmitTrue} }
 	return map[string]map[string]*prop.Prop{
 		rootIff: {
-			// CanQuit only if the app wired a real quit command; otherwise Quit
-			// cannot honour its contract (stop the process) so we must not claim it.
-			"CanQuit":             ro(c.cmds.Quit != nil),
+			"CanQuit":             ro(false),
 			"CanRaise":            ro(false),
 			"HasTrackList":        ro(false),
 			"Identity":            ro("OpenDeezer"),
@@ -144,7 +142,7 @@ func (c *linuxController) Update(s State) {
 	c.lastStatus = status
 	c.trackID = trackID
 
-	// Position is EmitFalse (stored, never signalled). The spec requires a Seeked
+	// Position is EmitFalse (stored, never signaled). The spec requires a Seeked
 	// signal on discontinuities, so emit one when the position jumps away from
 	// where free-running playback would have reached, or on a track change.
 	now := time.Now()
@@ -219,12 +217,6 @@ func sanitizeID(id string) string {
 type rootObj struct{ c *linuxController }
 
 func (rootObj) Raise() *dbus.Error { return nil }
-func (o rootObj) Quit() *dbus.Error {
-	if o.c.cmds.Quit != nil {
-		o.c.cmds.Quit()
-	}
-	return nil
-}
 
 type playerObj struct{ c *linuxController }
 
@@ -237,10 +229,8 @@ func call(fn func()) *dbus.Error {
 
 func (o playerObj) PlayPause() *dbus.Error { return call(o.c.cmds.PlayPause) }
 
-// Play/Pause must be idempotent per the MPRIS spec (Pause does nothing when
-// already paused, Play nothing when already playing). The app only exposes a
-// toggle, so consult the last known status and toggle only when it would move
-// in the requested direction.
+// Play and Pause must be idempotent per the MPRIS spec, but the app only has a toggle,
+// so toggle only when the last known status differs from the requested one.
 func (o playerObj) Play() *dbus.Error {
 	if o.c.status() != "Playing" {
 		return call(o.c.cmds.PlayPause)
@@ -268,7 +258,7 @@ func (o playerObj) SetPosition(trackID dbus.ObjectPath, posUS int64) *dbus.Error
 		return nil
 	}
 	if o.c.cmds.SetPosition != nil {
-		o.c.cmds.SetPosition("", posUS)
+		o.c.cmds.SetPosition(posUS)
 	}
 	return nil
 }

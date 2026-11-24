@@ -1298,7 +1298,7 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="435"/>
-        <source>Behaviour</source>
+        <source>Behavior</source>
         <translation>行为</translation>
     </message>
     <message>
@@ -1413,18 +1413,18 @@
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="311"/>
-        <source>Ads</source>
-        <translation>广告</translation>
+        <source>Play reporting</source>
+        <translation>播放上报</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="313"/>
-        <source>Disable ads</source>
-        <translation>禁用广告</translation>
+        <source>Don&apos;t report my plays</source>
+        <translation>不上报我的播放</translation>
     </message>
     <message>
         <location filename="../src/settingsdialog.cpp" line="316"/>
-        <source>Deezer Free is ad-supported. Reporting your plays — like the official app — credits artists and drives the ads. Disabling this removes ads but stops reporting your plays, which denies artists their play count and breaks Deezer&apos;s terms of use. Use at your own risk.</source>
-        <translation>Deezer Free 依靠广告支持。上报你的播放记录（与官方应用一样）可为艺人计入播放量并支撑广告。禁用此项会去除广告，但会停止上报你的播放记录，从而使艺人无法获得播放量，并违反 Deezer 的使用条款。使用风险自负。</translation>
+        <source>OpenDeezer plays no ads. It reports your plays to Deezer as Deezer&apos;s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Use at your own risk.</source>
+        <translation>OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。</translation>
     </message>
 </context>
 </TS>

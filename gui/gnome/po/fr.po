@@ -312,7 +312,7 @@ msgid "Crossfade"
 msgstr "Fondu enchaîné"
 
 #: src/main.c:1854
-msgid "Behaviour"
+msgid "Behavior"
 msgstr "Comportement"
 
 #: src/main.c:1857
@@ -384,11 +384,11 @@ msgid "Removed from Liked Songs"
 msgstr "Retiré des Titres favoris"
 
 #: src/main.c:2214
-msgid "Couldn't add to favourites"
+msgid "Couldn't add to favorites"
 msgstr "Impossible d'ajouter aux favoris"
 
 #: src/main.c:2214
-msgid "Couldn't remove from favourites"
+msgid "Couldn't remove from favorites"
 msgstr "Impossible de retirer des favoris"
 
 #: src/main.c:2238 src/main.c:3702
@@ -958,26 +958,16 @@ msgid "Preview only — a 30-second clip"
 msgstr "Extrait uniquement — un clip de 30 secondes"
 
 #: src/main.c:1836
-msgid "Ads"
-msgstr "Publicités"
+msgid "Play reporting"
+msgstr "Signalement des écoutes"
 
 #: src/main.c:1839
-msgid "Disable ads"
-msgstr "Désactiver les publicités"
+msgid "Don't report my plays"
+msgstr "Ne pas signaler mes écoutes"
 
 #: src/main.c:1842
-msgid ""
-"Deezer Free is ad-supported. Reporting your plays — like the official app — "
-"credits artists and drives the ads. Disabling this removes ads but stops "
-"reporting your plays, which denies artists their play count and breaks "
-"Deezer's terms of use. Use at your own risk."
-msgstr ""
-"Deezer Free est financé par la publicité. Signaler vos écoutes — comme le "
-"fait l'application officielle — crédite les artistes et alimente les "
-"publicités. Désactiver cette option supprime les publicités mais cesse aussi "
-"de signaler vos écoutes, ce qui prive les artistes de leur nombre d'écoutes "
-"et enfreint les conditions d'utilisation de Deezer. À utiliser à vos propres "
-"risques."
+msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "OpenDeezer ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l'arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d'utilisation de Deezer. À vos risques et périls."
 
 #: data/org.opendeezer.OpenDeezer.desktop.in:3
 msgid "OpenDeezer"

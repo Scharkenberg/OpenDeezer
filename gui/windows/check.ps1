@@ -39,7 +39,7 @@ $jobs = foreach ($name in $lanes.Keys) {
 }
 # What a lane prints when it failed: a build error or warning, a failed test, a harness line that
 # misses its mark, a non-zero exit.
-$failure = ' error |[1-9]\d* (Warning|Error)\(s\)|Failed!|Failed: +[1-9]|WRONG|FAILED|FATAL|CLIPPED|DIFFER|REVERTED|SQUARE|HIDDEN|timed out|build failed|(vet|test) exit [^0]'
+$failure = ' error |[1-9]\d* (Warning|Error)\(s\)|Failed!|Failed: +[1-9]|WRONG|FAILED|FATAL|CLIPPED|DIFFER|REVERTED|SQUARE|HIDDEN|STALE|BLURRED|CUT OFF|STUCK|UNHANDLED|MADE AGAIN|APPLOG bad |timed out|build failed|(vet|test) exit [^0]'
 $failed = $false
 $clock = [Diagnostics.Stopwatch]::StartNew()
 foreach ($job in $jobs) {

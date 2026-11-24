@@ -1,11 +1,6 @@
-// Package history keeps a purely local listening history. Entries are appended
-// to <config-dir>/history.jsonl (one JSON object per line) and never leave the
-// machine: nothing in this package talks to the network.
-//
-// The store is safe for one writer (the player reporting plays) plus any
-// number of concurrent readers (stats views, the control API). Record only
-// appends; the newest entries are read into memory on the first Recent and
-// kept in sync by Record, and the stats read the file.
+// Package history keeps a local listening history in <config-dir>/history.jsonl (one
+// JSON object per line), never sent anywhere. The app and the TUI both write to it;
+// Record only appends, and a store reads the file again when the other wrote.
 package history
 
 import (
@@ -25,19 +20,16 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
 )
 
-// Kind values for Entry.Kind. A song carries "" (the zero value, which is also
-// how legacy JSONL lines written before Kind existed decode) or KindTrack;
-// KindEpisode marks a podcast episode so native history screens can route a
-// replay to the episode player instead of the music-track resolver.
+// Kind values for Entry.Kind. A song carries "" (also what lines without a kind decode
+// to) or KindTrack; KindEpisode marks a podcast episode, replayed by the episode
+// player.
 const (
 	KindTrack   = "track"
 	KindEpisode = "episode"
 )
 
-// Entry is one item from the local listening history — a played song or podcast
-// episode. Kind marks which: "" (legacy/default) or KindTrack is a song,
-// KindEpisode is a podcast episode. Old lines with no "kind" field decode as ""
-// and are therefore treated as songs (backward compatible).
+// Entry is one played song or podcast episode from the local history. Kind "" or
+// KindTrack is a song, KindEpisode an episode.
 type Entry struct {
 	TrackID           string `json:"trackId"`
 	Title             string `json:"title"`
@@ -59,10 +51,9 @@ const (
 	cdnImage = "/250x250-000000-80-0-0.jpg"
 )
 
-// line is an Entry as stored in the file. An artwork URL of the CDN shape above
-// is stored as Cover ("<kind>/<hash>") and CDN (the host, omitted when it is
-// cdnHost), with ArtworkURL empty; any other URL stays in ArtworkURL. Lines that
-// carry the full URL read as they are.
+// line is an Entry as stored: a CDN artwork URL is stored as Cover ("<kind>/<hash>")
+// and CDN (the host, omitted for cdnHost) with ArtworkURL empty; other URLs stay in
+// ArtworkURL.
 type line struct {
 	Entry
 	Cover string `json:"cover,omitempty"`
@@ -118,8 +109,8 @@ type ArtistStat struct {
 	TotalSec int64
 }
 
-// DefaultCap is how many entries the JSONL file is allowed to grow to before
-// rotation trims it back to the newest DefaultCap entries.
+// DefaultCap is how many entries the file keeps: past DefaultCap plus 10 % it is
+// rotated back to the newest DefaultCap.
 const DefaultCap = 50000
 
 // recentMax is how many of the newest entries a store keeps in memory for
@@ -135,6 +126,9 @@ type Store struct {
 	lines  int    // entries in the file; -1 until the first Record counts them
 	loaded bool   // recent holds the file's newest entries
 	recent []line // the newest recentMax entries, oldest -> newest
+	// seen is the file's size as recent knows it: another program's append makes the
+	// file larger, and the next Recent reads it again.
+	seen int64
 }
 
 // New returns a store backed by the given JSONL file. The file (and its
@@ -156,10 +150,8 @@ func Default() (*Store, error) {
 // Path returns the backing file path.
 func (s *Store) Path() string { return s.path }
 
-// Record appends one entry, durably (single write + fsync), without reading
-// the history. When the file exceeds the size cap it is rotated in place: the
-// newest cap entries are rewritten atomically (temp file + rename), matching
-// the config package's crash-safe write pattern.
+// Record appends one entry (single write and fsync) without reading the history. Past
+// the size cap the file is rewritten atomically with the newest cap entries.
 func (s *Store) Record(e Entry) error {
 	if e.StartedAt == 0 {
 		e.StartedAt = time.Now().Unix()
@@ -181,13 +173,21 @@ func (s *Store) Record(e Entry) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
 	if err != nil {
 		return err
 	}
+	// A line torn by a crash gets its newline first, so this entry is not lost with it.
+	data := append(b, '\n')
+	if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+		last := make([]byte, 1)
+		if _, err := f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+			data = append([]byte{'\n'}, data...)
+		}
+	}
 	// One Write call for the whole line so concurrent external readers never
 	// see a torn record; Sync so a crash right after Record can't lose it.
-	if _, err := f.Write(append(b, '\n')); err != nil {
+	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		return err
 	}
@@ -200,6 +200,7 @@ func (s *Store) Record(e Entry) error {
 	}
 	s.lines++
 	if s.loaded {
+		s.seen += int64(len(data))
 		if len(s.recent) == recentMax {
 			s.recent = append(s.recent[:0], s.recent[1:]...)
 		}
@@ -209,6 +210,7 @@ func (s *Store) Record(e Entry) error {
 	// TUI and the GUI share the file: rotation reads it again, so what the
 	// other appended meanwhile survives.
 	if s.lines > s.cap+s.cap/10 {
+		s.loaded = false // the file is rewritten: the next Recent reads it again
 		return s.rotateLocked()
 	}
 	return nil
@@ -291,10 +293,9 @@ func (s *Store) rotateLocked() error {
 	return nil
 }
 
-// eachLocked calls fn for every entry in the file, oldest first, a full
-// artwork URL already moved into Cover and CDN. Caller holds the lock.
-// Unparseable lines (a torn write from a crash mid-line) are skipped rather
-// than poisoning the whole history; a missing file has no entries.
+// eachLocked calls fn for every entry, oldest first, with a full artwork URL split into
+// Cover and CDN. Unparseable lines are skipped; a missing file has no entries. Caller
+// holds the lock.
 func (s *Store) eachLocked(fn func(line)) error {
 	f, err := os.Open(s.path)
 	if os.IsNotExist(err) {
@@ -327,13 +328,21 @@ func (s *Store) eachLocked(fn func(line)) error {
 }
 
 // Recent returns the newest n entries, newest first. n <= 0 returns all.
-// Up to recentMax entries come from memory, read from the file once.
+// Up to recentMax entries come from memory, read from the file again when its size
+// differs from what this store wrote or read (the other program appended).
 func (s *Store) Recent(n int) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var from []line
 	if n > 0 && n <= recentMax {
+		fi, statErr := os.Stat(s.path)
+		if s.loaded && (statErr != nil || fi.Size() != s.seen) {
+			s.loaded = false // another program wrote to the file
+		}
 		if !s.loaded {
+			if statErr == nil {
+				s.seen = fi.Size()
+			}
 			var win []line // the newest entries read so far, at most 2*recentMax
 			err := s.eachLocked(func(l line) {
 				if len(win) == 2*recentMax {
@@ -362,9 +371,8 @@ func (s *Store) Recent(n int) ([]Entry, error) {
 	return out, nil
 }
 
-// TopTracks returns the n most-played tracks since the given time (zero time =
-// all history), ordered by play count, then total listened time, then title.
-// Podcast episodes are excluded — this is a music-only stat.
+// TopTracks returns the n most-played tracks since the given time (zero = all), by
+// play count, then listened time, then title. Podcast episodes are excluded.
 func (s *Store) TopTracks(since time.Time, n int) ([]TrackStat, error) {
 	cut := sinceUnix(since)
 	byKey := map[string]*TrackStat{}
@@ -408,10 +416,8 @@ func (s *Store) TopTracks(since time.Time, n int) ([]TrackStat, error) {
 	return out, nil
 }
 
-// TopArtists returns the n most-played artists since the given time (zero time
-// = all history), ordered by play count, then total listened time, then name.
-// Podcast episodes are excluded — this is a music-only stat (a show's name would
-// otherwise land in the artist chart).
+// TopArtists returns the n most-played artists since the given time (zero = all), by
+// play count, then listened time, then name. Podcast episodes are excluded.
 func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
 	cut := sinceUnix(since)
 	byArtist := map[string]*ArtistStat{}
@@ -451,9 +457,8 @@ func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
 	return out, nil
 }
 
-// TotalListenedSec sums the seconds listened since the given time (zero time =
-// all history). This is total listening time across all media — songs and
-// podcast episodes alike (unlike TopTracks/TopArtists, which are music-only).
+// TotalListenedSec sums the seconds listened since the given time (zero = all), songs
+// and podcast episodes alike.
 func (s *Store) TotalListenedSec(since time.Time) (int64, error) {
 	cut := sinceUnix(since)
 	var total int64

@@ -1,6 +1,6 @@
-// Command opendeezer is a terminal Deezer client: log in with your ARL, browse
-// liked songs / playlists / search, and stream — decrypt + decode + play all
-// locally. Your ARL never leaves your machine except in requests to Deezer.
+// Command opendeezer is a terminal Deezer client: log in with your ARL, browse liked
+// songs, playlists and search, and stream (decrypt, decode and play locally). The ARL
+// is sent only to Deezer.
 package main
 
 import (
@@ -70,9 +70,8 @@ func main() {
 		return
 	}
 
-	// File logging (level via $OPENDEEZER_LOG); never writes to stdout, so the
-	// TUI is unaffected. Best-effort: discards on failure. The log file is held
-	// open for the process lifetime and released by the OS on exit.
+	// File logging (level via $OPENDEEZER_LOG), never to stdout so the TUI is unaffected.
+	// If the log file cannot be opened, logs are discarded. The file stays open until exit.
 	if base, err := os.UserConfigDir(); err == nil {
 		_ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
 	}

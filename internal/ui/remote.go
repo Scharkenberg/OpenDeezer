@@ -18,11 +18,9 @@ func normalizePeer(addr string) (base, hostport string) {
 	return config.NormalizePeer(addr)
 }
 
-// remoteConnectCmd connects to a peer's control API: verify with /whoami, grab
-// initial status. Auth always uses our own Deezer user id (same-account); the
-// local token is sent ONLY for a trusted (manually-typed) address — never to a
-// discovered device, whose advertisement is unauthenticated and spoofable, so we
-// must not leak the shared token to it.
+// remoteConnectCmd connects to a peer (/whoami, then status) with same-account auth.
+// The local token goes only to a manually typed address, never to a discovered device,
+// whose advertisement can be spoofed.
 func (m *Model) remoteConnectCmd(addr string, trusted bool) tea.Cmd {
 	base, hostport := normalizePeer(addr)
 	if base == "" {
@@ -32,7 +30,7 @@ func (m *Model) remoteConnectCmd(addr string, trusted bool) tea.Cmd {
 	}
 	token := ""
 	if trusted {
-		token = LoadControl().Token
+		token = config.LoadControl().Token
 	}
 	account := m.client.UserID()
 	return func() tea.Msg {
@@ -41,7 +39,7 @@ func (m *Model) remoteConnectCmd(addr string, trusted bool) tea.Cmd {
 		if err != nil {
 			return remoteConnMsg{err: err}
 		}
-		st, _ := rc.Status() // best-effort initial snapshot
+		st, _ := rc.Status() // initial snapshot; an error leaves it zero
 		return remoteConnMsg{
 			client: rc, addr: hostport, name: who.Name,
 			clientType: who.Client, version: who.Version, state: st,
@@ -49,10 +47,9 @@ func (m *Model) remoteConnectCmd(addr string, trusted bool) tea.Cmd {
 	}
 }
 
-// discoverDevicesCmd scans the LAN for OpenDeezer Connect devices and enriches
-// each with what it's currently playing (best-effort, needs same-account auth).
+// discoverDevicesCmd scans the LAN for Connect devices; nothing is asked of them before
+// the user picks one.
 func (m *Model) discoverDevicesCmd() tea.Cmd {
-	account := m.client.UserID()
 	selfPort := 0
 	if m.ctrl != nil {
 		if _, port, err := net.SplitHostPort(m.ctrl.Addr()); err == nil {
@@ -60,19 +57,10 @@ func (m *Model) discoverDevicesCmd() tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		devs, _ := discovery.ProbePeers(700*time.Millisecond, selfPort, account)
+		devs, _ := discovery.ProbePeers(700*time.Millisecond, selfPort)
 		peers := make([]peerDevice, 0, len(devs))
 		for _, d := range devs {
-			np := ""
-			// account-only: never send the token to an unverified discovered peer.
-			rc := control.NewClient("http://"+d.Addr, "", account)
-			if st, err := rc.Status(); err == nil && st.Track != nil {
-				np = st.Track.Title
-				if st.Track.Artist != "" {
-					np += " — " + st.Track.Artist
-				}
-			}
-			peers = append(peers, peerDevice{dev: d, nowPlaying: np})
+			peers = append(peers, peerDevice{dev: d})
 		}
 		return devicesDiscoveredMsg{peers: peers}
 	}
@@ -162,11 +150,9 @@ func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "esc", "backspace":
-		// Non-destructive detach: leaving the remote screen stops *driving* the
-		// peer, but must NOT stop its music (disconnect != stop). Crucially, no
-		// synchronous HTTP call here — an unreachable peer would otherwise freeze
-		// the update loop for the client's full timeout. Use 'S' to stop the
-		// peer explicitly when leaving.
+		// Leaving the remote screen stops driving the peer but not its music, and makes no
+		// synchronous HTTP call that could freeze the update loop. 'S' stops the peer on the
+		// way out.
 		m.detachRemote()
 		m.showMenu()
 		m.status = i18n.T("Disconnected from remote")
@@ -200,10 +186,8 @@ func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// remoteStopDetachCmd stops the peer's playback in the background after the user
-// has already left the remote screen (the 'S' key). Runs off the update loop so
-// an unreachable peer can't block it, and discards the result — we no longer
-// drive the peer.
+// remoteStopDetachCmd stops the peer's playback in the background after the user left
+// the remote screen ('S'), off the update loop, discarding the result.
 func remoteStopDetachCmd(rc *control.Client) tea.Cmd {
 	if rc == nil {
 		return nil

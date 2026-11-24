@@ -4,6 +4,138 @@ All notable changes to OpenDeezer are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **One player at a time, like Deezer's own players.** OpenDeezer pauses when
+  another player of the account (the Deezer web player, a phone) starts a
+  track, and announces its own starts so those players pause. Settings ›
+  Playback › *One player at a time* turns it off (`playAlongside` in
+  `playback.json`).
+- **What another player plays.** While nothing plays in the Windows app, the
+  player bar shows the track another player of the account started, marked
+  with a speaker, with *Play here*. The Android app announces every track it
+  plays, so the bar follows it track by track. The web player announces only
+  the tracks a person starts; when it moves on by itself, the bar keeps the
+  speaker with *Playing in another player*, without a title, for as long as
+  the account's listening history keeps getting tracks.
+
+- **Endless Flow and mixes.** Flow, a Flow mood and the track and artist
+  mixes keep adding new tracks as the queue runs low, as Deezer's players
+  do. Flow follows the account's tuner, and its moods (chill, workout,
+  focus, party, sad, love) can be played (`DZFlowJSON(mood)`,
+  `DZFlowMoodsJSON`).
+- **Podcast progress, as in Deezer's apps.** Where you stopped in an episode
+  is saved to the account every 30 s and when you pause or move on, an
+  episode resumes from there, and episodes can be marked as played. Episodes
+  can play at 0.5× to 2×.
+- **More of the account's library in the engine:** favorite albums, artists
+  and podcasts, adding and removing them, "Don't recommend" for tracks and
+  artists, the search history, and the explicit-content level. The Windows
+  app shows them in a later change.
+
+- **The queue comes back (Windows).** The queue, where you were, shuffle and repeat are kept
+  across restarts; Play picks up where you left off.
+- **Podcasts in the Windows app.** Episodes show their date and how far you got. Their menu marks
+  them played or unplayed, copies the link and shows the description. A speed button cycles
+  0.5× to 2× (in More on narrow windows).
+- **Play next and Add to queue for albums and playlists (Windows)**, each confirmed with a toast;
+  clearing the queue asks first.
+- **Sleep timer presets as in Deezer's app:** 5, 10, 20, 30, 45 and 60 minutes, the end of the
+  track or episode, and off, each confirmed.
+- **Offline page:** the space your offline music takes, *Shuffle downloads*, and downloads that
+  stopped, each with Retry.
+- **Media keys follow shuffle and repeat**, and the Windows media overlay and the tray tooltip
+  clear when nothing is left to play.
+
+- **Favorites (Windows):** the Playlists page is now *Favorites*, with playlists, albums,
+  artists and podcasts. Each has a search and a sort, and playlists filter by who made them.
+  Albums, playlists, podcasts and artists get a heart.
+- **Search and sort in every list**, kept per list. Your own playlists reorder by drag, and
+  *Edit playlist* changes the title, description, and whether it is private or collaborative.
+- **Search remembers:** the box offers your recent searches (clear them from there), and results
+  start with Deezer's top result.
+- **Copy link, Don't recommend, Save as playlist:** links for tracks, albums, playlists, artists,
+  podcasts and episodes. Tracks and artists can be left out of recommendations. A mix, Flow or
+  the queue can be kept as a playlist.
+- **Flow moods**, under Flow; **lyrics translations**, where Deezer has them; the **explicit
+  content** level and the **theme** (light, dark or as Windows) in Settings; **Manage my plan**.
+- **Home shows the top albums** beside the top tracks.
+- **Pin to Home:** albums, artists, playlists, podcasts and tracks pin to the top of Home, as in
+  Deezer's apps. *Unpin from Home* takes them off.
+
+### Changed
+- **OpenDeezer presents itself to Deezer as Deezer's web player**, whose
+  session it uses: a current browser's User-Agent, the web player's headers
+  on gateway calls, and its current build number in listen reports and on the
+  live connection. The build number is read after each login and kept.
+  Before, requests said `OpenDeezer/0.1`.
+
+### Removed
+- **The unused free-tier ad schedule.** OpenDeezer read Deezer's audio-ad
+  cadence but never played an ad; the code and the README's claim that Free is
+  "ad-supported like the web player" are gone. Play reporting is unchanged.
+- **The setting that said it disables ads** is now *Don't report my plays*,
+  under *Play reporting*, in every app and language: OpenDeezer plays no ads
+  either way, and the text says what the switch really does.
+
+### Fixed
+- **The Android app reports which list each play came from** (a playlist,
+  an album, Flow, a mix, a search), as Deezer's players do, so Flow and mixes
+  keep going there too.
+- **Credits in your language:** author, composer and other contributors, as the web player
+  groups them.
+- **Lyrics lines are reachable by keyboard**; Enter plays from a line.
+- **A refused output device or equalizer change says so**, and a refused device is no longer
+  saved.
+- **Settings follow the account** when it finishes loading while they are open.
+- **Folder settings keep their titles (Windows).** *Cache folder* and *Download folder* show the
+  path and Browse on a row of their own under the title; a long path squeezed the title to a few
+  letters a line, or to nothing in a tall empty card.
+- **Flyouts and lists keep their width (Windows).** Every flyout has a fixed width, and every list
+  is as wide as its longest item from the start, so opening one no longer widens it or the flyout
+  around it (the account flyout grew when *Audio quality* was opened).
+- **The seek slider no longer shrinks as the window widens (Windows).** It only grows with the
+  window, from 134 px at the narrowest; the times moved above its ends, beside the buttons, and
+  show once there is room for them.
+- **Playing from a shortened list (Home, Charts, Search, an artist's top tracks) queues the whole
+  list**, not only the rows shown; history rows keep their length.
+- **Liked songs past 5000.** Every liked song shows as liked; the ids are read
+  in pages of 10 000 with the web player's checksum, so an unchanged list
+  costs one short reply.
+- **No gaps between MP3 tracks.** The encoder's delay and padding that Deezer's
+  MP3s carry are trimmed, as Deezer's apps do.
+- **Lyrics as Deezer's players show them**, with translations where Deezer
+  has them; the older source stays as a fallback.
+- **An announcement to the account's other players no longer hangs** on a dead
+  connection; it gives up after 5 seconds.
+- **An ended Deezer session no longer locks you out of your music (Windows).**
+  At start, music kept offline still opens, with *Sign in again*; while the
+  app runs, a notice offers *Sign in again*, and signing in as the same
+  account keeps the queue. The sign-in page keeps the device Deezer knows.
+- **Plays are reported to Deezer as its own players report them.** Every
+  track start now goes to Deezer's listen log, including gapless and
+  crossfade hand-overs, automatic advances, next/previous, episodes and plays
+  from the phone remote; before, only a play picked by hand was reported. Each
+  report carries the track that ended before it: the seconds actually heard,
+  its pauses and seeks, its format, whether it came from the cache, the list
+  it was played from, and shuffle and repeat. Listens made offline are kept
+  and sent together once back online.
+- **Loudness normalization works like Deezer's.** A track louder than your
+  account's target loudness is turned down to it; quieter tracks are left as
+  they are. Before, quieter tracks were turned down further.
+- **No 30-second preview when the session needs renewing.** When Deezer
+  refuses an expired license, OpenDeezer now renews it, and an expired track
+  token is fetched again. Before, both played the preview. The preview now
+  plays only when Deezer refuses the track itself, and it comes from Deezer's
+  media service, as in its own players. Requests go to the media host Deezer
+  names at login.
+- **Windows: lyrics no longer stay on the loading placeholder** when you left
+  the page while they loaded and came back on the same track; a failed load
+  shows the error with Retry instead of "no lyrics".
+- **Windows: the collapsed navigation pane** is 46 px wide, so its icons sit
+  centered between the window edge and the page.
+
 ## [3.1.4]
 
 ### Added
@@ -559,7 +691,7 @@ core and all eight clients:
   after a chosen interval — Off / 15 / 30 / 45 / 60 minutes, or **at the end of
   the current track**. It fades the audio out smoothly over the last few seconds
   before pausing. Because the timer runs on the audio engine's own clock in the
-  shared Go core, every client shows the same behaviour: the TUI (`T` to cycle),
+  shared Go core, every client shows the same behavior: the TUI (`T` to cycle),
   the phone web remote (a Sleep button), and native controls in the macOS, iOS,
   Android (phone + TV), Windows, GNOME and KDE apps. Also reachable over the
   control API (`POST /sleep`) and the SDK.
@@ -610,7 +742,7 @@ core and all eight clients:
   duplicate media-key handlers (Next/Prev used to jump two tracks after a switch).
 - **iOS**: the app version was stuck at 1.5.1 in the committed Xcode project; it
   now tracks the release.
-- **Android**: the Now-Playing heart now reflects the track's real favourite
+- **Android**: the Now-Playing heart now reflects the track's real favorite
   state on entry (instead of always empty), and the login WebView (phone + TV) is
   destroyed when its screen leaves composition to stop leaking the renderer.
 - **Windows**: switching accounts while on Home now refreshes Home for the new
@@ -695,7 +827,7 @@ core and all eight clients:
     📡 → `network-wireless`, "Vol" → a volume icon), and the explicit emoji → a
     small "E" badge.
   - **Windows**: a Groove-Music-style transport — cover + title/artist on the
-    left, the controls centred with play/pause as a filled accent circle and the
+    left, the controls centered with play/pause as a filled accent circle and the
     seek bar + times directly under it, and lyrics/artist/connect/volume on the
     right (Repeat/Lyrics/Artist now Segoe Fluent icons).
   - **GNOME**: already native; added the missing transport tooltips.

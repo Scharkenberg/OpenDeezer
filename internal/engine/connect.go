@@ -1,10 +1,8 @@
 package engine
 
-// OpenDeezer Connect: discover other OpenDeezer instances on the LAN and route
-// this client's playback to a chosen one (like Spotify Connect). When a device
-// is connected, the playback calls forward to its control API and read its
-// status, so the host's existing transport UI drives the remote device with
-// only a small picker added.
+// OpenDeezer Connect: discover OpenDeezer instances on the LAN and route playback to
+// one. While a device is connected, playback calls forward to its control API and read
+// its status.
 
 import (
 	"encoding/json"
@@ -62,10 +60,8 @@ func remoteSnapshot() control.State {
 	return remoteSt
 }
 
-// NowPlaying returns the track actually playing right now: when routed to a
-// device the remote's current track (so the controller's now-playing stays in
-// sync), otherwise the local current track (which also reflects tracks
-// started through the control API). ok is false when nothing is playing.
+// NowPlaying returns the playing track: the remote's when routed to a device, else the
+// local one (control API starts included). ok is false when nothing plays.
 func NowPlaying() (t bridge.Track, ok bool) {
 	if routedRemote() != nil {
 		if rt := remoteSnapshot().Track; rt != nil {
@@ -115,16 +111,11 @@ func nowPlayingChanged() {
 	npMu.Unlock()
 }
 
-// DiscoverDevices broadcasts a LAN probe and returns the OpenDeezer devices
-// found and the configured peers (discovery.ProbePeers); timeout bounds the
-// whole wait. A peer listed without metadata can still be connected:
-// ConnectDevice makes its own authenticated status call before routing.
+// DiscoverDevices returns the LAN devices and the configured peers
+// (discovery.ProbePeers) within timeout. A peer without metadata can still be
+// connected: ConnectDevice checks it with an authenticated status call.
 func DiscoverDevices(timeout time.Duration) []discovery.Device {
-	uid := ""
-	if c := Client(); c != nil {
-		uid = c.UserID()
-	}
-	devs, err := discovery.ProbePeers(timeout, selfControlPort(), uid)
+	devs, err := discovery.ProbePeers(timeout, selfControlPort())
 	if err != nil {
 		// A discovery error is expected/partial (e.g. no multicast on a VPN); the
 		// configured unicast peers still fill the picker.
@@ -142,9 +133,8 @@ func remoteTrack(t *control.Track) deezer.Track {
 	}
 }
 
-// ConnectDevice routes playback to the device at addr ("host", "host:port" or
-// a URL; the port defaults to 7654). Local playback is stopped (audio moves to
-// the device). It reports whether the device is now routed.
+// ConnectDevice routes playback to the device at addr ("host", "host:port" or a URL;
+// port 7654 by default), stopping local playback, and reports whether it is routed.
 func ConnectDevice(addr string) bool {
 	base, hp := config.NormalizePeer(addr)
 	c := Client()
@@ -155,29 +145,25 @@ func ConnectDevice(addr string) bool {
 	// never the control token: a discovery reply is unauthenticated and spoofable,
 	// so sending the shared token would leak it to an attacker's fake device.
 	rc := control.NewClient(base, "", c.UserID())
-	// /whoami is served unauthenticated by design, so it can't prove the peer is
-	// controllable. Require an AUTHENTICATED /status to succeed BEFORE stopping
-	// local playback: a token-protected or different-account peer would
-	// otherwise 401 every command, leaving the user with dead local audio and a
-	// "connected" UI that drives nothing.
+	// /whoami is unauthenticated, so require an authenticated /status before stopping
+	// local playback: a peer that rejects our auth would leave dead audio and a UI that
+	// drives nothing.
 	st, err := rc.Status()
 	if err != nil {
 		odlog.Warn("connect %s: %v", hp, err)
 		return false
 	}
-	// Normalize the host's repeat: this controller keeps repeat locally and never
-	// forwards it (a Repeat-All would trap the host looping the single-item queue
-	// we stream it). Send SetRepeat("off") once so a previously-set host repeat
-	// can't strand playback. Best-effort.
+	// Set the host's repeat to "off" once: repeat stays local here (a forwarded Repeat-All
+	// would loop the host's single-item queue). A failure is ignored.
 	if _, e := rc.SetRepeat("off"); e != nil {
 		odlog.Debug("connect %s: normalize repeat: %v", hp, e)
 	}
-	// Audio moves to the device: stop local playback (only now that the peer is
-	// proven controllable).
+	// Audio moves to the device: stop local playback, the peer being proven
+	// controllable.
 	withPlayer(func(p *audio.Player) { p.Stop() })
 
-	// Sync the engine's current-track with what's actually playing on the remote,
-	// so now-playing / Discord RP / lyrics reflect the remote immediately.
+	// Set the engine's current track to the remote's, so now-playing, Discord RP and
+	// lyrics follow the remote at once.
 	if st.Track != nil {
 		setCurrentTrack(remoteTrack(st.Track))
 	}
@@ -194,10 +180,8 @@ func ConnectDevice(addr string) bool {
 	remoteAddr = hp
 	mu.Unlock()
 
-	// Switching devices A->B: stop the OLD device so it doesn't keep playing
-	// unattended. Fire-and-forget on its own goroutine (rc.Stop is a network
-	// round-trip bounded by the control client's own HTTP timeout) so the connect
-	// returns immediately. Re-selecting the same device keeps it playing.
+	// Switching devices A->B: stop the old device on its own goroutine (a network round
+	// trip) so the connect returns at once. Re-selecting the same device keeps it playing.
 	if oldRc != nil && oldAddr != hp {
 		go func() { _, _ = oldRc.Stop() }()
 	}
@@ -241,9 +225,8 @@ func ConnectedDevice() string {
 	return remoteAddr
 }
 
-// remotePoller refreshes the cached remote status once a second until stopped.
-// Each poll also syncs the engine's current-track so now-playing / Discord RP /
-// lyrics reflect what the remote is actually playing as it changes.
+// remotePoller refreshes the cached remote status once a second until stopped, also
+// syncing the engine's current track with the remote's.
 func remotePoller(rc *control.Client, stop chan struct{}) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -259,12 +242,9 @@ func remotePoller(rc *control.Client, stop chan struct{}) {
 			mu.Lock()
 			active := remoteCli == rc // still the active device?
 			if active {
-				// The remote renders single tracks we send it; it has no queue of
-				// its own: THIS device drives the queue. When the remote's track
-				// ends it goes playing -> stopped near the end, so bump the
-				// finished counter to fire this device's auto-advance, which then
-				// sends the next track (honoring repeat/shuffle). The position
-				// guard keeps a user-initiated mid-track stop from auto-advancing.
+				// The remote plays single tracks we send and this device owns the queue. A remote
+				// going playing -> stopped near the end bumps the finished counter to auto-advance;
+				// the position guard ignores a mid-track stop.
 				if remoteSt.State == "playing" && st.State == "stopped" &&
 					remoteSt.DurationMS > 0 && remoteSt.PositionMS >= remoteSt.DurationMS-2000 {
 					finished++
@@ -272,8 +252,10 @@ func remotePoller(rc *control.Client, stop chan struct{}) {
 				remoteSt = st
 			}
 			mu.Unlock()
-			// Sync current-track outside the lock (setCurrentTrack uses its own mutex).
-			if active && st.Track != nil {
+			// A new track becomes the current one outside the lock (setCurrentTrack takes its own);
+			// the same track again only refreshes now-playing.
+			cur, _ := currentTrackSnapshot()
+			if active && st.Track != nil && st.Track.ID != cur.ID {
 				setCurrentTrack(remoteTrack(st.Track))
 			} else if active {
 				nowPlayingChanged()
@@ -282,20 +264,14 @@ func remotePoller(rc *control.Client, stop chan struct{}) {
 	}
 }
 
-// setRemoteState caches a status returned by a command issued to rc (so the UI
-// updates without waiting for the next poll). It applies ONLY when rc is still
-// the CURRENT remote client: a late in-flight response from a device we've
-// since disconnected from (or switched away from: A while B is now active)
-// must not resurrect stale state or bump the finished counter for the wrong
-// device.
+// setRemoteState caches a status returned by a command to rc, so the UI updates
+// before the next poll, only while rc is the current remote client.
 func setRemoteState(rc *control.Client, st control.State) {
 	mu.Lock()
 	if remoteCli != nil && remoteCli == rc {
-		// A command's status response can be the first observer of the remote's
-		// track end (playing -> stopped near the end), so detect it here too (not
-		// only in remotePoller) and bump finished to fire this device's
-		// auto-advance. Otherwise the next poll sees stopped -> stopped and never
-		// advances. The position guard keeps a user-initiated stop from advancing.
+		// A command's response may be the first to see the remote's track end (playing ->
+		// stopped near the end), so bump finished here too; the next poll would only see
+		// stopped -> stopped. The position guard ignores a user stop.
 		if remoteSt.State == "playing" && st.State == "stopped" &&
 			remoteSt.DurationMS > 0 && remoteSt.PositionMS >= remoteSt.DurationMS-2000 {
 			finished++

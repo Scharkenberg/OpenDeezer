@@ -47,7 +47,6 @@ internal sealed partial class MarqueeText : Panel
     private static readonly TimeSpan Hold = TimeSpan.FromMilliseconds(Timing.MarqueeHoldMs);
     private static readonly TimeSpan MaxReturn = TimeSpan.FromMilliseconds(Timing.MarqueeMaxReturnMs);
     private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(Timing.MarqueeFadeMs);
-    private static SolidColorBrush? s_transparent;
 
     private bool _scrolling, _hovered, _autoPlayed;
     private double _overflow;
@@ -61,7 +60,7 @@ internal sealed partial class MarqueeText : Panel
 
     public MarqueeText()
     {
-        Background = s_transparent ??= new SolidColorBrush(Microsoft.UI.Colors.Transparent); // hover anywhere on the label
+        Style = Ui.Styles.Get("MarqueePanel"); // hover anywhere on the label
         PointerEntered += (_, _) =>
         {
             _hovered = true;

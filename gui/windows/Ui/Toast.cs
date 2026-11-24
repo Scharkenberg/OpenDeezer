@@ -1,4 +1,4 @@
-// One notice at a time, floating bottom-centre over the views. It closes by itself after a few
+// One notice at a time, floating bottom-center over the views. It closes by itself after a few
 // seconds unless it is sticky or carries an action. UI thread only.
 
 using System;

@@ -36,7 +36,7 @@ public sealed partial class MainWindow : Window
     {
         var dq = DispatcherQueue;
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        Ui.Scale = NativeMethods.GetDpiForWindow(_hwnd) / 96.0;
+        Ui.Scale = Ui.DpiScale(_hwnd);
         _tray = new Tray(RestoreWindow, Quit);
         _bounds = new WindowBounds(this, _hwnd, Session.Settings);
         Title = "OpenDeezer";
@@ -50,7 +50,7 @@ public sealed partial class MainWindow : Window
 
         _home = NavItem("Nav_Home", Icons.Home, () => _navigator.Go<HomeView>());
         _liked = NavItem("Nav_LikedSongs", Icons.Heart, () => _navigator.Go<CollectionView>(Collection.Liked));
-        _playlists = NavItem("Nav_Playlists", Icons.Playlists, () => _navigator.Go<PlaylistsView>());
+        _playlists = NavItem("Nav_Favorites", Icons.Playlists, () => _navigator.Go<PlaylistsView>());
         _recent = NavItem("Nav_Recent", Icons.Recent, () => _navigator.Go<RecentView>());
         _offline = NavItem("Nav_Offline", Icons.Offline, () => _navigator.Go<OfflineView>());
         _flow = NavItem("Nav_Flow", Icons.Flow, () => _navigator.Go<CollectionView>(Collection.Flow));
@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
             IsSettingsVisible = true,
             AlwaysShowHeader = false,
             OpenPaneLength = Size.Pane,
+            CompactPaneLength = Size.Rail,
         };
         var library = new NavigationViewItemHeader { Content = Loc.S("Nav_GroupLibrary") };
         var discover = new NavigationViewItemHeader { Content = Loc.S("Nav_GroupDiscover") };
@@ -85,6 +86,11 @@ public sealed partial class MainWindow : Window
         _bar.LyricsToggled += ToggleLyrics;
         _bar.QueueToggled += on => _queue.IsOpen = on;
         _queue.Closed += () => _bar.SetQueueOpen(false);
+        QueuePane.OpenRequested += () =>
+        {
+            _queue.IsOpen = true;
+            _bar.SetQueueOpen(true);
+        };
 
         Grid.SetRow(_nav, 1);
         Grid.SetRow(_grip, 1);
@@ -107,18 +113,21 @@ public sealed partial class MainWindow : Window
             if (_nav.SettingsItem is NavigationViewItem settings) settings.InfoBadge = new InfoBadge();
         };
         Player.Failed += f => Toast.Show(f.Warning ? InfoBarSeverity.Warning : InfoBarSeverity.Error, f.Title, f.Message);
+        Player.SessionExpired += () => Toast.Show(InfoBarSeverity.Warning, Loc.S("Login_ExpiredTitle"), Loc.S("Login_Expired"),
+            Ui.Button(Loc.S("Login_SignInAgain"), WebSignInView.SignInAgain), sticky: true);
         Player.TrackChanged += () =>
         {
-            if (Player.Current is { } t) _tray.SetTip(t.ArtistLine.Length == 0 ? t.Name : t.Name + " · " + t.ArtistLine);
+            var t = Player.Current;
+            _tray.SetTip(t == null ? "" : t.ArtistLine.Length == 0 ? t.Name : t.Name + " · " + t.ArtistLine);
         };
-        // Minimised or hidden: the position clock stops and the poll slows down.
+        // Minimized or hidden: the position clock stops and the poll slows down.
         VisibilityChanged += (_, e) => SetVisible(e.Visible);
         // Scrolling labels rest while the window is in the background.
         Activated += (_, e) => Marquee.SetPaused(e.WindowActivationState == WindowActivationState.Deactivated);
         AppWindow.Changed += (_, e) =>
         {
             if (e.DidVisibilityChange && AppWindow.IsVisible) _bar.RenderPosition();
-            // VisibilityChanged need not fire on minimise: a minimised window counts as hidden.
+            // VisibilityChanged need not fire on minimize: a minimized window counts as hidden.
             if (e.DidPresenterChange)
                 SetVisible(AppWindow.IsVisible && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized });
             if (e.DidPositionChange || e.DidSizeChange || e.DidPresenterChange) _bounds.Capture();
@@ -126,6 +135,7 @@ public sealed partial class MainWindow : Window
         _root.Loaded += (_, _) =>
         {
             Dialogs.Root = _root.XamlRoot;
+            Dialogs.ApplyTheme();
             Ui.FollowScale(_root.XamlRoot);
         };
         Activated += OnFirstActivated;
@@ -147,7 +157,7 @@ public sealed partial class MainWindow : Window
         Session.CheckForUpdate();
     }
 
-    // Hidden or minimised, the engine and the offline fetch are polled less or not at all.
+    // Hidden or minimized, the engine and the offline fetch are polled less or not at all.
     private static void SetVisible(bool visible)
     {
         Player.SetVisible(visible);
@@ -269,6 +279,9 @@ public sealed partial class MainWindow : Window
     {
         _quitting = false;
         _tray.Add();
+        // PrepareExit stopped the poll and the media controls: a signed-in player works again.
+        if (Session.SignedIn) Player.StartPolling();
+        _media?.Enable();
         AppWindow.Show();
     }
 

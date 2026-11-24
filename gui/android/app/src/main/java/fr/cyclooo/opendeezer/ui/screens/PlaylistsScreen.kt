@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.Engine
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.engine.Track
 import fr.cyclooo.opendeezer.player.PlayerController
@@ -172,7 +173,12 @@ fun PlaylistsBookScreen(
                 }
                 Column(Modifier.fillMaxSize()) {
                     SectionHeader(sel?.name ?: stringResource(R.string.home_liked))
-                    TrackList(tracks, player, Modifier.fillMaxSize())
+                    TrackList(
+                        tracks,
+                        player,
+                        if (sel == null) ListenContext("profile_loved", Engine.userId()) else ListenContext("playlist_page", sel.id),
+                        Modifier.fillMaxSize(),
+                    )
                 }
             },
         )

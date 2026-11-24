@@ -111,12 +111,9 @@ func (d *StripeDecryptor) Feed(data []byte, out []byte) []byte {
 	return out
 }
 
-// Consumed reports how many ciphertext bytes have been fed so far (full chunks
-// already emitted plus the partial chunk still buffered). The stripe cipher is
-// byte-for-byte 1:1, so this is exactly the offset to resume a dropped CDN
-// download from via an HTTP Range request: re-issuing the GET with
-// `Range: bytes=<Consumed()>-` and continuing to Feed the same decryptor yields
-// output identical to an uninterrupted download.
+// Consumed reports how many ciphertext bytes were fed (emitted chunks plus the buffered
+// partial). The cipher is 1:1, so a dropped download resumes with
+// `Range: bytes=<Consumed()>-` into the same decryptor.
 func (d *StripeDecryptor) Consumed() int64 {
 	return int64(d.chunkIndex)*StripeChunk + int64(len(d.buf))
 }

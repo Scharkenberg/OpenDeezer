@@ -8,14 +8,12 @@ import (
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
 	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
+	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// controlQueueEditMsg is a queue mutation from the control API. Unlike the
-// fire-and-forget controlCmdMsg commands, these must report success/failure
-// back to the HTTP handler (the server maps an error to 409 Conflict), so the
-// hook blocks on reply until the update loop has applied the edit. The queue is
-// only ever touched on the update loop — same single-threading as the UI keys.
+// controlQueueEditMsg is a control API queue edit. The hook blocks on reply until the
+// update loop applied it, so the handler can answer an error with 409 Conflict.
 type controlQueueEditMsg struct {
 	kind  string       // add | jump | remove | move
 	track deezer.Track // for add (already fetched off-loop)
@@ -28,19 +26,9 @@ type controlQueueEditMsg struct {
 // update loop to apply a queue edit (the loop normally answers within a tick).
 const controlReplyTimeout = 5 * time.Second
 
-// buildControlCommands assembles the control-API callback set shared by the
-// main control server and the web-remote server. Thread-safety contract:
-//
-//   - simple playback commands marshal onto the Bubble Tea loop via send
-//     (fire-and-forget, exactly like the media-key bridge);
-//   - queue edits go through send too, but carry a reply channel so the HTTP
-//     handler can surface a real error (see controlQueueEditMsg);
-//   - network fetches (track/album/mix resolution) run on the HTTP goroutine —
-//     the deezer.Client is safe for concurrent use (the server already calls
-//     Search/Playlists from handlers) — and only the resulting track list is
-//     handed to the update loop;
-//   - HistoryRecent reads the history store directly: the store is internally
-//     locked (one writer + concurrent readers by design).
+// buildControlCommands builds the control callbacks for the control and web-remote
+// servers. Commands and queue edits run on the update loop via send; fetches run on the
+// HTTP goroutine; HistoryRecent reads the locked history store.
 func buildControlCommands(send func(tea.Msg), client *deezer.Client, hist *history.Store) control.Commands {
 	queueEdit := func(msg controlQueueEditMsg, reply chan error) error {
 		send(msg)
@@ -55,7 +43,7 @@ func buildControlCommands(send func(tea.Msg), client *deezer.Client, hist *histo
 		reply := make(chan error, 1)
 		return queueEdit(controlQueueEditMsg{kind: kind, i: i, j: j, reply: reply}, reply)
 	}
-	playNow := func(fetch func() ([]deezer.Track, error)) error {
+	playNow := func(ctx listens.Context, fetch func() ([]deezer.Track, error)) error {
 		if client == nil {
 			return errors.New("not available")
 		}
@@ -66,7 +54,7 @@ func buildControlCommands(send func(tea.Msg), client *deezer.Client, hist *histo
 		if len(ts) == 0 {
 			return errors.New("no tracks found")
 		}
-		send(playNowMsg{tracks: ts})
+		send(playNowMsg{tracks: ts, ctx: ctx})
 		return nil
 	}
 	return control.Commands{
@@ -106,13 +94,13 @@ func buildControlCommands(send func(tea.Msg), client *deezer.Client, hist *histo
 		QueueRemove: func(i int) error { return edit("remove", i, 0) },
 		QueueMove:   func(from, to int) error { return edit("move", from, to) },
 		PlayAlbum: func(id string) error {
-			return playNow(func() ([]deezer.Track, error) { return client.AlbumTracks(id) })
+			return playNow(listens.Context{Type: "album_page", ID: id}, func() ([]deezer.Track, error) { return client.AlbumTracks(id) })
 		},
 		PlayMixTrack: func(id string) error {
-			return playNow(func() ([]deezer.Track, error) { return client.TrackMix(id) })
+			return playNow(listens.Context{Type: "track_mix_contextual", ID: id}, func() ([]deezer.Track, error) { return client.TrackMix(id) })
 		},
 		PlayMixArtist: func(id string) error {
-			return playNow(func() ([]deezer.Track, error) { return client.ArtistMix(id) })
+			return playNow(listens.Context{Type: "artist_smartradio", ID: id}, func() ([]deezer.Track, error) { return client.ArtistMix(id) })
 		},
 		HistoryRecent: func(n int) (json.RawMessage, error) {
 			if hist == nil {
@@ -122,18 +110,14 @@ func buildControlCommands(send func(tea.Msg), client *deezer.Client, hist *histo
 			if err != nil {
 				return nil, err
 			}
-			if len(es) == 0 {
-				return json.RawMessage(`[]`), nil
-			}
 			return json.Marshal(es)
 		},
 	}
 }
 
-// handleControlQueueEdit applies a control-API queue edit on the update loop
-// and reports the result on the message's reply channel. Mirrors the queue-view
-// keys: jump reuses queueJump, remove refuses the playing row like the UI does,
-// move follows the cursor semantics of queueMove.
+// handleControlQueueEdit applies a control API queue edit on the update loop like the
+// queue-view keys (remove refuses the playing row) and reports the result on the reply
+// channel.
 func (m *Model) handleControlQueueEdit(msg controlQueueEditMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var err error
@@ -180,12 +164,9 @@ func (m *Model) handleControlQueueEdit(msg controlQueueEditMsg) (tea.Model, tea.
 	default:
 		err = errors.New("unknown queue edit")
 	}
-	// Ordering invariant: publish the refreshed control snapshot BEFORE the
-	// reply is sent, so the snapshot store happens-before the HTTP handler's
-	// receive — a handler that serializes state right after the reply must see
-	// the post-edit queue, never the stale one. publishControl is nil-guarded
-	// (no-op without a control server) and the reply channel is buffered, so
-	// neither line can block the update loop.
+	// Publish the refreshed snapshot before sending the reply, so the handler serializes
+	// the edited queue. Neither line can block: publishControl is nil-guarded and the reply
+	// channel is buffered.
 	m.publishControl()
 	if msg.reply != nil {
 		msg.reply <- err // buffered(1) by the sender; never blocks the loop

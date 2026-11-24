@@ -14,7 +14,7 @@ namespace OpenDeezer;
 
 internal sealed class RemoteControl
 {
-    private const string LanAddress = ":7654";
+    private static readonly string LanAddress = ":" + Count.ControlPort;
 
     private readonly ToggleSwitch _on, _lan, _phone;
     private readonly PasswordBox _token = new() { PlaceholderText = Loc.S("Settings_AccessToken"), PasswordRevealMode = PasswordRevealMode.Peek, MinWidth = Size.FieldMin };
@@ -41,7 +41,7 @@ internal sealed class RemoteControl
         };
         _generate = Ui.Button(Loc.S("Btn_Generate"), () =>
         {
-            _token.Password = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+            _token.Password = Convert.ToHexString(RandomNumberGenerator.GetBytes(Count.TokenBytes)).ToLowerInvariant();
             _token.PasswordRevealMode = PasswordRevealMode.Visible; // so it can be typed on the phone
             Apply();
         });
@@ -76,7 +76,7 @@ internal sealed class RemoteControl
         }
         var info = await Task.Run(DeezerCore.WebRemoteInfo);
         Ui.Quietly(_phone, () => _phone.IsOn = info.Enabled);
-        if (info.Enabled) await ShowPairing();
+        if (info.Enabled) await ShowPairing(info);
         else _pairing.Visibility = Visibility.Collapsed;
     }
 
@@ -101,13 +101,14 @@ internal sealed class RemoteControl
     private async void SetPhone(bool on)
     {
         await Task.Run(() => DeezerCore.DZWebRemoteSetEnabled(on ? 1 : 0));
-        if (on) await ShowPairing();
+        if (on) await ShowPairing(await Task.Run(DeezerCore.WebRemoteInfo));
         else _pairing.Visibility = Visibility.Collapsed;
     }
 
-    private async Task ShowPairing()
+    // info: the phone remote's state as last read.
+    private async Task ShowPairing(WebRemoteInfo info)
     {
-        var (info, png) = await Task.Run(() => (DeezerCore.WebRemoteInfo(), DeezerCore.WebRemoteQRPng()));
+        var png = await Task.Run(DeezerCore.WebRemoteQRPng);
         _code.Text = info.Code;
         _url.Text = info.Url;
         _pairing.Visibility = Visibility.Visible;

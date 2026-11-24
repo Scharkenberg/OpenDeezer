@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import fr.cyclooo.opendeezer.R
 import fr.cyclooo.opendeezer.engine.Album
 import fr.cyclooo.opendeezer.engine.ArtistInfo
+import fr.cyclooo.opendeezer.engine.ListenContext
 import fr.cyclooo.opendeezer.engine.Playlist
 import fr.cyclooo.opendeezer.engine.SearchResults
 import fr.cyclooo.opendeezer.engine.Track
@@ -29,6 +30,7 @@ import fr.cyclooo.opendeezer.ui.components.TrackRow
 fun SearchResultsList(
     results: SearchResults,
     player: PlayerController,
+    context: ListenContext,
     onAlbum: (Album) -> Unit,
     onArtist: (ArtistInfo) -> Unit,
     onPlaylist: (Playlist) -> Unit,
@@ -44,7 +46,8 @@ fun SearchResultsList(
                 TrackRow(
                     track = track,
                     player = player,
-                    onClick = { player.playQueue(results.tracks, index) },
+                    context = context,
+                    onClick = { player.playQueue(results.tracks, index, context) },
                     onStartRadio = if (track.isEpisode) null else { { player.startTrackRadio(track) } },
                 )
             }

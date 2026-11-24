@@ -14,8 +14,10 @@ internal static partial class DeezerCore
     private const string Dll = "libdeezercore";
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZInit(string arl);
-    // Why the last DZInit failed: 1 ARL expired or invalid, 2 no internet, 4 no audio output, 0 or 3 other.
+    // Why the last DZInit failed: 0 ok, 1 ARL expired or invalid, 2 no internet, 3 other, 4 no audio output.
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZLoginErrorKind();
+    // 1 when Deezer refused the signed-in account's login since it signed in.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSessionExpired();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFavoritesJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPlaylistsJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPlaylistTracksJSON(string id);
@@ -45,6 +47,7 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZAccountJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZChartsJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistProfileJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistTopJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZTrackInfoJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZLyricsJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetReplayGain(int on);
@@ -54,10 +57,28 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRemoveFavorite(string trackID);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZAddToPlaylist(string playlistID, string trackID);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRemoveFromPlaylist(string playlistID, string trackID);
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCreatePlaylist(string title);
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZRenamePlaylist(string playlistID, string title);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCreatePlaylist(string title, string idsJSON);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZLibraryJSON(string kind);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetFavorite(string kind, string id, int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZIsFavorite(string kind, string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetRecommendationBan(string kind, string id, int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZSearchHistoryJSON(int n);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZAddSearchHistory(string type, string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZClearSearchHistory();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZBestResultJSON(string query);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPinnedJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetPinned(string type, string id, int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZExplicitJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSetExplicitLevel(string level);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFlowMoodsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPlaylistDetailsJSON(string id);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZUpdatePlaylist(string id, string changeJSON);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZReorderPlaylist(string id, string idsJSON);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZDeletePlaylist(string playlistID);
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFlowJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFlowJSON(string mood);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZEpisodeBookmarksJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZMarkEpisodePlayed(string id, int played);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetPlaybackSpeed(double speed);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZSearchPodcastsJSON(string q);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZPodcastEpisodesJSON(string podcastID);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZPlayEpisode(string episodeID, long durationMS);
@@ -66,9 +87,13 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCurrentAudioDevice();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetGapless(int on);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZGapless();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetSingleDevice(int on);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZSingleDevice();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetCrossfadeMS(int ms);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZCrossfadeMS();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZPreload(string trackID, long durationMS);
+    // The list the next play or preload comes from, for Deezer's listen log (ListenContext).
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetListenContext(string pageType, string id);
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetClientInfo(string client, string device);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDiscoverDevices(int timeoutMS);
@@ -77,6 +102,8 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZConnectedDevice();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZNowPlayingJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZNowPlayingVersion();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZElsewhereJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZElsewhereVersion();
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetRepeat(int mode);   // 0=off,1=all,2=one
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetShuffle(int on);    // 0/1
@@ -139,7 +166,7 @@ internal static partial class DeezerCore
     // Bumps on every DZQueueSet and on any other change of the list, not on cursor moves.
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial long DZQueueVersion();
 
-    // "off", "all" or "one". When casting both report the remote device.
+    // "off", "all" or "one": the engine queue's. DZGetShuffle reports the remote device while casting.
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZGetRepeat();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZGetShuffle();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZFavoriteIDsJSON();
@@ -162,7 +189,7 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetOfflineMode(int on);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZOfflineMode();
 
-    internal static string TakeJson(IntPtr p)
+    private static string TakeJson(IntPtr p)
     {
         if (p == IntPtr.Zero) return "";
         string s = Marshal.PtrToStringUTF8(p) ?? "";
@@ -183,7 +210,10 @@ internal static partial class DeezerCore
         finally { DZFree(p); }
     }
 
-    // The now-playing reply as bytes: the poll compares them before reading any.
+    internal static Elsewhere Elsewhere() => Read(DZElsewhereJSON(), WireJson.Default.Elsewhere);
+    internal static Dictionary<string, EpisodeBookmark> EpisodeBookmarks() => Read(DZEpisodeBookmarksJSON(), WireJson.Default.DictionaryStringEpisodeBookmark);
+
+    // The now-playing reply as UTF-8 bytes (the poll reads it when the now-playing version moved).
     internal static byte[] NowPlayingUtf8()
     {
         var p = DZNowPlayingJSON();
@@ -200,19 +230,28 @@ internal static partial class DeezerCore
     internal static CatalogReply Search(string q) => Read(DZSearchJSON(q), WireJson.Default.CatalogReply);
     internal static PlaylistsReply Playlists() => Read(DZPlaylistsJSON(), WireJson.Default.PlaylistsReply);
     internal static TracksReply Favorites() => Read(DZFavoritesJSON(), WireJson.Default.TracksReply);
-    internal static TracksReply Flow() => Read(DZFlowJSON(), WireJson.Default.TracksReply);
+    internal static TracksReply Flow(string mood = "") => Read(DZFlowJSON(mood), WireJson.Default.TracksReply);
     internal static TracksReply PlaylistTracks(string id) => Read(DZPlaylistTracksJSON(id), WireJson.Default.TracksReply);
     internal static TracksReply AlbumTracks(string id) => Read(DZAlbumTracksJSON(id), WireJson.Default.TracksReply);
     internal static TracksReply TrackMix(string id) => Read(DZTrackMixJSON(id), WireJson.Default.TracksReply);
     internal static TracksReply ArtistMix(string id) => Read(DZArtistMixJSON(id), WireJson.Default.TracksReply);
     internal static ArtistProfile ArtistProfile(string id) => Read(DZArtistProfileJSON(id), WireJson.Default.ArtistProfile);
+    internal static TracksReply ArtistTop(string id) => Read(DZArtistTopJSON(id), WireJson.Default.TracksReply);
     internal static TrackInfo TrackInfo(string id) => Read(DZTrackInfoJSON(id), WireJson.Default.TrackInfo);
     internal static Lyrics Lyrics(string id) => Read(DZLyricsJSON(id), WireJson.Default.Lyrics);
     internal static PodcastsReply SearchPodcasts(string q) => Read(DZSearchPodcastsJSON(q), WireJson.Default.PodcastsReply);
     internal static EpisodesReply PodcastEpisodes(string id) => Read(DZPodcastEpisodesJSON(id), WireJson.Default.EpisodesReply);
-    internal static CreatedReply CreatePlaylist(string name) => Read(DZCreatePlaylist(name), WireJson.Default.CreatedReply);
+    internal static CreatedReply CreatePlaylist(string name, IReadOnlyList<string>? ids = null) =>
+        Read(DZCreatePlaylist(name, ids == null ? "" : System.Text.Json.JsonSerializer.Serialize(ids, WireJson.Default.IReadOnlyListString)), WireJson.Default.CreatedReply);
+    internal static LibraryReply LibraryList(string kind) => Read(DZLibraryJSON(kind), WireJson.Default.LibraryReply);
+    internal static (SearchItem[] Items, string Error) SearchHistory(int n) => ReadArray(DZSearchHistoryJSON(n), WireJson.Default.SearchItemArray);
+    internal static SearchItem BestResult(string q) => Read(DZBestResultJSON(q), WireJson.Default.SearchItem);
+    internal static PinnedReply Pinned() => Read(DZPinnedJSON(), WireJson.Default.PinnedReply);
+    internal static ExplicitContent Explicit() => Read(DZExplicitJSON(), WireJson.Default.ExplicitContent);
+    internal static (FlowMood[] Items, string Error) FlowMoods() => ReadArray(DZFlowMoodsJSON(), WireJson.Default.FlowMoodArray);
+    internal static PlaylistDetails PlaylistDetails(string id) => Read(DZPlaylistDetailsJSON(id), WireJson.Default.PlaylistDetails);
     internal static QueueReply Queue() => Read(DZQueueJSON(), WireJson.Default.QueueReply);
-    internal static string LastError() => Read(DZLastErrorJSON(), WireJson.Default.Reply).Error;
+    internal static LastErrorReply LastError() => Read(DZLastErrorJSON(), WireJson.Default.LastErrorReply);
     internal static DevicesReply AudioDevices() => Read(DZAudioDevicesJSON(), WireJson.Default.DevicesReply);
     internal static ControlConfig ControlConfig() => Read(DZControlConfigJSON(), WireJson.Default.ControlConfig);
     internal static WebRemoteInfo WebRemoteInfo() => Read(DZWebRemoteInfoJSON(), WireJson.Default.WebRemoteInfo);
@@ -258,8 +297,8 @@ internal static partial class DeezerCore
 
     internal static RepeatMode GetRepeat() => TakeJson(DZGetRepeat()) switch
     {
-        "one" or "2" => RepeatMode.One,
-        "all" or "1" => RepeatMode.All,
+        "one" => RepeatMode.One,
+        "all" => RepeatMode.All,
         _ => RepeatMode.Off,
     };
 
