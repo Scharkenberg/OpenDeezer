@@ -4,23 +4,25 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// palette is a named color scheme for the TUI.
+// palette is a named color scheme for the TUI. dim and onAccent keep a WCAG contrast of
+// at least 4.5:1 on a dark terminal and on the accent (TestPaletteContrast).
 type palette struct {
-	name   string
-	accent lipgloss.Color // titles, progress fill, now-playing, spinner
-	dim    lipgloss.Color // secondary text
-	empty  lipgloss.Color // progress remainder
-	status lipgloss.Color // status line
-	sel    lipgloss.Color // selected row background
+	name     string
+	accent   lipgloss.Color // titles, progress fill, now-playing, spinner
+	dim      lipgloss.Color // secondary text
+	empty    lipgloss.Color // progress remainder
+	status   lipgloss.Color // status line
+	sel      lipgloss.Color // selected row background
+	onAccent lipgloss.Color // text on the accent (header chips)
 }
 
 // palettes are cycled from Settings; the first is the default.
 var palettes = []palette{
-	{"deezer", "#A238FF", "#626262", "#444444", "#FFD700", "#3A1F5C"},
-	{"ocean", "#00AFFF", "#8A8A8A", "#3A3A3A", "#00FFFF", "#0F3550"},
-	{"sunset", "#FF8700", "#8A8A8A", "#3A3A3A", "#FFAF00", "#4A2A10"},
-	{"mono", "#D0D0D0", "#767676", "#444444", "#BCBCBC", "#3A3A3A"},
-	{"matrix", "#00FF00", "#585858", "#303030", "#5FFF00", "#103A10"},
+	{"deezer", "#A238FF", "#A0A0A0", "#4A4A4A", "#FFD700", "#3A1F5C", "#FFFFFF"},
+	{"ocean", "#00AFFF", "#A0A0A0", "#3A3A3A", "#00FFFF", "#0F3550", "#111111"},
+	{"sunset", "#FF8700", "#A0A0A0", "#3A3A3A", "#FFAF00", "#4A2A10", "#111111"},
+	{"mono", "#D0D0D0", "#A8A8A8", "#444444", "#BCBCBC", "#3A3A3A", "#111111"},
+	{"matrix", "#00FF00", "#8FBF8F", "#303030", "#5FFF00", "#103A10", "#111111"},
 }
 
 // applyTheme restyles the shared style vars and the spinner for palette i.
@@ -31,7 +33,7 @@ func (m *Model) applyTheme(i int) {
 	m.theme = i
 	p := palettes[i]
 
-	accentColor = p.accent
+	accentColor, onAccent = p.accent, p.onAccent
 	accent = lipgloss.NewStyle().Foreground(p.accent).Bold(true)
 	dim = lipgloss.NewStyle().Foreground(p.dim)
 	barEmpty = lipgloss.NewStyle().Foreground(p.empty)

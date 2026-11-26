@@ -51,4 +51,4 @@ run: app
 	open $(APP)
 
 clean:
-	rm -rf .build $(APP) Clib/libdeezercore.a Clib/libdeezercore.h
+	rm -rf .build $(APP) Clib/libdeezercore*.a Clib/libdeezercore*.h Sources/PurpleDisc/Resources/Fonts

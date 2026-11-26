@@ -92,6 +92,7 @@ type Model struct {
 	helpOffset int    // first keybinding shown on the scrollable help screen
 	loading    bool   // a network request is in flight
 	ready      bool
+	sr         bool // screen-reader mode: a short plain-text frame (see screenreader.go)
 	width      int
 	height     int
 
@@ -143,6 +144,8 @@ type Model struct {
 	plPrompt     plPromptKind    // what the playlist-title prompt is for
 	plTarget     deezer.Playlist // rename/delete target
 	plConfirm    bool            // 'X' delete confirmation pending (y/n)
+	signOutConfirm bool          // Sign out device awaiting y/n
+	signedOut      bool          // the program ended by signing out
 	plReturn     screen          // screen restored when the title prompt closes
 
 	queueSel     int // queue-view cursor (row navigation on the 'u' screen)
@@ -773,6 +776,9 @@ type statusMsg struct{ text string }
 
 // statusExpiredMsg clears the status set at change n, if no newer one replaced it.
 type statusExpiredMsg int
+
+// statusTTL is how long a status shows before it clears.
+var statusTTL = 4 * time.Second
 type devicesMsg struct{ devices []audio.Device }
 type tickMsg time.Time
 

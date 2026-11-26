@@ -215,10 +215,7 @@ struct SettingsView: View {
                         get: { app.sleepMode },
                         set: { app.setSleepMode($0); updateSleepRemaining() })) {
                         Text(L("Off")).tag(0)
-                        Text(Lf("%d min", 15)).tag(15)
-                        Text(Lf("%d min", 30)).tag(30)
-                        Text(Lf("%d min", 45)).tag(45)
-                        Text(Lf("%d min", 60)).tag(60)
+                        ForEach([5, 10, 20, 30, 45, 60], id: \.self) { Text(Lf("%d min", $0)).tag($0) }
                         Text(L("End of track")).tag(-1)
                     }
                     .pickerStyle(.menu)

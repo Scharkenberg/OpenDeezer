@@ -153,8 +153,11 @@ internal sealed class AppTitleBar
         InputNonClientPointerSource.GetForWindowId(appWindow.Id).SetRegionRects(NonClientRegionKind.Passthrough, _passthrough);
     }
 
+    // A window being minimized reports caption insets below zero, which GridLength rejects; thrown
+    // from the queued Arrange, that ended the process.
     private static void SetWidth(ColumnDefinition c, double width)
     {
+        if (!(width > 0)) width = 0;
         if (Math.Abs(c.Width.Value - width) > 0.5) c.Width = new GridLength(width);
     }
 }

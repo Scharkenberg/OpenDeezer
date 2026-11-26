@@ -880,27 +880,16 @@ void MainWindow::applyAccount(const QByteArray &json) {
     const QJsonObject o = QJsonDocument::fromJson(json).object();
     m_accountName  = o.value("name").toString();
     m_accountOffer = o.value("offer").toString();
-    m_canHq        = o.value("canHq").toBool();
-    m_canHifi      = o.value("canHifi").toBool();
     m_premium      = o.value("premium").toBool();
     m_haveAccount  = o.value("loggedIn").toBool() || !m_accountName.isEmpty();
 }
 
 void MainWindow::applyQuality(int level) {
-    m_quality = level;
     DZSetQuality(level);
+    m_quality = DZQuality(); // capped at the account's plan
     const QString names[] = {tr("Normal (MP3 128)"), tr("High (MP3 320)"),
                              tr("HiFi (FLAC)")};
-    QString msg = tr("Quality: %1").arg(names[level < 0 ? 0 : (level > 2 ? 2 : level)]);
-    // Note when the chosen tier exceeds the account's entitlement; the engine
-    // transparently falls back, so this is informational only.
-    if (m_haveAccount) {
-        if (level >= 2 && !m_canHifi)
-            msg += tr(" — your plan has no HiFi; the engine will fall back");
-        else if (level >= 1 && !m_canHq)
-            msg += tr(" — your plan has no High quality; the engine will fall back");
-    }
-    statusBar()->showMessage(msg, 4000);
+    statusBar()->showMessage(tr("Quality: %1").arg(names[m_quality]), 4000);
 }
 
 void MainWindow::applyReplayGain(bool on) {

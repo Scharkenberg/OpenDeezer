@@ -194,7 +194,12 @@ func frames(check func(name string, w, h int, frame string)) {
 	}
 }
 
-// Every frame is exactly the terminal's height and no line is wider than it.
+// glyphs are the only non-ASCII characters a frame may show: those every terminal
+// font carries as text (WGL4: box drawing, block elements and a few symbols).
+const glyphs = "─━│▀▄▌▁▃▅▇▮▯►◄▲▼■●○♥♪♫≡•·…→←↑↓‖—−"
+
+// Every frame is exactly the terminal's height, no line is wider than it, and every
+// non-ASCII character in the English frames is in glyphs.
 func TestFrameFitsEveryScreen(t *testing.T) {
 	frames(func(name string, w, h int, frame string) {
 		lines := strings.Split(frame, "\n")
@@ -206,16 +211,6 @@ func TestFrameFitsEveryScreen(t *testing.T) {
 				t.Fatalf("%s: line %d is %d wide: %q", name, i, lw, ansi.Strip(l))
 			}
 		}
-	})
-}
-
-// glyphs are the only non-ASCII characters a frame may show: those every terminal
-// font carries as text (WGL4: box drawing, block elements and a few symbols).
-const glyphs = "─━│▀▄▌▁▃▅▇▮▯►◄▲▼■●○♥♪♫≡•·…→←↑↓‖—−"
-
-// Every non-ASCII character in the English frames is in glyphs.
-func TestFramesUseOnlyTextGlyphs(t *testing.T) {
-	frames(func(name string, _, _ int, frame string) {
 		for _, r := range ansi.Strip(frame) {
 			if r > 0x7F && !strings.ContainsRune(glyphs, r) {
 				t.Fatalf("%s: %q (U+%04X) is not in the glyph allowlist", name, r, r)

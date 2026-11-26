@@ -445,8 +445,6 @@ private:
 
     // ---- account tier (DZAccountJSON) ----
     QString m_accountName, m_accountOffer;      // shown in About / status bar
-    bool    m_canHq       = false;              // plan allows MP3 320
-    bool    m_canHifi     = false;              // plan allows FLAC
     bool    m_premium     = false;              // paid plan (gates Download; drives previews)
     bool    m_haveAccount = false;              // DZAccountJSON parsed OK
     QLabel *m_freeHint    = nullptr;            // status-bar "Free · standard quality (128 kbps)" hint

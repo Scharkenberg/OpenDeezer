@@ -12,7 +12,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.screen == screenNoInternet || m.screen == screenLoading { // splash, no frame
 		return m, nil
 	}
-	m.plConfirm = false // a pending delete is canceled by any mouse action
+	m.plConfirm, m.signOutConfirm = false, false // a pending question is canceled by any mouse action
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
 		return m.handleWheel(true)

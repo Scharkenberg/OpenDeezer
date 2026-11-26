@@ -63,6 +63,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Home shows the top albums** beside the top tracks.
 - **Pin to Home:** albums, artists, playlists, podcasts and tracks pin to the top of Home, as in
   Deezer's apps. *Unpin from Home* takes them off.
+- **Screen reader mode (terminal):** two short plain-text lines for Narrator, NVDA and braille
+  displays, on by itself when Windows reports a screen reader, with `-screen-reader` or in
+  Settings; `w` says the position and state.
+- **The terminal app's Windows executable has its icon and version details** (product name,
+  version, publisher, copyright in Properties › Details), from `cmd/purpledisc/purpledisc.rc`.
+- **Sign out in the terminal app:** Settings › *Sign out device* asks y/n (on Windows it says
+  the desktop app is signed out too), deletes the saved ARL and quits.
 
 ### Changed
 - **OpenDeezer is now Purple Disc for Deezer** ("Purple Disc" for short,

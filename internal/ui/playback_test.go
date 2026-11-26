@@ -127,6 +127,9 @@ func TestLoginKeepsWebRelease(t *testing.T) {
 	t.Cleanup(func() { deezer.SetTransport(prev) })
 	m := interactionModel(screenLoading)
 	m.client = deezer.New("arl")
+	ttl := statusTTL
+	statusTTL = 0 // runCmds runs the status's expiry tick too
+	t.Cleanup(func() { statusTTL = ttl })
 	_, cmd := m.Update(m.loginCmd()())
 	runCmds(cmd)
 	if b, release := config.LoadWebRelease(); b != bundle || release != "10020261124120000" {

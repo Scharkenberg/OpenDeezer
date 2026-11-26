@@ -4,7 +4,8 @@
 #   2. for each CPU type, assembles the phone flavor's release APK (-Tv: also the Android TV one)
 #      with one Gradle call, signs it with apksigner (v2 and v3; Android 7, the oldest supported,
 #      reads v2) and verifies it,
-#   3. writes them to gui\android\dist and deletes the build folders once at the end.
+#   3. writes them to gui\android\dist (replacing the APKs there) and deletes the build folders
+#      once at the end.
 #
 # Usage:  gui\android\release.ps1 [-Abi arm64-v8a[,x86_64]] [-Tv] [-Keystore <file>]
 # The key: -Keystore (password in ANDROID_KEYSTORE_PASSWORD), else ANDROID_KEYSTORE_FILE, else
@@ -32,6 +33,7 @@ try {
     $version = [regex]::Match((Get-Content (Join-Path $AndroidDir 'app\build.gradle.kts') -Raw), 'versionName = "([^"]+)"').Groups[1].Value
     $dist = Join-Path $AndroidDir 'dist'
     New-Item -ItemType Directory -Force $dist | Out-Null
+    Get-ChildItem $dist -Filter *.apk | Remove-Item
     $tasks = @('assembleMobileRelease') + $(if ($Tv) { 'assembleTvRelease' } else { @() })
     $flavors = @('mobile') + $(if ($Tv) { 'tv' } else { @() })
 
@@ -57,7 +59,6 @@ try {
             $name = if ($f -eq 'tv') { "PurpleDisc-$version-tv-$a.apk" } else { "PurpleDisc-$version-$a.apk" }
             $apk = Join-Path $dist $name
             Write-Host "==> Signing $name" -ForegroundColor Cyan
-            Remove-Item $apk -ErrorAction SilentlyContinue
             & $apksigner sign @sign --v1-signing-enabled false --out $apk $unsigned | Out-Host
             if ($LASTEXITCODE) { throw "apksigner sign failed ($LASTEXITCODE)" }
             & $apksigner verify $apk | Out-Host

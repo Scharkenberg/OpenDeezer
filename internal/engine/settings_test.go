@@ -89,7 +89,7 @@ func TestPlaybackLoadMigratesTUIFiles(t *testing.T) {
 // The engine applies playback.json to a new player and to the client of each
 // login.
 func TestPlaybackFileApplied(t *testing.T) {
-	fd := offlineEngine(t, "1001")
+	fd := offlineEngine(t, "1004")
 	_ = fd
 	if err := config.SavePlayback(config.Playback{Quality: 2, Gapless: false, CrossfadeMS: 5000, ReplayGain: true, PlayAlongside: true}); err != nil {
 		t.Fatal(err)
@@ -102,8 +102,28 @@ func TestPlaybackFileApplied(t *testing.T) {
 		t.Fatalf("player %v %d %v, single device %v", p.Gapless(), p.CrossfadeMS(), p.ReplayGain(), SingleDevice())
 	}
 	t.Cleanup(Logout)
-	if !Init("1001") || Client().Quality() != 2 || Quality() != 2 {
+	if !Init("1004") || Client().Quality() != 2 || Quality() != 2 {
 		t.Fatalf("client quality %d, engine %d after a login", Client().Quality(), Quality())
+	}
+}
+
+// A login caps the quality at the account's plan and saves it; a later ask above the
+// plan is capped too.
+func TestLoginCapsQualityToPlan(t *testing.T) {
+	offlineEngine(t, "1001")
+	if err := config.SavePlayback(config.Playback{Quality: 1, Gapless: true}); err != nil {
+		t.Fatal(err)
+	}
+	applyPlayback(nil, nil)
+	t.Cleanup(Logout)
+	if !Init("1001") || Quality() != 0 || Client().Quality() != 0 {
+		t.Fatalf("free account after login: engine %d, client %d, want 0", Quality(), Client().Quality())
+	}
+	if pb, _ := config.LoadPlayback(); pb.Quality != 0 {
+		t.Fatalf("playback.json quality %d, want 0", pb.Quality)
+	}
+	if SetQuality(2); Quality() != 0 {
+		t.Fatalf("free account asked for FLAC: %d, want 0", Quality())
 	}
 }
 

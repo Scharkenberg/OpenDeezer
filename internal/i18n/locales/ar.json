@@ -1,4 +1,9 @@
 {
+ "Sign out device": "تسجيل الخروج من هذا الجهاز",
+ "Sign out this device? The Windows app on this computer is signed out too. (y/n)": "تسجيل الخروج من هذا الجهاز؟ سيُسجَّل خروج تطبيق Windows على هذا الحاسوب أيضًا. (y/n)",
+ "Sign out this device? (y/n)": "تسجيل الخروج من هذا الجهاز؟ (y/n)",
+ "Signed out.": "تم تسجيل الخروج.",
+ "DEEZER_ARL is still set: remove it to stay signed out.": "لا يزال DEEZER_ARL مضبوطًا: احذفه لتبقى مسجَّل الخروج.",
  "Stopped remote and disconnected": "تم إيقاف التحكم عن بُعد وقطع الاتصال",
  "%d GB": "%d غيغابايت",
  "%d h %d min": "%d h %d min",
@@ -16,7 +21,6 @@
  "(loading lyrics…)": "(جارٍ تحميل كلمات الأغنية…)",
  "(no cover)": "(لا يوجد غلاف)",
  "(no lyrics available)": "(لا تتوفر كلمات)",
- "(plan can't stream that quality — will fall back)": "(لا تدعم باقتك هذه الجودة — سيتم الرجوع إلى جودة أقل)",
  "A download is already in progress…": "هناك تنزيل قيد التقدم بالفعل…",
  "AGPL-3.0. Not affiliated with Deezer.": "AGPL-3.0. غير تابع لِـDeezer.",
  "ARL expired or invalid — refresh the 'arl' cookie from deezer.com, then `purpledisc -save-arl <arl>`": "ARL منتهٍ أو غير صالح — حدِّث ملف تعريف الارتباط 'arl' من deezer.com، ثم `purpledisc -save-arl <arl>`",
@@ -265,5 +269,19 @@
  "vol": "صوت",
  "volume up / down": "رفع / خفض الصوت",
  "your playlists": "قوائم التشغيل الخاصة بك",
- "↑/↓ scroll · esc back": "↑/↓ تمرير · esc رجوع"
+ "↑/↓ scroll · esc back": "↑/↓ تمرير · esc رجوع",
+ "%d of %d": "%d من %d",
+ "%s of %s": "%s من %s",
+ "Filter": "تصفية",
+ "Home": "الرئيسية",
+ "Now playing: %s": "يُشغَّل الآن: %s",
+ "Paused": "متوقف مؤقتًا",
+ "Playing: %s": "قيد التشغيل: %s",
+ "Screen reader mode": "وضع قارئ الشاشة",
+ "Stopped": "متوقف",
+ "album": "ألبوم",
+ "explicit": "صريح",
+ "liked": "مفضلة",
+ "position and state": "الموضع والحالة",
+ "sleep %d min": "نوم %d دقيقة"
 }

@@ -15,7 +15,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"   # repo root: module github.com/Scharkenberg/PurpleDisc
+ROOT="$(cd "$HERE/../.." && pwd)"   # repo root: module github.com/Scharkenberg/PurpleDisc/v4
 
 echo "==> [1/3] building Go core archive (corelib -> lib/libdeezercore.a)"
 mkdir -p "$HERE/lib"

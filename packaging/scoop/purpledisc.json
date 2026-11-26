@@ -9,7 +9,7 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/Scharkenberg/PurpleDisc/releases/download/v4.0.0/purpledisc-tui-windows-amd64.exe#/purpledisc.exe",
-            "hash": "57aca3445af9516a9c4be3aee22974e6b18bac64ec714c40ab7eaca3cb5cd4b9"
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
         }
     },
     "bin": "purpledisc.exe",

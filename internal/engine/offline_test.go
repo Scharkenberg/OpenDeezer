@@ -135,7 +135,7 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 			case "deezer.getUserData":
 				user := strings.TrimPrefix(r.Header.Get("Cookie"), "arl=")
 				write(w, map[string]any{"error": map[string]any{}, "results": map[string]any{"checkForm": "tok",
-					"USER":   map[string]any{"USER_ID": user, "BLOG_NAME": "u", "OPTIONS": map[string]any{"license_token": "lic", "web_hq": user == "1003"}},
+					"USER":   map[string]any{"USER_ID": user, "BLOG_NAME": "u", "OPTIONS": map[string]any{"license_token": "lic", "web_hq": user == "1003" || user == "1004", "web_lossless": user == "1004"}},
 					"OFFERS": []any{map[string]any{"title": "Premium"}}, "GAIN": map[string]any{"TARGET": "-15", "ADS": "-13"}}})
 			case "song.getData":
 				var id json.Number

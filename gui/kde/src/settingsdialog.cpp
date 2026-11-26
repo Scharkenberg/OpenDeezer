@@ -171,7 +171,7 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
     m_quality->addItem(tr("Normal — MP3 128 kbps"), 0);
     m_quality->addItem(tr("High — MP3 320 kbps"), 1);
     m_quality->addItem(tr("HiFi — FLAC lossless"), 2);
-    m_quality->setCurrentIndex(loadQuality(m_iniPath));
+    m_quality->setCurrentIndex(DZQuality()); // the engine caps it at the plan
     audioForm->addRow(tr("Streaming quality"), m_quality);
     m_replayGain = new QCheckBox(tr("Normalize loudness (ReplayGain)"));
     m_replayGain->setChecked(loadReplayGain(m_iniPath));
@@ -231,7 +231,9 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
     // applies immediately on change rather than waiting for OK.
     m_sleepTimer = new QComboBox;
     m_sleepTimer->addItem(tr("Off"), 0);
-    m_sleepTimer->addItem(tr("15 minutes"), 15);
+    m_sleepTimer->addItem(tr("5 minutes"), 5);
+    m_sleepTimer->addItem(tr("10 minutes"), 10);
+    m_sleepTimer->addItem(tr("20 minutes"), 20);
     m_sleepTimer->addItem(tr("30 minutes"), 30);
     m_sleepTimer->addItem(tr("45 minutes"), 45);
     m_sleepTimer->addItem(tr("60 minutes"), 60);

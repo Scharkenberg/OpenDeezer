@@ -1,4 +1,9 @@
 {
+ "Sign out device": "在此设备上退出登录",
+ "Sign out this device? The Windows app on this computer is signed out too. (y/n)": "在此设备上退出登录？此电脑上的 Windows 应用也会退出登录。(y/n)",
+ "Sign out this device? (y/n)": "在此设备上退出登录？(y/n)",
+ "Signed out.": "已退出登录。",
+ "DEEZER_ARL is still set: remove it to stay signed out.": "DEEZER_ARL 仍已设置：删除它才能保持退出状态。",
  "Stopped remote and disconnected": "已停止远程控制并断开连接",
  "%d GB": "%d GB",
  "%d h %d min": "%d h %d min",
@@ -16,7 +21,6 @@
  "(loading lyrics…)": "（正在加载歌词…）",
  "(no cover)": "（无封面）",
  "(no lyrics available)": "（暂无歌词）",
- "(plan can't stream that quality — will fall back)": "（当前套餐无法播放该音质 — 将自动降级）",
  "A download is already in progress…": "已有下载正在进行…",
  "AGPL-3.0. Not affiliated with Deezer.": "AGPL-3.0。与 Deezer 无关联。",
  "ARL expired or invalid — refresh the 'arl' cookie from deezer.com, then `purpledisc -save-arl <arl>`": "ARL 已过期或无效 — 请从 deezer.com 刷新 'arl' cookie，然后运行 `purpledisc -save-arl <arl>`",
@@ -265,5 +269,19 @@
  "vol": "音量",
  "volume up / down": "音量 增大 / 减小",
  "your playlists": "你的歌单",
- "↑/↓ scroll · esc back": "↑/↓ 滚动 · esc 返回"
+ "↑/↓ scroll · esc back": "↑/↓ 滚动 · esc 返回",
+ "%d of %d": "第 %d 项，共 %d 项",
+ "%s of %s": "%s，共 %s",
+ "Filter": "筛选",
+ "Home": "首页",
+ "Now playing: %s": "当前播放：%s",
+ "Paused": "已暂停",
+ "Playing: %s": "正在播放：%s",
+ "Screen reader mode": "屏幕阅读器模式",
+ "Stopped": "已停止",
+ "album": "专辑",
+ "explicit": "露骨内容",
+ "liked": "已喜欢",
+ "position and state": "位置和状态",
+ "sleep %d min": "睡眠 %d 分钟"
 }

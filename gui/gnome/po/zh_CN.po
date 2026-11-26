@@ -327,6 +327,15 @@ msgstr "关闭窗口时继续播放并保留在系统媒体控件中，而不是
 msgid "15 minutes"
 msgstr "15 分钟"
 
+msgid "5 minutes"
+msgstr "5 分钟"
+
+msgid "10 minutes"
+msgstr "10 分钟"
+
+msgid "20 minutes"
+msgstr "20 分钟"
+
 #: src/main.c:1866
 msgid "30 minutes"
 msgstr "30 分钟"

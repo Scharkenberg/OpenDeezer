@@ -1,4 +1,9 @@
 {
+ "Sign out device": "Выйти на этом устройстве",
+ "Sign out this device? The Windows app on this computer is signed out too. (y/n)": "Выйти на этом устройстве? Приложение для Windows на этом компьютере тоже выйдет. (y/n)",
+ "Sign out this device? (y/n)": "Выйти на этом устройстве? (y/n)",
+ "Signed out.": "Вы вышли.",
+ "DEEZER_ARL is still set: remove it to stay signed out.": "DEEZER_ARL всё ещё задан: удалите его, чтобы остаться вне аккаунта.",
  "Stopped remote and disconnected": "Удалённое управление остановлено и отключено",
  "%d GB": "%d ГБ",
  "%d h %d min": "%d h %d min",
@@ -16,7 +21,6 @@
  "(loading lyrics…)": "(загрузка текста песни…)",
  "(no cover)": "(нет обложки)",
  "(no lyrics available)": "(текст недоступен)",
- "(plan can't stream that quality — will fall back)": "(тариф не поддерживает это качество — будет понижено)",
  "A download is already in progress…": "Загрузка уже выполняется…",
  "AGPL-3.0. Not affiliated with Deezer.": "AGPL-3.0. Не связано с Deezer.",
  "ARL expired or invalid — refresh the 'arl' cookie from deezer.com, then `purpledisc -save-arl <arl>`": "ARL истёк или недействителен — обновите cookie 'arl' на deezer.com, затем `purpledisc -save-arl <arl>`",
@@ -265,5 +269,19 @@
  "vol": "гр",
  "volume up / down": "громкость + / −",
  "your playlists": "ваши плейлисты",
- "↑/↓ scroll · esc back": "↑/↓ прокрутка · esc назад"
+ "↑/↓ scroll · esc back": "↑/↓ прокрутка · esc назад",
+ "%d of %d": "%d из %d",
+ "%s of %s": "%s из %s",
+ "Filter": "Фильтр",
+ "Home": "Главная",
+ "Now playing: %s": "Сейчас играет: %s",
+ "Paused": "Пауза",
+ "Playing: %s": "Играет: %s",
+ "Screen reader mode": "Режим чтения с экрана",
+ "Stopped": "Остановлено",
+ "album": "альбом",
+ "explicit": "18+",
+ "liked": "в любимых",
+ "position and state": "позиция и состояние",
+ "sleep %d min": "сон %d мин"
 }

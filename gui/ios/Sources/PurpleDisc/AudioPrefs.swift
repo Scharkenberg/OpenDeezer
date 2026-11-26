@@ -32,6 +32,7 @@ enum AudioPrefs {
     /// Push the saved settings into the engine. Call once after Init succeeds.
     static func applyOnLaunch() {
         Engine.setQuality(quality)
+        quality = Engine.quality() // capped at the account's plan
         Engine.setGapless(gapless)
         Engine.setReplayGain(replayGain)
         Engine.setCrossfadeMS(crossfadeMs)

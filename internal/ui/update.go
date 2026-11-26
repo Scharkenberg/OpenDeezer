@@ -93,24 +93,33 @@ func (m *Model) navCmd(c tea.Cmd) tea.Cmd {
 // Update handles all messages. A screen change makes pending navigation results stale,
 // drops a delete confirmation and detaches from a peer the new screen does not drive.
 // A new status clears itself after 4 s unless it shows a load in progress or the login
-// screen. Spinner and UI ticks run only while needed.
+// screen. In screen-reader mode a status stays until the next one or a change of the
+// playback state, and the spinner does not run. Spinner and UI ticks run only while
+// needed.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	prev, prevStatus := m.screen, m.status
+	var prevPlayback string
+	if m.sr {
+		prevPlayback = m.srPlayback()
+	}
 	_, cmd := m.update(msg)
+	if m.sr && m.status != "" && m.status == prevStatus && m.srPlayback() != prevPlayback {
+		m.status = "" // the event line says the newer playback state instead
+	}
 	if m.status != prevStatus {
 		m.statusSeq++
-		if seq := m.statusSeq; m.status != "" && !m.loading && m.screen != screenLoading {
-			cmd = tea.Batch(cmd, tea.Tick(4*time.Second, func(time.Time) tea.Msg { return statusExpiredMsg(seq) }))
+		if seq := m.statusSeq; m.status != "" && !m.loading && m.screen != screenLoading && !m.sr {
+			cmd = tea.Batch(cmd, tea.Tick(statusTTL, func(time.Time) tea.Msg { return statusExpiredMsg(seq) }))
 		}
 	}
 	if m.screen != prev {
 		m.nav++
-		m.plConfirm = false
+		m.plConfirm, m.signOutConfirm = false, false
 		if m.remote != nil && m.peer() == nil {
 			m.detachRemote()
 		}
 	}
-	if m.loading && !m.spinning {
+	if m.loading && !m.spinning && !m.sr {
 		m.spinning = true
 		cmd = tea.Batch(cmd, m.spinner.Tick)
 	}
@@ -177,15 +186,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.status = i18n.Tf("Logged in · %s", m.acct.Offer)
 		}
-		switch {
-		case !m.acct.Premium:
+		m.client.SetQuality(m.client.Quality()) // capped at the plan now that it is known
+		if !m.acct.Premium {
 			// Free account: streams full tracks at 128 kbps, as Deezer's web player
 			// does; 320/FLAC and downloads need a paid plan. A track
 			// with no full-length source falls back to a 30-second preview.
 			m.status += "  " + i18n.T("(free account · 128 kbps; downloads need a paid plan)")
-		case (m.client.Quality() == 2 && !m.acct.CanHiFi) || (m.client.Quality() == 1 && !m.acct.CanHQ):
-			// Warn if the chosen quality exceeds the plan's entitlement.
-			m.status += "  " + i18n.T("(plan can't stream that quality — will fall back)")
 		}
 		// Seed the liked-ids cache in the background so the 'f' toggle knows the
 		// current state before the Liked Songs view is ever opened; learn the web
@@ -806,7 +812,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleControlQueueEdit(msg)
 
 	case spinner.TickMsg:
-		if !m.loading {
+		if !m.loading || m.sr {
 			m.spinning = false
 			return m, nil
 		}
@@ -1026,11 +1032,34 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Plain lyrics do not follow the position: the cursor keys scroll them.
+	if m.screen == screenLyrics && m.lyrics != nil && !m.lyrics.IsSynced() {
+		switch msg.String() {
+		case "down", "j":
+			m.lyricsOffset++
+			return m, nil
+		case "up", "k":
+			m.lyricsOffset = max(0, m.lyricsOffset-1)
+			return m, nil
+		}
+	}
+
 	// Let the list own keys while filtering (so typing works).
 	if m.list.FilterState() == list.Filtering {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
+	}
+
+	if m.signOutConfirm {
+		switch msg.String() {
+		case "y", "Y":
+			m.signOutConfirm = false
+			return m, m.signOut()
+		case "n", "N", "esc":
+			m.signOutConfirm = false
+		}
+		return m, nil
 	}
 
 	// A playlist delete is awaiting confirmation: y deletes, n/esc cancels,
@@ -1177,6 +1206,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Cycle the sleep timer: off → 5 → 10 → 20 → 30 → 45 → 60 min → end-of-track → off.
 		m.cycleSleepTimer()
 		m.status = sleepStatus(m.player)
+		return m, nil
+	case "w":
+		m.status = m.whereStatus()
 		return m, nil
 	case "R":
 		// On the playlists screen, R renames the highlighted playlist.

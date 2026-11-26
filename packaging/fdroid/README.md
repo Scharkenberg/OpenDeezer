@@ -14,7 +14,7 @@ repository.
 
 The recipe builds `pdmobile.aar` from the reviewed Go source; it never downloads
 or bundles the generated AAR. It pins Go through the `go` srclib, derives the
-exact `golang.org/x/mobile` version from `go.mod`, pins NDK r26d, and assembles
+exact `golang.org/x/mobile` version from `go.mod`, pins NDK r30, and assembles
 four unsigned `mobileRelease` APKs for F-Droid to compare with the signed
 upstream binaries. Each build selects exactly one ABI and has its own ordered
 version code. The Android TV
@@ -37,7 +37,7 @@ infrastructure.
    cp packaging/fdroid/fdroiddata/dev.scharkenberg.purpledisc.yml \
      /path/to/fdroiddata/metadata/
    fdroid lint dev.scharkenberg.purpledisc
-   for code in 261 262 263 264; do
+   for code in 271 272 273 274; do
      fdroid build --test "dev.scharkenberg.purpledisc:$code"
    done
    ```
@@ -56,7 +56,7 @@ infrastructure.
   section. The upstream reproducible workflow therefore builds at F-Droid's
   canonical `/home/vagrant/build/dev.scharkenberg.purpledisc` path. Keep that path and
   the source commit identical when comparing the four binaries.
-- The tagged release currently requires Go 1.25.12. The recipe builds it from
+- The tagged release currently requires Go 1.27.4. The recipe builds it from
   F-Droid's `go` srclib, using Debian's Go only as a bootstrap compiler. This is
   slower than a conventional Android build and has not yet been exercised on an
   official F-Droid worker.

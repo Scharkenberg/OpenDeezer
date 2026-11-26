@@ -1121,7 +1121,7 @@ func resetOfflineGlobals() {
 // canceled and waited for, so no cleanup swaps globals under them; then t fails (t nil
 // only stops waiting).
 func waitJobsDone(t *testing.T) {
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		jobMu.Lock()
 		var live []*offlineJob

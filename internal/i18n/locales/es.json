@@ -1,4 +1,9 @@
 {
+ "Sign out device": "Cerrar sesión en este dispositivo",
+ "Sign out this device? The Windows app on this computer is signed out too. (y/n)": "¿Cerrar sesión en este dispositivo? La app de Windows de este equipo también cerrará sesión. (y/n)",
+ "Sign out this device? (y/n)": "¿Cerrar sesión en este dispositivo? (y/n)",
+ "Signed out.": "Sesión cerrada.",
+ "DEEZER_ARL is still set: remove it to stay signed out.": "DEEZER_ARL sigue definido: elimínalo para seguir sin sesión.",
  "Stopped remote and disconnected": "Control remoto detenido y desconectado",
  "%d GB": "%d GB",
  "%d h %d min": "%d h %d min",
@@ -16,7 +21,6 @@
  "(loading lyrics…)": "(cargando letra…)",
  "(no cover)": "(sin carátula)",
  "(no lyrics available)": "(no hay letra disponible)",
- "(plan can't stream that quality — will fall back)": "(tu plan no puede reproducir esa calidad — se reducirá)",
  "A download is already in progress…": "Ya hay una descarga en curso…",
  "AGPL-3.0. Not affiliated with Deezer.": "AGPL-3.0. Sin afiliación con Deezer.",
  "ARL expired or invalid — refresh the 'arl' cookie from deezer.com, then `purpledisc -save-arl <arl>`": "ARL caducado o no válido — actualiza la cookie 'arl' desde deezer.com y luego `purpledisc -save-arl <arl>`",
@@ -265,5 +269,19 @@
  "vol": "vol",
  "volume up / down": "subir / bajar volumen",
  "your playlists": "tus playlists",
- "↑/↓ scroll · esc back": "↑/↓ desplazar · esc atrás"
+ "↑/↓ scroll · esc back": "↑/↓ desplazar · esc atrás",
+ "%d of %d": "%d de %d",
+ "%s of %s": "%s de %s",
+ "Filter": "Filtro",
+ "Home": "Inicio",
+ "Now playing: %s": "Sonando ahora: %s",
+ "Paused": "En pausa",
+ "Playing: %s": "Reproduciendo: %s",
+ "Screen reader mode": "Modo lector de pantalla",
+ "Stopped": "Detenido",
+ "album": "álbum",
+ "explicit": "explícito",
+ "liked": "favorito",
+ "position and state": "posición y estado",
+ "sleep %d min": "apagado %d min"
 }

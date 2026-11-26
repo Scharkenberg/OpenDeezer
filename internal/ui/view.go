@@ -18,6 +18,7 @@ import (
 
 var (
 	accentColor = palettes[0].accent
+	onAccent    = palettes[0].onAccent
 	accent      = lipgloss.NewStyle().Foreground(palettes[0].accent).Bold(true)
 	dim         = lipgloss.NewStyle().Foreground(palettes[0].dim)
 	barEmpty    = lipgloss.NewStyle().Foreground(palettes[0].empty)
@@ -30,7 +31,7 @@ var (
 func chip(s string, bg lipgloss.Color) string {
 	fg := lipgloss.Color("#F0F0F0")
 	if bg == accentColor {
-		fg = "#111111"
+		fg = onAccent
 	}
 	return lipgloss.NewStyle().Foreground(fg).Background(bg).Bold(bg == accentColor).Render(" " + s + " ")
 }
@@ -156,6 +157,9 @@ func (m *Model) hasTrackRows() bool {
 // View renders the whole screen: the header row (and its rule from 30 rows), the
 // body with the side panel when it fits, and the footer.
 func (m *Model) View() string {
+	if m.sr {
+		return m.srView()
+	}
 	if !m.ready || m.screen == screenLoading || m.screen == screenNoInternet {
 		return m.splashView()
 	}
@@ -569,7 +573,10 @@ func (m *Model) nowLine() string {
 // is shown, else the keys of the screen in front.
 func (m *Model) hintLine() string {
 	s := m.status
-	if m.plConfirm {
+	switch {
+	case m.signOutConfirm:
+		s = signOutQuestion()
+	case m.plConfirm:
 		s = i18n.Tf("Delete playlist %s? (y/n)", m.plTarget.Name)
 	}
 	if s != "" {
@@ -696,6 +703,7 @@ var helpGroups = []struct {
 		{"s", "stop"},
 		{"T", "cycle the sleep timer"},
 		{"m", "start a radio"},
+		{"w", "position and state"},
 	}},
 	{"Browse", [][2]string{
 		{"↑↓ j k", "move selection"},

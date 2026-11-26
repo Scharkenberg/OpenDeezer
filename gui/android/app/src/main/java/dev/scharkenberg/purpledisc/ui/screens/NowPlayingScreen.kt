@@ -118,7 +118,7 @@ private val PlaySize = 72.dp
 private const val LIKE_MS = 400
 private const val MODE_TURN_MS = 350
 private const val VOLUME_STEP_MS = 33L
-private val SleepMinutes = listOf(15, 30, 45, 60)
+private val SleepMinutes = listOf(5, 10, 20, 30, 45, 60)
 private val Speeds = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
 
 /** A top bar with no fill, for the pages on the backdrop. */

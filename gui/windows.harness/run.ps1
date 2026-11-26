@@ -14,13 +14,13 @@ if ($LASTEXITCODE -ne 0) { Write-Error 'harness build failed'; return }
 $exe = Get-ChildItem (Join-Path $here 'bin') -Recurse -Filter PdHarness.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $exe) { Write-Error 'build failed'; return }
 
-# A throwaway profile, so the real settings and login are never read.
+# A throwaway profile, so the real settings, login and cache are never read.
 New-Item -ItemType Directory -Force (Join-Path $out 'profile\purpledisc') | Out-Null
 $result = Join-Path $out 'result.txt'
 Remove-Item $result -ErrorAction SilentlyContinue
-$saved = $env:APPDATA
+$saved = $env:APPDATA, $env:LOCALAPPDATA
 try {
-    $env:APPDATA = Join-Path $out 'profile'
+    $env:APPDATA = $env:LOCALAPPDATA = Join-Path $out 'profile'
     $env:HARNESS_OUT = $result
     $env:HARNESS_ONLY = $Only -join ','
     $env:HARNESS_PICTURE = $Picture
@@ -29,7 +29,7 @@ try {
     if (-not $p.WaitForExit(240000)) { $p.Kill(); 'timed out' }
 }
 finally {
-    $env:APPDATA = $saved
+    $env:APPDATA, $env:LOCALAPPDATA = $saved
     Remove-Item Env:HARNESS_OUT, Env:HARNESS_ONLY, Env:HARNESS_PICTURE -ErrorAction SilentlyContinue
 }
 $lines = Get-Content $result -ErrorAction SilentlyContinue

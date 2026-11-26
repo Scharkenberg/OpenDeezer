@@ -10,6 +10,6 @@ pkgbase = purpledisc
 	depends = alsa-lib
 	options = !lto
 	source = purpledisc-4.0.0.tar.gz::https://github.com/Scharkenberg/PurpleDisc/archive/refs/tags/v4.0.0.tar.gz
-	sha256sums = ab74d97aea73c48046518b480f8ab223ade69bf3d776995dc5cf411054094db6
+	sha256sums = 0000000000000000000000000000000000000000000000000000000000000000
 
 pkgname = purpledisc

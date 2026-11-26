@@ -265,15 +265,20 @@ const (
 	QualityLossless = 2 // FLAC (HiFi), MP3 when unavailable
 )
 
-// SetQuality selects the preferred stream quality (0..2). Deezer returns the
-// first format the account+track is entitled to, so an unentitled FLAC/320
-// automatically falls back to a lower MP3 format.
+// SetQuality selects the stream quality (0..2). Once logged in it is capped at what the
+// account's plan plays, so a Free account holds MP3 128 whatever was asked.
 func (c *Client) SetQuality(q int) {
-	if q < 0 {
-		q = 0
-	} else if q > 2 {
-		q = 2
+	q = min(max(q, QualityNormal), QualityLossless)
+	c.mu.RLock()
+	if c.apiToken != "" {
+		if q == QualityLossless && !c.canHiFi {
+			q = QualityHigh
+		}
+		if q == QualityHigh && !c.canHQ {
+			q = QualityNormal
+		}
 	}
+	c.mu.RUnlock()
 	atomic.StoreInt32(&c.quality, int32(q))
 }
 

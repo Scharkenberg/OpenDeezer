@@ -1,4 +1,9 @@
 {
+ "Sign out device": "इस डिवाइस से साइन आउट करें",
+ "Sign out this device? The Windows app on this computer is signed out too. (y/n)": "इस डिवाइस से साइन आउट करें? इस कंप्यूटर का Windows ऐप भी साइन आउट हो जाएगा। (y/n)",
+ "Sign out this device? (y/n)": "इस डिवाइस से साइन आउट करें? (y/n)",
+ "Signed out.": "साइन आउट हो गया।",
+ "DEEZER_ARL is still set: remove it to stay signed out.": "DEEZER_ARL अभी भी सेट है: साइन आउट रहने के लिए इसे हटाएँ।",
  "Stopped remote and disconnected": "रिमोट रोका गया और डिस्कनेक्ट किया गया",
  "%d GB": "%d GB",
  "%d h %d min": "%d h %d min",
@@ -16,7 +21,6 @@
  "(loading lyrics…)": "(बोल लोड हो रहे हैं…)",
  "(no cover)": "(कोई कवर नहीं)",
  "(no lyrics available)": "(कोई बोल उपलब्ध नहीं)",
- "(plan can't stream that quality — will fall back)": "(यह प्लान उस गुणवत्ता को स्ट्रीम नहीं कर सकता — कम गुणवत्ता पर लौटेगा)",
  "A download is already in progress…": "एक डाउनलोड पहले से चल रहा है…",
  "AGPL-3.0. Not affiliated with Deezer.": "AGPL-3.0. Deezer से संबद्ध नहीं।",
  "ARL expired or invalid — refresh the 'arl' cookie from deezer.com, then `purpledisc -save-arl <arl>`": "ARL समाप्त या अमान्य — deezer.com से 'arl' कुकी रीफ़्रेश करें, फिर `purpledisc -save-arl <arl>`",
@@ -265,5 +269,19 @@
  "vol": "वॉल्यूम",
  "volume up / down": "वॉल्यूम बढ़ाएँ / घटाएँ",
  "your playlists": "आपकी प्लेलिस्ट",
- "↑/↓ scroll · esc back": "↑/↓ स्क्रॉल · esc वापस"
+ "↑/↓ scroll · esc back": "↑/↓ स्क्रॉल · esc वापस",
+ "%d of %d": "%[2]d में से %[1]d",
+ "%s of %s": "%[2]s में से %[1]s",
+ "Filter": "फ़िल्टर",
+ "Home": "होम",
+ "Now playing: %s": "अभी चल रहा है: %s",
+ "Paused": "रुका हुआ",
+ "Playing: %s": "चल रहा है: %s",
+ "Screen reader mode": "स्क्रीन रीडर मोड",
+ "Stopped": "रुका",
+ "album": "एल्बम",
+ "explicit": "वयस्क",
+ "liked": "पसंदीदा",
+ "position and state": "स्थान और स्थिति",
+ "sleep %d min": "स्लीप %d मिनट"
 }

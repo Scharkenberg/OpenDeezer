@@ -1477,8 +1477,8 @@ static void settings_save(App *a) {
 static void on_quality_selected(GObject *row, GParamSpec *ps, gpointer data) {
   (void)ps;
   App *a = data;
-  a->quality = (int)adw_combo_row_get_selected(ADW_COMBO_ROW(row));
-  DZSetQuality(a->quality);
+  DZSetQuality((int)adw_combo_row_get_selected(ADW_COMBO_ROW(row)));
+  a->quality = DZQuality();
   settings_save(a);
   const char *names[] = {_("Normal (MP3 128)"), _("High (MP3 320)"), _("HiFi (FLAC)")};
   toastf(a, _("Audio quality: %s"), names[a->quality < 0 ? 0 : (a->quality > 2 ? 2 : a->quality)]);
@@ -1539,7 +1539,7 @@ static void on_crossfade_selected(GObject *row, GParamSpec *ps, gpointer data) {
  * entry ("End of track") pauses when the current track finishes instead; index
  * 0 ("Off") cancels. Both endpoints carry 0 minutes, so they are distinguished
  * by their position (see on_sleep_timer_selected). */
-static const int SLEEP_MIN[] = {0, 15, 30, 45, 60, 0};
+static const int SLEEP_MIN[] = {0, 5, 10, 20, 30, 45, 60, 0};
 
 static void on_sleep_timer_selected(GObject *row, GParamSpec *ps, gpointer data) {
   (void)ps;
@@ -2341,8 +2341,9 @@ static void on_settings(GSimpleAction *action, GVariant *param, gpointer data) {
   adw_preferences_group_add(behave, bg);
 
   /* sleep timer — pause after a delay (auto fade-out) or when the track ends */
-  const char *const slabels[] = {_("Off"), _("15 minutes"), _("30 minutes"),
-                                 _("45 minutes"), _("60 minutes"), _("End of track"), NULL};
+  const char *const slabels[] = {_("Off"), _("5 minutes"), _("10 minutes"), _("20 minutes"),
+                                 _("30 minutes"), _("45 minutes"), _("60 minutes"),
+                                 _("End of track"), NULL};
   GtkWidget *sleep = adw_combo_row_new();
   adw_preferences_row_set_title(ADW_PREFERENCES_ROW(sleep), _("Sleep timer"));
   adw_action_row_set_subtitle(ADW_ACTION_ROW(sleep),
@@ -6456,6 +6457,7 @@ static void init_done(GObject *src, GAsyncResult *res, gpointer data) {
     APP->login_captured = FALSE;
     login_dismiss(APP);                         /* tear down the login window if it is open */
     DZSetQuality(APP->quality);                /* apply persisted quality once logged in */
+    APP->quality = DZQuality();                /* capped at the account's plan */
     DZSetReplayGain(APP->replaygain ? 1 : 0);  /* apply persisted ReplayGain */
     DZSetGapless(APP->gapless ? 1 : 0);        /* apply persisted gapless */
     DZSetCrossfadeMS(APP->crossfade_ms);       /* apply persisted crossfade */

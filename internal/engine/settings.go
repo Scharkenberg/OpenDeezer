@@ -33,6 +33,10 @@ func applyPlayback(p *audio.Player, c *deezer.Client) {
 	}
 	if c != nil {
 		c.SetQuality(Quality())
+		if q := c.Quality(); q != Quality() {
+			quality.Store(int32(q))
+			savePlayback(func(pb *config.Playback) { pb.Quality = q })
+		}
 		target := c.GainTarget()
 		withPlayer(func(p *audio.Player) { p.SetReplayGainTarget(target) })
 		if ok && pb.GainTarget != target {
@@ -57,14 +61,15 @@ func savePlayback(edit func(*config.Playback)) {
 	}
 }
 
-// SetQuality sets and saves the stream quality: 0 MP3 128, 1 MP3 320, 2 FLAC
-// (MP3 where the account or the track has no FLAC).
+// SetQuality sets and saves the stream quality: 0 MP3 128, 1 MP3 320, 2 FLAC, capped
+// at the signed-in account's plan (MP3 where the track has no FLAC).
 func SetQuality(q int) {
 	q = clampQuality(q)
-	quality.Store(int32(q))
 	if c := Client(); c != nil {
 		c.SetQuality(q)
+		q = c.Quality()
 	}
+	quality.Store(int32(q))
 	savePlayback(func(pb *config.Playback) { pb.Quality = q })
 }
 

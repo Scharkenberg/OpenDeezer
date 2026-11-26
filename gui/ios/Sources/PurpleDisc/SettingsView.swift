@@ -5,7 +5,9 @@ import UIKit
 /// `.off` cancels and `.endOfTrack` stops when the current track finishes.
 private enum SleepOption: Int, CaseIterable, Identifiable {
     case off = 0
-    case min15 = 15
+    case min5 = 5
+    case min10 = 10
+    case min20 = 20
     case min30 = 30
     case min45 = 45
     case min60 = 60

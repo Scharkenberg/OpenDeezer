@@ -50,6 +50,11 @@ bumpnum() {
 
 # ---- single source of truth (all Go binaries) ----
 sub "$VERSION_GO" "s/^const Number = \".*\"/const Number = \"$NEW\"/"
+# The terminal app's Windows icon and version details; the .syso is compiled from it on
+# Windows (cmd/purpledisc/winres.ps1), and TestWindowsResourceIsCurrent fails until it is.
+IFS=. read -r NMAJ NMIN NPAT <<<"$NEW"
+sub cmd/purpledisc/purpledisc.rc -E -e "s/^(FILEVERSION|PRODUCTVERSION) [0-9,]+/\1 $NMAJ,$NMIN,$NPAT,0/" \
+  -e "s/(\"(File|Product)Version\", )\"[0-9.]+\"/\1\"$NEW\"/"
 
 # ---- macOS ----
 # CFBundleShortVersionString = NEW; CFBundleVersion += 1.
@@ -105,4 +110,4 @@ grep -rn --exclude-dir=.git --exclude=CHANGELOG.md --exclude-dir=scripts -F "$CU
   gui/windows/PurpleDisc.csproj gui/android/app/build.gradle.kts gui/ios/project.yml \
   packaging 2>/dev/null || echo "  (none)"
 echo
-echo "done: $NEW — remember to add a CHANGELOG.md entry and run: go build ./..."
+echo "done: $NEW — remember to add a CHANGELOG.md entry, run cmd/purpledisc/winres.ps1 on Windows and run: go build ./..."

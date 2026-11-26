@@ -1242,6 +1242,18 @@
         <translation>Fondu enchaîné</translation>
     </message>
     <message>
+        <source>5 minutes</source>
+        <translation>5 minutes</translation>
+    </message>
+    <message>
+        <source>10 minutes</source>
+        <translation>10 minutes</translation>
+    </message>
+    <message>
+        <source>20 minutes</source>
+        <translation>20 minutes</translation>
+    </message>
+    <message>
         <location filename="../src/settingsdialog.cpp" line="234"/>
         <source>15 minutes</source>
         <translation>15 minutes</translation>

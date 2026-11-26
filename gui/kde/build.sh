@@ -8,7 +8,7 @@
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../.." && pwd)   # repo root: module github.com/Scharkenberg/PurpleDisc
+ROOT=$(cd "$HERE/../.." && pwd)   # repo root: module github.com/Scharkenberg/PurpleDisc/v4
 
 mkdir -p "$HERE/lib"
 

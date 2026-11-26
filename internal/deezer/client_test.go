@@ -11,6 +11,24 @@ import (
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
+func TestSetQualityCapsToPlan(t *testing.T) {
+	c := New("arl")
+	c.SetQuality(QualityLossless)
+	if c.Quality() != QualityLossless {
+		t.Fatalf("before login: %d, want the asked quality", c.Quality())
+	}
+	c.apiToken = "token"
+	for _, tc := range []struct {
+		hq, hifi bool
+		want     int
+	}{{false, false, QualityNormal}, {true, false, QualityHigh}, {true, true, QualityLossless}} {
+		c.canHQ, c.canHiFi = tc.hq, tc.hifi
+		if c.SetQuality(QualityLossless); c.Quality() != tc.want {
+			t.Errorf("plan hq=%v hifi=%v: %d, want %d", tc.hq, tc.hifi, c.Quality(), tc.want)
+		}
+	}
+}
+
 func TestTrackIDOf(t *testing.T) {
 	cases := []struct{ uri, want string }{
 		{"deezer:track:3135556", "3135556"},

@@ -301,6 +301,7 @@ final class AppState: ObservableObject {
         // Apply persisted audio quality + gapless/crossfade, claim the OS Now
         // Playing command handlers, and wire up the tray.
         Core.setQuality(settings.quality)
+        settings.quality = Core.quality // capped at the account's plan
         Core.setGapless(settings.gapless)
         Core.setCrossfadeMS(settings.crossfadeMS)
         currentAudioDeviceID = Core.currentAudioDevice
@@ -1310,8 +1311,8 @@ final class AppState: ObservableObject {
     // MARK: settings
 
     func setQuality(_ level: Int) {
-        settings.quality = level
         Core.setQuality(level)
+        settings.quality = Core.quality
         settings.save()
     }
 

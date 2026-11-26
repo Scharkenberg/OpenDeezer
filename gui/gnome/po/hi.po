@@ -330,6 +330,15 @@ msgstr ""
 msgid "15 minutes"
 msgstr "15 मिनट"
 
+msgid "5 minutes"
+msgstr "5 मिनट"
+
+msgid "10 minutes"
+msgstr "10 मिनट"
+
+msgid "20 minutes"
+msgstr "20 मिनट"
+
 #: src/main.c:1866
 msgid "30 minutes"
 msgstr "30 मिनट"

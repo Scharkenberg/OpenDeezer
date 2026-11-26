@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"runtime"
+
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
@@ -21,8 +23,12 @@ func (m *Model) settings() []setting {
 		{"Audio quality", func() string {
 			return i18n.T([]string{"Normal (MP3 128)", "High (MP3 320)", "HiFi (FLAC)"}[m.client.Quality()])
 		}, func() tea.Cmd {
-			q := (m.client.Quality() + 1) % 3
-			m.client.SetQuality(q)
+			next := (m.client.Quality() + 1) % 3
+			m.client.SetQuality(next)
+			if m.client.Quality() < next { // the plan stops below it: start over
+				m.client.SetQuality(0)
+			}
+			q := m.client.Quality()
 			m.savePlayback(func(pb *config.Playback) { pb.Quality = q })
 			return nil
 		}},
@@ -104,6 +110,7 @@ func (m *Model) settings() []setting {
 			m.cycleLanguage()
 			return nil
 		}},
+		{"Screen reader mode", func() string { return boolLabel(m.sr) }, m.toggleScreenReader},
 	}
 	if !m.acct.Premium {
 		s = append(s, setting{"Play reporting", func() string { return boolLabel(!m.client.AdsDisabled()) }, func() tea.Cmd {
@@ -121,8 +128,33 @@ func (m *Model) settings() []setting {
 	return append(s, setting{"About", func() string { return "" }, func() tea.Cmd {
 		m.toggleScreen(screenCredits)
 		return nil
+	}}, setting{"Sign out device", func() string { return "" }, func() tea.Cmd {
+		m.signOutConfirm = true
+		return nil
 	}})
 }
+
+// signOutQuestion asks before the saved ARL goes; on Windows the desktop app reads the
+// same file, so it says that app is signed out too.
+func signOutQuestion() string {
+	if runtime.GOOS == "windows" {
+		return i18n.T("Sign out this device? The Windows app on this computer is signed out too. (y/n)")
+	}
+	return i18n.T("Sign out this device? (y/n)")
+}
+
+// signOut deletes the saved ARL and quits; a failure stays on screen.
+func (m *Model) signOut() tea.Cmd {
+	if err := DeleteARL(); err != nil {
+		m.status = i18n.Tf("Error: %s", err.Error())
+		return nil
+	}
+	m.signedOut = true
+	return tea.Quit
+}
+
+// SignedOut reports whether the program ended by signing out.
+func (m *Model) SignedOut() bool { return m.signedOut }
 
 // showSettings lists the settings with their current values, the cursor on row i.
 func (m *Model) showSettings(i int) {

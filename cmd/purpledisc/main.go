@@ -53,6 +53,7 @@ func main() {
 	outPath := flag.String("o", "", "output file for -export-playlist (default: stdout)")
 	importPl := flag.String("import-playlist", "", "import this playlist file (CSV/M3U/plain text) into your Deezer account and exit")
 	plTitle := flag.String("playlist-title", "", "title for the playlist created by -import-playlist (default: the file name)")
+	screenReader := flag.Bool("screen-reader", false, "screen-reader mode for this run: a short plain-text view, no full-screen redraws")
 	flag.Parse()
 	version = releaseVersion(version)
 
@@ -122,9 +123,16 @@ func main() {
 	client := deezer.New(arl) // ui.New applies the saved playback settings
 	model := ui.New(client, player)
 
-	// Mouse cell-motion: wheel scrolling, click-to-select/activate and
-	// progress-bar seeking (see internal/ui/mouse.go).
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// Screen-reader mode draws inline without mouse reporting. Otherwise the
+	// full-screen view with mouse cell-motion: wheel scrolling, click-to-select/activate
+	// and progress-bar seeking (see internal/ui/mouse.go).
+	sr := *screenReader || ui.ScreenReaderAtStart()
+	model.SetScreenReader(sr)
+	var opts []tea.ProgramOption
+	if !sr {
+		opts = append(opts, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(model, opts...)
 	model.StartMedia(p.Send) // OS media controls (MPRIS on Linux)
 	if err := model.StartControl(p.Send); err != nil {
 		pdlog.Warn("control api: %v", err) // non-fatal: TUI still runs
@@ -136,6 +144,12 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
+	}
+	if model.SignedOut() {
+		fmt.Println(i18n.T("Signed out."))
+		if os.Getenv("DEEZER_ARL") != "" {
+			fmt.Println(i18n.T("DEEZER_ARL is still set: remove it to stay signed out."))
+		}
 	}
 }
 

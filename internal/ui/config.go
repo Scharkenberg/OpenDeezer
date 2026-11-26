@@ -33,6 +33,18 @@ func SaveARL(arl string) error {
 	return config.WriteFile("arl.txt", strings.TrimSpace(arl)+"\n")
 }
 
+// DeleteARL removes the saved ARL; none saved is not an error.
+func DeleteARL() error {
+	dir, err := config.Dir()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(dir, "arl.txt")); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // loadPlayback returns the playback settings of playback.json, shared with
 // the engine (config.LoadPlayback moves the TUI's older files into it). With
 // neither, the TUI's defaults are written there.
@@ -108,6 +120,32 @@ func LoadTheme() string {
 // SaveTheme persists the theme name, atomically.
 func SaveTheme(name string) error {
 	return config.WriteFile("theme.txt", name+"\n")
+}
+
+// LoadScreenReader returns the saved screen-reader mode: "on", "off", or "" for
+// automatic.
+func LoadScreenReader() string {
+	dir, err := config.Dir()
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "screen-reader.txt"))
+	if err != nil {
+		return ""
+	}
+	switch v := strings.TrimSpace(string(b)); v {
+	case "on", "off":
+		return v
+	}
+	return ""
+}
+
+// SaveScreenReader persists the screen-reader mode as "on" or "off", atomically.
+func SaveScreenReader(on bool) error {
+	if on {
+		return saveStringFile("screen-reader.txt", "on")
+	}
+	return saveStringFile("screen-reader.txt", "off")
 }
 
 // ResumeState is the last-played track plus the position to resume from.

@@ -200,7 +200,7 @@ fun TvSettingsScreen(account: Account?, onLogout: () -> Unit) {
             }
         }
         item {
-            val labels = listOf(stringResource(R.string.common_off), "15", "30", "45", "60", stringResource(R.string.sleep_end))
+            val labels = listOf(stringResource(R.string.common_off), "5", "10", "20", "30", "45", "60", stringResource(R.string.sleep_end))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.settings_sleep_timer), color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

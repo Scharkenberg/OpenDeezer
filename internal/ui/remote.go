@@ -167,6 +167,9 @@ func (m *Model) handleRemoteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, remoteStopDetachCmd(rc)
 	case "Q":
 		return m, tea.Quit
+	case "w":
+		m.status = m.remoteWhereStatus()
+		return m, nil
 	case "l":
 		// Show the connected peer's now-playing lyrics (the peer drives position).
 		if m.remoteState.Track == nil {

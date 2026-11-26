@@ -38,9 +38,9 @@ modules:
     build-commands:
       - cd gui/gnome && chmod +x build.sh && ./build.sh
       - install -Dm755 gui/gnome/purpledisc-gnome /app/bin/purpledisc-gnome
-      - install -Dm644 gui/gnome/data/dev.scharkenberg.PurpleDisc.desktop /app/share/applications/dev.scharkenberg.PurpleDisc.desktop
+      - install -Dm644 gui/gnome/build/dev.scharkenberg.PurpleDisc.desktop/app/share/applications/dev.scharkenberg.PurpleDisc.desktop
       - install -Dm644 gui/gnome/data/purpledisc.png /app/share/icons/hicolor/256x256/apps/dev.scharkenberg.PurpleDisc.png
     sources:
       - type: git
         url: https://github.com/Scharkenberg/PurpleDisc.git
-        tag: v3.1.3
+        tag: v4.0.0

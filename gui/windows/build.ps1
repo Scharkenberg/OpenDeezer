@@ -16,7 +16,7 @@ param([string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 
 $here   = $PSScriptRoot
-$root   = (Resolve-Path (Join-Path $here '..\..')).Path   # repo root: module github.com/Scharkenberg/PurpleDisc
+$root   = (Resolve-Path (Join-Path $here '..\..')).Path   # repo root: module github.com/Scharkenberg/PurpleDisc/v4
 $libDir = Join-Path $here 'lib'
 New-Item -ItemType Directory -Force -Path $libDir | Out-Null
 
@@ -47,6 +47,7 @@ $csproj = Join-Path $here 'PurpleDisc.csproj'
 $framework = ([xml](Get-Content $csproj)).Project.PropertyGroup.TargetFramework
 $bin = Join-Path $here 'bin'
 $outDir = Join-Path $bin "$Configuration\$framework\win-x64\publish"
+if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
 & dotnet publish $csproj -c $Configuration -r win-x64 --self-contained -p:WindowsPackageType=None -o $outDir
 $publishExit = $LASTEXITCODE
 Receive-Job $goBuild -Wait -AutoRemoveJob

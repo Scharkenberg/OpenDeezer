@@ -1253,6 +1253,18 @@
         <translation>Кроссфейд</translation>
     </message>
     <message>
+        <source>5 minutes</source>
+        <translation>5 минут</translation>
+    </message>
+    <message>
+        <source>10 minutes</source>
+        <translation>10 минут</translation>
+    </message>
+    <message>
+        <source>20 minutes</source>
+        <translation>20 минут</translation>
+    </message>
+    <message>
         <location filename="../src/settingsdialog.cpp" line="234"/>
         <source>15 minutes</source>
         <translation>15 минут</translation>

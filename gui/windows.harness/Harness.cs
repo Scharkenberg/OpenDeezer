@@ -608,8 +608,8 @@ internal static partial class Harness
     }
 
     // A window being resized, as a row-limited grid sees it: its width in 8-px steps a frame apart,
-    // wider then narrower. Wrong when the grid's items are made again, or a tile in view changes
-    // picture or goes blank on the way; the sharper pictures come once the steps rest.
+    // wider then narrower. Wrong when the grid's items are made again or a tile in view changes
+    // picture on the way, or a tile in view still has no decoded picture once the steps rest.
     private static async Task TestResize()
     {
         // A picture of its own for each album (copies in the working directory), as covers are.
@@ -646,12 +646,12 @@ internal static partial class Harness
             {
                 if (Descendants<Border>(tile).Select(b => b.Background).OfType<ImageBrush>().FirstOrDefault(b => b.ImageSource != null)?.ImageSource is not BitmapImage image) continue;
                 if (seen.Add(image)) pictures++;
+                if (image.PixelWidth == 0) blank++;
                 if (tile.Item is not { } album) continue;
                 now[album] = image;
                 // A tile in view that changes picture shows its placeholder until the new one decodes.
                 if (!shown.TryGetValue(album, out var before)) continue;
                 if (!ReferenceEquals(before, image)) blankFrames++;
-                if (image.PixelWidth == 0) blank++;
             }
             shown.Clear();
             foreach (var (album, image) in now) shown[album] = image;
@@ -667,12 +667,13 @@ internal static partial class Harness
             Look();
             await Task.Delay(16);
         }
-        bool ok = fills == 0 && blankFrames == 0 && blank == 0;
-        string sweep = $"items made again {fills}x, pictures of tiles coming into view {pictures}, picture changes in view {blankFrames}, blanked {blank}";
-        blankFrames = 0;
+        string sweep = $"items made again {fills}x, pictures of tiles coming into view {pictures}, picture changes in view {blankFrames}";
+        bool ok = fills == 0 && blankFrames == 0;
+        blankFrames = 0; blank = 0;
         await Settle(800);
         Look();
-        Log($"resize sweep 700 -> 1500 -> 700 px: {sweep}; sharper pictures after the rest {blankFrames} -> {(ok ? "ok" : "WRONG")}");
+        ok &= blank == 0;
+        Log($"resize sweep 700 -> 1500 -> 700 px: {sweep}; sharper pictures after the rest {blankFrames}, undecoded in view {blank} -> {(ok ? "ok" : "WRONG")}");
     }
 
     // Queue rows: how far the title moves when hover swaps the duration for the two buttons.

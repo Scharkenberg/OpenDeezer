@@ -1,5 +1,5 @@
-# Runs the checks, each in its own process (app, harness and go vet side by side, then go test),
-# and prints the results lane by lane.
+# Runs the checks, each in its own process (app and go vet side by side, then the harness alone,
+# then go test), and prints the results lane by lane.
 # Exits 1 when any lane reports a failure (CI runs it as is).
 #   .\check.ps1          app build + tests, harness, go vet, go test
 #   .\check.ps1 -Race    go test with the race detector (slower)
@@ -39,9 +39,10 @@ $lanes = [ordered]@{
 $unknown = $Only | Where-Object { $_ -notin $lanes.Keys }
 if ($unknown) { "unknown lane: $($unknown -join ', ') (lanes: $($lanes.Keys -join ', '))"; exit 1 }
 $names = $lanes.Keys | Where-Object { -not $Only -or $_ -in $Only }
-# Go tests run once the other lanes ended: beside them on a busy machine (8 logical CPUs, two
-# emulators) a 50-track pin and the discovery replies ran past their tests' time.
-$stages = @($names | Where-Object { $_ -ne 'go' }), @($names | Where-Object { $_ -eq 'go' })
+# The harness and the Go tests each run alone: beside the other lanes on a busy machine (8 logical
+# CPUs, two emulators) the harness ended early twice, and a 50-track pin and the discovery replies
+# ran past their tests' time.
+$stages = @($names | Where-Object { $_ -in 'app', 'vet' }), @($names | Where-Object { $_ -eq 'harness' }), @($names | Where-Object { $_ -eq 'go' })
 # What a lane prints when it failed: a build error or warning, a failed test, a harness line that
 # misses its mark, a non-zero exit.
 $failure = ' error |[1-9]\d* (Warning|Error)\(s\)|Failed!|Failed: +[1-9]|WRONG|FAILED|FATAL|CLIPPED|DIFFER|REVERTED|SQUARE|HIDDEN|STALE|BLURRED|CUT OFF|STUCK|UNHANDLED|MADE AGAIN|APPLOG bad |timed out|build failed|(vet|test) exit [^0]'

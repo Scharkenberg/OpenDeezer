@@ -194,6 +194,17 @@ access to your account.
 | s | stop | | , | settings (quality, sound, theme, language) |
 | T | sleep timer | | D | download track (paid plans) |
 | i | about | | ? | help · q quit |
+| w | position and state | | | |
+
+**Screen reader mode** (Narrator, NVDA, braille displays) shows two plain lines
+instead of the full screen: where you are and what is selected, then what just
+happened or what plays. It turns on by itself on Windows when a screen reader
+runs, with `-screen-reader`, or under Settings › *Screen reader mode*; `w` says
+the position, state and modes.
+
+To sign out, choose Settings › *Sign out device* and confirm with `y`: the saved ARL is
+deleted and the app quits. On Windows the desktop app shares that sign-in and is signed
+out too.
 
 Home screen entries: Liked Songs · My Playlists · Flow · Flow moods · Charts ·
 Podcasts · Search · Stats · Remote control · Web Remote · Settings (and Resume

@@ -7,7 +7,7 @@ Commands:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/Scharkenberg/PurpleDisc/releases/download/v4.0.0/purpledisc-tui-windows-amd64.exe
-    InstallerSha256: 57aca3445af9516a9c4be3aee22974e6b18bac64ec714c40ab7eaca3cb5cd4b9
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
 ReleaseDate: "2026-07-14"
 ManifestType: installer
 ManifestVersion: 1.12.0
