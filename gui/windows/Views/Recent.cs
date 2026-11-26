@@ -12,9 +12,9 @@ internal sealed class RecentView : View
     internal readonly TextBlock _total = Ui.Text("", TextKind.SectionTitle);
     private readonly SelectorBar _filters = new();
     internal readonly TrackList _recent = new() { Context = new("history_song", "") }, _top = new() { Context = new("history_song", "") };
-    // History has no artist id or picture: initials, and a click searches the name.
+    // History has no artist id: the engine finds the picture, and a click searches the name.
     private readonly TileGrid<ArtistStat> _artists = new(
-        a => new TileData(a.Artist, Loc.Plural("Plays", a.Plays), "", Round: true),
+        a => new TileData(a.Artist, Loc.Plural("Plays", a.Plays), a.PictureUrl, Round: true),
         a => Nav.Push<SearchView>(a.Artist));
     private readonly ScrollViewer _scroller;
     internal readonly StateView _state;
@@ -76,8 +76,8 @@ internal sealed class RecentView : View
                 ArtistId = k.ArtistId,
                 ArtistLine = s.Artist.Length == 0 ? plays : s.Artist + " · " + plays,
                 AlbumName = k.AlbumName,
-                ArtworkUrl = k.ArtworkUrl,
-                DurationMs = k.DurationMs,
+                ArtworkUrl = k.ArtworkUrl.Length > 0 ? k.ArtworkUrl : s.ArtworkUrl,
+                DurationMs = k.DurationMs > 0 ? k.DurationMs : s.DurationMs,
                 IsExplicit = k.IsExplicit,
             });
         }

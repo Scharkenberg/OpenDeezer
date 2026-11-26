@@ -144,6 +144,19 @@ func (c *Client) ArtistTop(id string) ([]Track, error) {
 	return out, nil
 }
 
+// ArtistPicture is the artist's picture URL (public REST), "" when they have none.
+func (c *Client) ArtistPicture(id string) (string, error) {
+	b, err := c.restGet("/artist/" + id)
+	if err != nil {
+		return "", err
+	}
+	var info restArtistDTO
+	if err := json.Unmarshal(b, &info); err != nil {
+		return "", err
+	}
+	return info.toArtistInfo().ArtworkURL, nil
+}
+
 // ArtistProfile fetches an artist's profile plus top tracks, albums and related
 // artists (all public REST, the four calls in parallel). A failure on any
 // sub-list is tolerated so a partial profile still renders.

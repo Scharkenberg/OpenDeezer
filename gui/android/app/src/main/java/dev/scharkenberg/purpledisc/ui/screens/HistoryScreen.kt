@@ -32,7 +32,11 @@ import dev.scharkenberg.purpledisc.engine.HistoryStats
 import dev.scharkenberg.purpledisc.engine.ListenContext
 import dev.scharkenberg.purpledisc.engine.Track
 import dev.scharkenberg.purpledisc.player.PlayerController
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import dev.scharkenberg.purpledisc.ui.components.AppChip
+import dev.scharkenberg.purpledisc.ui.components.Artwork
+import dev.scharkenberg.purpledisc.ui.theme.Size
 import dev.scharkenberg.purpledisc.ui.components.Load
 import dev.scharkenberg.purpledisc.ui.components.LoadView
 import dev.scharkenberg.purpledisc.ui.components.TrackRow
@@ -77,7 +81,10 @@ fun HistoryScreen(player: PlayerController, onBack: () -> Unit) {
                         TrackRow(t, player, context, onClick = { player.playSingle(t, context) })
                     }
                     else -> items(stats.topArtists, key = { "sa-${it.artist}" }) { a ->
-                        ListItem(supportingContent = { Text(pluralStringResource(R.plurals.n_plays, a.plays, a.plays)) }) {
+                        ListItem(
+                            leadingContent = { Artwork(a.pictureUrl, Modifier.size(Size.rowArt), shape = CircleShape, shown = Size.rowArt) },
+                            supportingContent = { Text(pluralStringResource(R.plurals.n_plays, a.plays, a.plays)) },
+                        ) {
                             Text(a.artist.ifBlank { stringResource(R.string.unknown_title) })
                         }
                     }

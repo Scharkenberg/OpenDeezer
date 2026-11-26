@@ -256,6 +256,7 @@ data class ArtistStat(
     val artist: String,
     val plays: Int,
     val totalSec: Long,
+    val pictureUrl: String = "",
 )
 
 data class HistoryStats(
@@ -671,6 +672,7 @@ object Json {
                         artist = it.optString("artist"),
                         plays = it.optInt("plays"),
                         totalSec = it.optLong("totalSec"),
+                        pictureUrl = it.optString("pictureUrl"),
                     )
                 }
             },

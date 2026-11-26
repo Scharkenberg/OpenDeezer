@@ -107,6 +107,7 @@ type ArtistStat struct {
 	Artist   string
 	Plays    int
 	TotalSec int64
+	TrackID  string // the artist's latest played track: the way to their id and picture
 }
 
 // DefaultCap is how many entries the file keeps: past DefaultCap plus 10 % it is
@@ -433,6 +434,9 @@ func (s *Store) TopArtists(since time.Time, n int) ([]ArtistStat, error) {
 		}
 		st.Plays++
 		st.TotalSec += e.DurationPlayedSec
+		if e.TrackID != "" {
+			st.TrackID = e.TrackID
+		}
 	})
 	s.mu.RUnlock()
 	if err != nil {

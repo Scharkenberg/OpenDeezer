@@ -312,12 +312,15 @@ internal sealed record TrackStat
     public string Title { get; init; } = "";
     public string Artist { get; init; } = "";
     public int Plays { get; init; }
+    public string ArtworkUrl { get; init; } = "";
+    public long DurationMs { get; init; }
 }
 
 internal sealed record ArtistStat
 {
     public string Artist { get; init; } = "";
     public int Plays { get; init; }
+    public string PictureUrl { get; init; } = "";
 }
 
 internal sealed record HistoryStats : Reply

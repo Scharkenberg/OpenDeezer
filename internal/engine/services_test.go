@@ -1585,14 +1585,20 @@ func TestListenEntryKeepsArtworkAndLength(t *testing.T) {
 func TestHistoryStatsTopTracksCarryArtwork(t *testing.T) {
 	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
 	trackMetaMu.Lock()
-	trackMeta = map[string]deezer.Track{"7": {ArtworkURL: "pic7", DurationMS: 200000}}
+	trackMeta = map[string]deezer.Track{"7": {ArtworkURL: "pic7", DurationMS: 200000, Artists: []deezer.Artist{{ID: "98", Name: "Guest"}, {ID: "99", Name: "A"}}}}
+	artistPics = map[string]string{"99": "picA"}
 	trackMetaMu.Unlock()
 	if err := historyStore().Record(history.Entry{TrackID: "7", Title: "Seven", Artist: "A", StartedAt: time.Now().Unix(), DurationPlayedSec: 60}); err != nil {
 		t.Fatal(err)
 	}
-	top := HistoryStats(0)["topTracks"].([]jTrackStat)
+	stats := HistoryStats(0)
+	top := stats["topTracks"].([]jTrackStat)
 	if len(top) != 1 || top[0].ArtworkURL != "pic7" || top[0].DurationMS != 200000 {
 		t.Fatalf("top tracks = %+v, want track 7 with its artwork and length", top)
+	}
+	// The top artist's picture comes through their latest track's artist of that name.
+	if artists := stats["topArtists"].([]jArtistStat); len(artists) != 1 || artists[0].PictureURL != "picA" {
+		t.Fatalf("top artists = %+v, want A with their picture", artists)
 	}
 }
 

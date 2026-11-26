@@ -1517,7 +1517,61 @@ func HistoryRecent(n int) ([]history.Entry, error) {
 var (
 	trackMetaMu sync.Mutex
 	trackMeta   = map[string]deezer.Track{}
+	artistPics  = map[string]string{} // artist id -> picture URL, also under trackMetaMu
 )
+
+// artistPictures returns the pictures of the artists of stats, found through each one's
+// latest track: the track's artist of that name (else its main artist), then that
+// artist's picture, each looked up once per process.
+func artistPictures(c *deezer.Client, stats []history.ArtistStat) []string {
+	meta := make([]history.Entry, len(stats))
+	for i, a := range stats {
+		meta[i] = history.Entry{TrackID: a.TrackID}
+	}
+	fillHistoryMeta(c, meta)
+	ids := make([]string, len(stats))
+	need := map[string]bool{}
+	trackMetaMu.Lock()
+	for i, a := range stats {
+		artists := trackMeta[a.TrackID].Artists
+		for _, ar := range artists {
+			if ar.Name == a.Artist {
+				ids[i] = ar.ID
+			}
+		}
+		if ids[i] == "" && len(artists) > 0 {
+			ids[i] = artists[0].ID
+		}
+		if _, ok := artistPics[ids[i]]; ids[i] != "" && !ok {
+			need[ids[i]] = true
+		}
+	}
+	trackMetaMu.Unlock()
+	if c != nil {
+		var wg sync.WaitGroup
+		slots := make(chan struct{}, maxMetaLookups)
+		for id := range need {
+			wg.Go(func() {
+				slots <- struct{}{}
+				pic, err := c.ArtistPicture(id)
+				<-slots
+				if err == nil || !deezer.IsNoNetwork(err) {
+					trackMetaMu.Lock()
+					artistPics[id] = pic
+					trackMetaMu.Unlock()
+				}
+			})
+		}
+		wg.Wait()
+	}
+	trackMetaMu.Lock()
+	defer trackMetaMu.Unlock()
+	pics := make([]string, len(stats))
+	for i, id := range ids {
+		pics[i] = artistPics[id]
+	}
+	return pics
+}
 
 // maxMetaLookups bounds the concurrent track lookups of fillHistoryMeta.
 const maxMetaLookups = 4
@@ -1547,7 +1601,7 @@ func fillHistoryMeta(c *deezer.Client, entries []history.Entry) {
 				<-slots
 				if err == nil || !deezer.IsNoNetwork(err) {
 					trackMetaMu.Lock()
-					trackMeta[id] = deezer.Track{ArtworkURL: t.ArtworkURL, DurationMS: t.DurationMS}
+					trackMeta[id] = deezer.Track{ArtworkURL: t.ArtworkURL, DurationMS: t.DurationMS, Artists: t.Artists}
 					trackMetaMu.Unlock()
 				}
 			})
@@ -1606,9 +1660,10 @@ type jTrackStat struct {
 }
 
 type jArtistStat struct {
-	Artist   string `json:"artist"`
-	Plays    int    `json:"plays"`
-	TotalSec int64  `json:"totalSec"`
+	Artist     string `json:"artist"`
+	Plays      int    `json:"plays"`
+	TotalSec   int64  `json:"totalSec"`
+	PictureURL string `json:"pictureUrl,omitempty"`
 }
 
 // HistoryStats computes the local stats over the last sinceDays (<= 0: all) as
@@ -1637,9 +1692,10 @@ func HistoryStats(sinceDays int) map[string]any {
 			}
 		}
 		if ta, err := st.TopArtists(since, 50); err == nil {
+			pics := artistPictures(netClient(), ta)
 			topArtists = make([]jArtistStat, len(ta))
 			for i, a := range ta {
-				topArtists[i] = jArtistStat{Artist: a.Artist, Plays: a.Plays, TotalSec: a.TotalSec}
+				topArtists[i] = jArtistStat{Artist: a.Artist, Plays: a.Plays, TotalSec: a.TotalSec, PictureURL: pics[i]}
 			}
 		}
 		total, _ = st.TotalListenedSec(since)
