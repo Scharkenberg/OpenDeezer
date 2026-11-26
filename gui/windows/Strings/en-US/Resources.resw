@@ -197,7 +197,7 @@
     <value>No other devices found on your network.</value>
   </data>
   <data name="Connect_VersionFormat" xml:space="preserve">
-    <value>{0} · OpenDeezer {1}</value>
+    <value>{0} · Purple Disc {1}</value>
   </data>
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>Playing on {0}</value>
@@ -215,7 +215,7 @@
     <value>No lyrics available.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Sign in to OpenDeezer</value>
+    <value>Sign in to Purple Disc</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>Paste your Deezer ARL</value>
@@ -266,7 +266,7 @@
     <value>Retry</value>
   </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>Show OpenDeezer</value>
+    <value>Show Purple Disc</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>Quit</value>
@@ -344,7 +344,7 @@
     <value>Closing the window keeps playing in the tray</value>
   </data>
   <data name="Settings_TrayOff" xml:space="preserve">
-    <value>Closing the window quits OpenDeezer</value>
+    <value>Closing the window quits Purple Disc</value>
   </data>
   <data name="Settings_RemoteControl" xml:space="preserve">
     <value>Remote control</value>
@@ -383,7 +383,7 @@
     <value>System default</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>Restart OpenDeezer to apply the new language</value>
+    <value>Restart Purple Disc to apply the new language</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>Preset</value>
@@ -401,13 +401,13 @@
     <value>Scan with your phone (same Wi-Fi), then enter the code.</value>
   </data>
   <data name="About_Title" xml:space="preserve">
-    <value>About OpenDeezer</value>
+    <value>About Purple Disc</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
     <value>Unofficial open-source client for Deezer.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>By Cycl0o0; Windows app by Scharkenberg. Licensed under AGPL-3.0.</value>
+    <value>By Scharkenberg, based on OpenDeezer by Cycl0o0. Licensed under AGPL-3.0.</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} track</value>
@@ -530,7 +530,7 @@
     <value>Don&apos;t report my plays</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Stops reporting your plays to Deezer. Artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. OpenDeezer plays no ads either way.</value>
+    <value>Stops reporting your plays to Deezer. Artists get no credit for those plays, and it breaks Deezer&apos;s terms of use. Purple Disc plays no ads either way.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>Recent</value>
@@ -629,7 +629,7 @@
     <value>Web sign-in needs the Microsoft Edge WebView2 Runtime. Install it or use an ARL token.</value>
   </data>
   <data name="Error_EngineMissing" xml:space="preserve">
-    <value>libdeezercore.dll couldn't be loaded. Reinstall OpenDeezer.</value>
+    <value>libdeezercore.dll couldn't be loaded. Reinstall Purple Disc.</value>
   </data>
   <data name="Error_NoAudio" xml:space="preserve">
     <value>No audio output was found. Connect speakers or headphones, then try again.</value>
@@ -698,10 +698,10 @@
     <value>Without a token, any device signed in to your Deezer account can control playback.</value>
   </data>
   <data name="Tray_HintTitle" xml:space="preserve">
-    <value>OpenDeezer is still running</value>
+    <value>Purple Disc is still running</value>
   </data>
   <data name="Tray_HintBody" xml:space="preserve">
-    <value>Music keeps playing. Open or quit OpenDeezer from the tray icon.</value>
+    <value>Music keeps playing. Open or quit Purple Disc from the tray icon.</value>
   </data>
   <data name="Sleep_RemainingFormat" xml:space="preserve">
     <value>Pauses in {0}</value>
@@ -837,9 +837,6 @@
   </data>
   <data name="Empty_Artist" xml:space="preserve">
     <value>Nothing found for this artist</value>
-  </data>
-  <data name="Lyrics_PaidOnly" xml:space="preserve">
-    <value>Lyrics come with Deezer Premium, Duo, Family and Student.</value>
   </data>
   <data name="Queue_LeftFormat" xml:space="preserve">
     <value>{0} left</value>
@@ -1336,5 +1333,23 @@
   </data>
   <data name="Pin_Full" xml:space="preserve">
     <value>Home is full. Unpin something first</value>
+  </data>
+  <data name="Track_Unavailable" xml:space="preserve">
+    <value>Not available on Deezer</value>
+  </data>
+  <data name="Menu_GoToAlbum" xml:space="preserve">
+    <value>Go to album</value>
+  </data>
+  <data name="Charts_AllGenres" xml:space="preserve">
+    <value>All genres</value>
+  </data>
+  <data name="Charts_Genre" xml:space="preserve">
+    <value>Genre</value>
+  </data>
+  <data name="Menu_On" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Menu_Off" xml:space="preserve">
+    <value>Off</value>
   </data>
 </root>

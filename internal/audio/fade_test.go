@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 func sampleAt(b []byte, frameIdx int) int16 {

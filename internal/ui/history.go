@@ -3,9 +3,9 @@ package ui
 import (
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

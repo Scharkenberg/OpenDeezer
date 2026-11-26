@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.System;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class DeviceSetting
 {

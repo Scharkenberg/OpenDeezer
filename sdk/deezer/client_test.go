@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 func TestNew(t *testing.T) {

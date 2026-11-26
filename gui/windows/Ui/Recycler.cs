@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed partial class Recycler<TElement, TData>(Func<TElement> create, Action<TElement, TData, int> bind) : IElementFactory
     where TElement : UIElement
@@ -35,7 +35,13 @@ internal sealed partial class Recycler<TElement, TData>(Func<TElement> create, A
 // The built-in add, remove and reposition transitions, for single-item edits only.
 internal sealed partial class EditTransitions : LinedFlowLayoutItemCollectionTransitionProvider
 {
+    private long _quietUntil;
+
+    // The edits of the next layout pass are not animated (a grid that follows the window's width).
+    public void QuietOnce() => _quietUntil = Environment.TickCount64 + 250;
+
     protected override bool ShouldAnimateCore(ItemCollectionTransition transition) =>
-        (transition.Triggers & (ItemCollectionTransitionTriggers.CollectionChangeReset | ItemCollectionTransitionTriggers.LayoutTransition)) == 0
+        Environment.TickCount64 >= _quietUntil
+        && (transition.Triggers & (ItemCollectionTransitionTriggers.CollectionChangeReset | ItemCollectionTransitionTriggers.LayoutTransition)) == 0
         && base.ShouldAnimateCore(transition);
 }

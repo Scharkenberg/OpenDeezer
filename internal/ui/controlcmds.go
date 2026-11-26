@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/listens"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

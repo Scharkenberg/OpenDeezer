@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window's first picture below Android 12: the app's background and the launch mark's circle
+     (108 of the mark's 120 units in its 192-dp box), where the mark draws in. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_background" />
+    <item
+        android:width="172.8dp"
+        android:height="172.8dp"
+        android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="@color/mark" />
+        </shape>
+    </item>
+</layer-list>

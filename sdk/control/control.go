@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/url"
 
-	internalcontrol "github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	sdkdeezer "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	internalcontrol "github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	sdkdeezer "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 // ---- type aliases ----
@@ -63,7 +63,7 @@ func PlayerEQ(get func() EQController, presets []string) *EQ {
 
 // ---- Server ----
 
-// Server hosts the OpenDeezer remote-control API. Create it with [NewServer],
+// Server hosts the Purple Disc remote-control API. Create it with [NewServer],
 // [Server.Start] binds the port and [Server.Close] stops it. Safe for concurrent use
 // once started.
 type Server struct {
@@ -136,7 +136,7 @@ type Client struct {
 }
 
 // NewClient builds a control client for base (e.g. "http://192.168.1.5:7654"). token
-// sets X-OpenDeezer-Token and accountID X-OpenDeezer-Account; "" omits either.
+// sets X-PurpleDisc-Token and accountID X-PurpleDisc-Account; "" omits either.
 func NewClient(base, token, accountID string) *Client {
 	return &Client{c: internalcontrol.NewClient(base, token, accountID)}
 }

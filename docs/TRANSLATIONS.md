@@ -1,6 +1,6 @@
 # Translations
 
-OpenDeezer is localized natively on every client — there is no shared runtime
+Purple Disc is localized natively on every client — there is no shared runtime
 translation layer. The TUI and the phone web remote live in the Go engine; each
 GUI uses its platform's own string mechanism. So adding or fixing a language means
 touching one set of files per client, all in the same well-defined places.
@@ -19,7 +19,7 @@ The product currently ships in seven languages:
 
 Each client falls back to English for any string a language is missing, and picks
 the language from the OS/system setting (with a per-app override in the GUIs and a
-🌐 Language menu / `LANG` in the TUI). Use each platform's own locale identifier —
+Settings > Language / `LANG` in the TUI). Use each platform's own locale identifier —
 they differ (`zh` vs `zh-CN` vs `zh_CN` vs `values-zh-rCN` vs `zh-Hans`); the
 table above is the authoritative mapping.
 
@@ -37,8 +37,8 @@ added or dropped.
 should read identically in the TUI, the web remote and every GUI. Two parts:
 
 - **Brand and technical tokens stay verbatim, untranslated, in every language:**
-  OpenDeezer, Deezer, Flow, ARL, FLAC, MP3, HiFi, HQ, kbps, dB, Hz, kHz,
-  ReplayGain, Blowfish, WASAPI, Wi-Fi, GitHub, AGPL-3.0, Cycl0o0, WinUI, Fluent,
+  Purple Disc, Deezer, Flow, ARL, FLAC, MP3, HiFi, HQ, kbps, dB, Hz, kHz,
+  ReplayGain, Blowfish, WASAPI, Wi-Fi, GitHub, AGPL-3.0, Scharkenberg, Cycl0o0, OpenDeezer, Purple Disc, WinUI, Fluent,
   C#, Go, `libdeezercore.dll`.
 - **Shared UI nouns get one translation per language, reused everywhere.** Pick a
   wording for terms like Liked Songs, Playlists, Charts, Podcasts, Search, Queue,
@@ -86,8 +86,8 @@ Adding a locale (example: Portuguese `pt`):
    `SetLocale` accept it), and add a case in `pluralCategory` for the language's
    CLDR cardinal rule. Languages that are just `one`/`other` can share the default
    branch; add an explicit case only for `few`/`many`/`two`/`zero` languages.
-2. **`internal/ui/language.go`** — add `"pt"` to `languageOrder` so the 🌐 Language
-   menu row cycles to it.
+2. **`internal/ui/language.go`** — add `"pt"` to `languageOrder` so Settings > Language
+   cycles to it.
 3. **`internal/i18n/locales/pt.json`** — copy `en.json` and translate every value.
    Keep every key and every format verb (`%s` / `%d` / `%%`) intact; if word order
    changes with two or more arguments, use Go indexed verbs (`%[1]s` / `%[2]s`).
@@ -114,14 +114,14 @@ the JSON is fully supported — the tests enforce parity.
 
 Strings live in per-language `.lproj` bundles; every user-facing literal already
 routes through `L()` / `Lf()` / `Lp()` (`Bundle.module`) in
-`Sources/OpenDeezer/L.swift`, so no Swift changes are needed for existing strings.
+`Sources/PurpleDisc/L.swift`, so no Swift changes are needed for existing strings.
 
 Adding a language (example: `pt-BR`; use the exact BCP-47 folder name, e.g.
 `pt-BR.lproj`, `zh-Hans.lproj`):
 
-1. Copy `Sources/OpenDeezer/Resources/en.lproj/Localizable.strings` and
+1. Copy `Sources/PurpleDisc/Resources/en.lproj/Localizable.strings` and
    `en.lproj/Localizable.stringsdict` into a new
-   `Sources/OpenDeezer/Resources/<code>.lproj/`.
+   `Sources/PurpleDisc/Resources/<code>.lproj/`.
 2. In `Localizable.strings`, translate only the right-hand value of each
    `"key" = "value";` line. Keep the keys and every `%@`/`%d` placeholder
    unchanged (use `%1$@`/`%2$@` only if you must reorder).
@@ -190,18 +190,18 @@ Adding a language (example: Portuguese `pt`):
    gettext form — `language`, or `language_REGION` for a variant (this repo uses
    `zh_CN`).
 2. Create `po/pt.po`. Easiest:
-   `msginit --input=po/opendeezer-gnome.pot --locale=pt --output=po/pt.po`
+   `msginit --input=po/purpledisc-gnome.pot --locale=pt --output=po/pt.po`
    (fills a correct header including the right `Plural-Forms`). Or copy an existing
    same-plural-rules `.po` (e.g. `es.po`) and edit the `Language:` /
    `Language-Team:` / `Plural-Forms:` header lines.
 3. Translate every `msgstr`. Keep printf specifiers exactly (`%s`, `%d`, `%u`,
-   `%lld`) and the brand words verbatim. Leave the `OpenDeezer` msgid untranslated
+   `%lld`) and the brand words verbatim. Leave the `PurpleDisc` msgid untranslated
    (it is the desktop `Name=` brand). For the four plural entries (`msgid_plural`
    present: `%u track` / `%lld track` / `%lld fan` / `%lld episode`) provide
    exactly `nplurals` `msgstr[N]` forms, each keeping the number placeholder.
 
 No meson edits are needed — `po/meson.build` (the `i18n.gettext` glib preset)
-auto-discovers `LINGUAS`, builds `pt/LC_MESSAGES/opendeezer-gnome.mo`, and the
+auto-discovers `LINGUAS`, builds `pt/LC_MESSAGES/purpledisc-gnome.mo`, and the
 `.desktop` merge picks up `pt` too.
 
 Verify:
@@ -213,8 +213,8 @@ Verify:
 
 If you first add *new* source strings, wrap them in `_("…")` (or `N_()`+`_()` for
 compile-time arrays, `ngettext(sing, plur, n)` for counted nouns) in `src/main.c`,
-regenerate the template with `meson compile -C build opendeezer-gnome-pot`, then
-`msgmerge -U po/*.po po/opendeezer-gnome.pot` before translating the new msgids.
+regenerate the template with `meson compile -C build purpledisc-gnome-pot`, then
+`msgmerge -U po/*.po po/purpledisc-gnome.pot` before translating the new msgids.
 
 ## KDE (`gui/kde`)
 
@@ -228,10 +228,10 @@ Adding a locale (example: `pt_BR`):
 
    ```sh
    lupdate src/mainwindow.cpp src/settingsdialog.cpp src/logindialog.cpp \
-           src/loginhelper.cpp src/main.cpp -ts i18n/opendeezer_pt_BR.ts
+           src/loginhelper.cpp src/main.cpp -ts i18n/purpledisc_pt_BR.ts
    ```
 
-   Or copy an existing `i18n/opendeezer_fr.ts` and change the
+   Or copy an existing `i18n/purpledisc_fr.ts` and change the
    `<TS language="…">` attribute.
 2. Open it in Qt Linguist (or edit the XML) and fill every `<translation>`,
    including all `<numerusform>` children for the seven `%n` plural messages
@@ -240,18 +240,18 @@ Adding a locale (example: `pt_BR`):
    `type="unfinished"`. Keep `%1`/`%2`/`%n` placeholders and brand tokens verbatim;
    keep the `&` mnemonic in menu strings.
 3. Register it in `CMakeLists.txt`: add
-   `${CMAKE_CURRENT_SOURCE_DIR}/i18n/opendeezer_pt_BR.ts` to the
-   `OPENDEEZER_TS_FILES` list. The `foreach` compiles it to `.qm` and all three
+   `${CMAKE_CURRENT_SOURCE_DIR}/i18n/purpledisc_pt_BR.ts` to the
+   `PURPLEDISC_TS_FILES` list. The `foreach` compiles it to `.qm` and all three
    targets embed it — no other CMake change.
 
 No source change is needed: `main.cpp`/`loginhelper.cpp` already load
-`:/i18n/opendeezer_<xx>` for `QLocale::system()` and flip to RTL when the locale
+`:/i18n/purpledisc_<xx>` for `QLocale::system()` and flip to RTL when the locale
 is right-to-left.
 
 Verify:
 
 ```sh
-lrelease i18n/opendeezer_pt_BR.ts   # must report 0 unfinished, 0 errors
+lrelease i18n/purpledisc_pt_BR.ts   # must report 0 unfinished, 0 errors
 ./build.sh
 ```
 
@@ -280,7 +280,7 @@ Adding a language (example: German `de`):
    `<locale android:name="de"/>`) so the Android 13+ per-app language picker lists
    it.
 
-No engine change is needed — the `odmobile.aar` is git-ignored and rebuilt each CI
+No engine change is needed — the `pdmobile.aar` is git-ignored and rebuilt each CI
 run via gomobile. Non-composable code uses `context.getString(R.string.x)`; Compose
 uses `stringResource()` / `pluralStringResource()`.
 
@@ -322,7 +322,7 @@ Verify:
 ./build.sh   # binds the Go engine, xcodegen generate, simulator xcodebuild
 ```
 
-Confirm a `<code>.lproj` appears inside the built `OpenDeezer.app`.
+Confirm a `<code>.lproj` appears inside the built `PurpleDisc.app`.
 
 ---
 

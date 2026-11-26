@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the OpenDeezer iOS app for the Simulator:
-#   1. binds the Go engine (mobile/) into Odmobile.xcframework via gomobile
-#   2. generates OpenDeezer.xcodeproj from project.yml via xcodegen
+# Builds the Purple Disc iOS app for the Simulator:
+#   1. binds the Go engine (mobile/) into Pdmobile.xcframework via gomobile
+#   2. generates PurpleDisc.xcodeproj from project.yml via xcodegen
 #   3. builds the app with xcodebuild (no code signing, simulator only)
 #
 # Usage: gui/ios/build.sh [--skip-bind] [--skip-gen]
@@ -20,9 +20,9 @@ for arg in "$@"; do
 done
 
 if [[ "$SKIP_BIND" -eq 0 ]]; then
-  echo "==> binding Go engine -> Odmobile.xcframework"
+  echo "==> binding Go engine -> Pdmobile.xcframework"
   cd "$ROOT"
-  TOOLS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/opendeezer-mobile-tools.XXXXXX")"
+  TOOLS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/purpledisc-mobile-tools.XXXXXX")"
   trap 'rm -rf "$TOOLS_DIR"' EXIT
   "$ROOT/scripts/build-mobile-tools.sh" "$TOOLS_DIR"
   export PATH="$TOOLS_DIR:$PATH"
@@ -42,8 +42,8 @@ if [[ "$SKIP_BIND" -eq 0 ]]; then
       cp "$f.patched" "$f" && rm -f "$f.patched"
     fi
   done
-  rm -rf "$IOS_DIR/Odmobile.xcframework"
-  gomobile bind -trimpath -target=ios -o "$IOS_DIR/Odmobile.xcframework" ./mobile
+  rm -rf "$IOS_DIR/Pdmobile.xcframework"
+  gomobile bind -trimpath -ldflags="-s -w" -target=ios -o "$IOS_DIR/Pdmobile.xcframework" ./mobile
 fi
 
 if [[ "$SKIP_GEN" -eq 0 ]]; then
@@ -54,6 +54,6 @@ fi
 
 echo "==> xcodebuild (iphonesimulator)"
 cd "$IOS_DIR"
-xcodebuild -project OpenDeezer.xcodeproj -scheme OpenDeezer -sdk iphonesimulator \
+xcodebuild -project PurpleDisc.xcodeproj -scheme PurpleDisc -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO build

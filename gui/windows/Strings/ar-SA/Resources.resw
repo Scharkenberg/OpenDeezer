@@ -197,7 +197,7 @@
     <value>لم يتم العثور على أجهزة أخرى على شبكتك.</value>
   </data>
   <data name="Connect_VersionFormat" xml:space="preserve">
-    <value>{0} · OpenDeezer {1}</value>
+    <value>{0} · Purple Disc {1}</value>
   </data>
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>التشغيل على {0}</value>
@@ -215,7 +215,7 @@
     <value>لا تتوفر كلمات لهذه الأغنية.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>تسجيل الدخول إلى OpenDeezer</value>
+    <value>تسجيل الدخول إلى Purple Disc</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>الصق ARL الخاص بـ Deezer</value>
@@ -266,7 +266,7 @@
     <value>إعادة المحاولة</value>
   </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>إظهار OpenDeezer</value>
+    <value>إظهار Purple Disc</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>إنهاء</value>
@@ -344,7 +344,7 @@
     <value>إغلاق النافذة يُبقي التشغيل في شريط النظام</value>
   </data>
   <data name="Settings_TrayOff" xml:space="preserve">
-    <value>إغلاق النافذة يُنهي OpenDeezer</value>
+    <value>إغلاق النافذة يُنهي Purple Disc</value>
   </data>
   <data name="Settings_RemoteControl" xml:space="preserve">
     <value>التحكم عن بُعد</value>
@@ -383,7 +383,7 @@
     <value>افتراضي النظام</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>أعد تشغيل OpenDeezer لتطبيق اللغة الجديدة</value>
+    <value>أعد تشغيل Purple Disc لتطبيق اللغة الجديدة</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>إعداد مسبق</value>
@@ -401,13 +401,13 @@
     <value>امسح بهاتفك (نفس شبكة Wi-Fi)، ثم أدخل الرمز.</value>
   </data>
   <data name="About_Title" xml:space="preserve">
-    <value>حول OpenDeezer</value>
+    <value>حول Purple Disc</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
     <value>عميل مفتوح المصدر غير رسمي لـ Deezer.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>بواسطة Cycl0o0؛ تطبيق Windows بواسطة Scharkenberg. مرخّص بموجب AGPL-3.0.</value>
+    <value>بواسطة Scharkenberg، مبني على OpenDeezer من Cycl0o0. مرخّص بموجب AGPL-3.0.</value>
   </data>
   <data name="Tracks_Zero" xml:space="preserve">
     <value>{0} مقطع</value>
@@ -530,7 +530,7 @@
     <value>لا تبلّغ عن استماعي</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>يوقف إبلاغ Deezer عن استماعك. لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. لا يعرض OpenDeezer أي إعلانات في كل الأحوال.</value>
+    <value>يوقف إبلاغ Deezer عن استماعك. لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. لا يعرض Purple Disc أي إعلانات في كل الأحوال.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>الأخيرة</value>
@@ -617,7 +617,7 @@
     <value>يتطلب تسجيل الدخول عبر الويب Microsoft Edge WebView2 Runtime. ثبّته أو استخدم رمز ARL.</value>
   </data>
   <data name="Error_EngineMissing" xml:space="preserve">
-    <value>تعذّر تحميل libdeezercore.dll. أعد تثبيت OpenDeezer.</value>
+    <value>تعذّر تحميل libdeezercore.dll. أعد تثبيت Purple Disc.</value>
   </data>
   <data name="Error_NoAudio" xml:space="preserve">
     <value>لم يُعثر على مخرج صوت. صِل سماعات أو مكبرات صوت، ثم حاول مرة أخرى.</value>
@@ -686,10 +686,10 @@
     <value>دون رمز، يمكن لأي جهاز مسجّل الدخول بحساب Deezer الخاص بك التحكم في التشغيل.</value>
   </data>
   <data name="Tray_HintTitle" xml:space="preserve">
-    <value>لا يزال OpenDeezer قيد التشغيل</value>
+    <value>لا يزال Purple Disc قيد التشغيل</value>
   </data>
   <data name="Tray_HintBody" xml:space="preserve">
-    <value>تستمر الموسيقى في التشغيل. افتح OpenDeezer أو أنهِه من أيقونة منطقة الإعلامات.</value>
+    <value>تستمر الموسيقى في التشغيل. افتح Purple Disc أو أنهِه من أيقونة منطقة الإعلامات.</value>
   </data>
   <data name="Sleep_RemainingFormat" xml:space="preserve">
     <value>إيقاف مؤقت بعد {0}</value>
@@ -837,9 +837,6 @@
   </data>
   <data name="Plays_Many" xml:space="preserve">
     <value>{0} مرة تشغيل</value>
-  </data>
-  <data name="Lyrics_PaidOnly" xml:space="preserve">
-    <value>كلمات الأغاني متاحة مع اشتراكات Deezer Premium وDuo وFamily وStudent.</value>
   </data>
   <data name="Queue_LeftFormat" xml:space="preserve">
     <value>متبقٍ {0}</value>
@@ -1336,5 +1333,23 @@
   </data>
   <data name="Pin_Full" xml:space="preserve">
     <value>الرئيسية ممتلئة. ألغِ تثبيت عنصر أولًا</value>
+  </data>
+  <data name="Track_Unavailable" xml:space="preserve">
+    <value>غير متاح على Deezer</value>
+  </data>
+  <data name="Menu_GoToAlbum" xml:space="preserve">
+    <value>الانتقال إلى الألبوم</value>
+  </data>
+  <data name="Charts_AllGenres" xml:space="preserve">
+    <value>كل الأنواع</value>
+  </data>
+  <data name="Charts_Genre" xml:space="preserve">
+    <value>النوع</value>
+  </data>
+  <data name="Menu_On" xml:space="preserve">
+    <value>مفعّل</value>
+  </data>
+  <data name="Menu_Off" xml:space="preserve">
+    <value>معطّل</value>
   </data>
 </root>

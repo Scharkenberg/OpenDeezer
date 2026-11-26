@@ -1,4 +1,3 @@
 .build/
-OpenDeezer.app/
-Clib/libdeezercore.a
-Clib/libdeezercore.h
+PurpleDisc.app/
+Clib/libdeezercore*

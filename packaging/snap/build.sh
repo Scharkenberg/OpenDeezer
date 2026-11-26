@@ -26,8 +26,8 @@ if [[ -z "$VERSION" ]] || ! git -C "$ROOT" rev-parse --verify --quiet "$SOURCE_R
   exit 1
 fi
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/opendeezer-snap.XXXXXX")"
-VOLUME="opendeezer-snap-build-$$-$RANDOM"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/purpledisc-snap.XXXXXX")"
+VOLUME="purpledisc-snap-build-$$-$RANDOM"
 PUBLISH_TMP=""
 cleanup() {
   docker volume rm --force "$VOLUME" >/dev/null 2>&1 || true

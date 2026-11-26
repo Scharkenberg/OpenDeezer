@@ -1,14 +1,18 @@
-BIN     := opendeezer
-PKG     := ./cmd/opendeezer
-MCPBIN  := opendeezer-mcp
-MCPPKG  := ./cmd/opendeezer-mcp
+BIN     := purpledisc
+PKG     := ./cmd/purpledisc
+MCPBIN  := purpledisc-mcp
+MCPPKG  := ./cmd/purpledisc-mcp
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 DIST    := dist
 
-.PHONY: build mcp run test vet tidy clean cross
+.PHONY: build mcp run test vet tidy clean cross pgo
 
-build:
+# The profile go build reads is kept once, in corelib.
+pgo:
+	cp corelib/default.pgo cmd/purpledisc/default.pgo
+
+build: pgo
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) $(PKG)
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(MCPBIN) $(MCPPKG)
 
@@ -29,13 +33,13 @@ tidy:
 	go mod tidy
 
 clean:
-	rm -rf $(BIN) $(MCPBIN) $(DIST)
+	rm -rf $(BIN) $(MCPBIN) $(DIST) cmd/purpledisc/default.pgo
 
 # Cross-compile. Only macOS is cgo-free (oto/purego backend); every other OS
 # uses malgo, which needs cgo — Windows cross-builds via mingw-w64
 # (`brew install mingw-w64` / `apt install gcc-mingw-w64-x86-64`). Linux needs
 # cgo+ALSA, so it's built natively in CI (.github/workflows/release.yml).
-cross:
+cross: pgo
 	@mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$(BIN)-darwin-arm64  $(PKG)
 	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$(BIN)-darwin-amd64  $(PKG)

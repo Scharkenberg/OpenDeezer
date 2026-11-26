@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // throttledServer streams body in fixed-size chunks with a delay between each,

@@ -1,5 +1,5 @@
-// Package control exposes the OpenDeezer remote-control API: a small
-// HTTP/JSON server that a controller (another OpenDeezer client, an MCP agent,
+// Package control exposes the Purple Disc remote-control API: a small
+// HTTP/JSON server that a controller (another Purple Disc client, an MCP agent,
 // a phone web remote) can drive, and a matching client that talks to one.
 //
 // # Host a control server
@@ -40,7 +40,7 @@
 //
 // # Auth modes
 //
-//   - token: bearer token in X-OpenDeezer-Token; set [Config.Token]
+//   - token: bearer token in X-PurpleDisc-Token; set [Config.Token]
 //   - account: controller proves it is the same Deezer account;
 //     set [Config.SameAccountOnly] = true
 //   - session: phone web remote; set [Config.WebRemote] = true

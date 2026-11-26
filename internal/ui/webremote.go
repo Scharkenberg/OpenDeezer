@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	qrcode "github.com/skip2/go-qrcode"
@@ -225,28 +225,19 @@ func (m *Model) webRemotePairingCode() string {
 }
 
 // webRemoteView renders the Web Remote screen.
-func (m *Model) webRemoteView(rows int) string {
-	lines := []string{
-		accent.Render("📱 "+i18n.T("Web Remote")) + dim.Render("  — "+i18n.T("control from your phone")),
-		"",
-	}
+func (m *Model) webRemoteView(rows, width int) string {
+	var lines []string
 	if !m.webRemoteActive {
-		lines = append(lines,
-			i18n.T("Web remote is off."),
-			"",
-			dim.Render(i18n.T("Press enter to enable. Your phone must be on the same Wi-Fi.")),
-			"",
-		)
+		lines = append(lines, " "+i18n.T("Web remote is off."), "")
 	} else {
-		lines = append(lines,
-			i18n.T("Scan with your phone (same Wi-Fi), then enter the code."),
-			"",
-			i18n.T("Code")+":  "+accent.Render(m.webRemotePairingCode()),
-			"URL:   "+dim.Render(m.webRemoteURL),
-			"",
-		)
+		lines = append(lines, " "+i18n.T("Scan with your phone (same Wi-Fi), then enter the code."), "")
+		lines = append(lines, pairs([][2]string{
+			{i18n.T("Code"), accent.Render(m.webRemotePairingCode())},
+			{"URL", m.webRemoteURL},
+		})...)
+		lines = append(lines, "")
 		if m.webRemoteQR != "" {
-			lines = append(lines, strings.Split(strings.TrimRight(m.webRemoteQR, "\n"), "\n")...)
+			lines = append(lines, centered(width, strings.Split(strings.TrimRight(m.webRemoteQR, "\n"), "\n")...)...)
 			lines = append(lines, "")
 		}
 	}
@@ -262,28 +253,10 @@ func (m *Model) webRemoteView(rows int) string {
 	if cfg.Token != "" {
 		tokenStatus = i18n.T("set")
 	}
-	lines = append(lines,
-		dim.Render("Control API"),
-		"  "+i18n.T("Status")+": "+apiStatus,
-		"  "+i18n.T("Token")+":  "+tokenStatus,
-		"",
-	)
-
 	if m.ctrlEditToken {
-		lines = append(lines,
-			i18n.T("Token")+": "+m.search.View(),
-			dim.Render(i18n.T("enter save · esc cancel")),
-		)
-	} else {
-		toggle := i18n.T("enter enable")
-		if m.webRemoteActive {
-			toggle = i18n.T("enter disable")
-		}
-		lines = append(lines, dim.Render(i18n.Tf("%s · a control API on/off · t set token · esc back · q quit", toggle)))
+		tokenStatus = m.search.View()
 	}
-
-	if m.status != "" {
-		lines = append(lines, "", statusSty.Render(m.status))
-	}
+	lines = append(lines, " "+accent.Render("Control API"))
+	lines = append(lines, pairs([][2]string{{i18n.T("Status"), apiStatus}, {i18n.T("Token"), tokenStatus}})...)
 	return padTo(lines, rows)
 }

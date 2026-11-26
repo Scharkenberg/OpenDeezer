@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // maxFetch bounds Fetch: the length goes out to C as an int, and artwork is far smaller.

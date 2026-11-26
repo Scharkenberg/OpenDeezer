@@ -8,7 +8,7 @@ using Windows.Media;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class MediaControls
 {

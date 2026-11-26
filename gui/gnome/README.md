@@ -1,6 +1,6 @@
-# OpenDeezer (GNOME)
+# Purple Disc (GNOME)
 
-Native GNOME front-end for OpenDeezer — a GTK4 + libadwaita desktop client with a
+Native GNOME front-end for Purple Disc — a GTK4 + libadwaita desktop client with a
 Deezer-purple accent. The whole engine (login, browse, Blowfish decrypt, MP3
 decode, ALSA playback) is the Go core compiled to a C static archive
 (`lib/libdeezercore.a`) and linked in-process; this directory is UI only.
@@ -16,7 +16,7 @@ decode, ALSA playback) is the Go core compiled to a C static archive
 - **Theme:** Deezer "Electric Violet" `#A238FF` accent via a `GtkCssProvider`
   (libadwaita 1.6 accent variables with a pre-1.6 named-color fallback), forced
   dark color scheme.
-- **About** (menu button, top-left) credits **Cycl0o0**, AGPL-3.0.
+- **About** (menu button, top-left) credits **Scharkenberg** (based on OpenDeezer by Cycl0o0), AGPL-3.0.
 
 All blocking engine calls (login, browse, play, cover fetch) run on `GTask`
 worker threads; cheap player state is polled from a 300 ms `g_timeout` that also
@@ -28,7 +28,7 @@ drives the scrubber and auto-advances when a track ends.
 cd gui/gnome
 chmod +x build.sh        # first time only
 ./build.sh               # builds the Go archive, then meson + ninja
-./opendeezer-gnome
+./purpledisc-gnome
 ```
 
 `build.sh` always rebuilds `lib/libdeezercore.a` from `../../corelib` first, so
@@ -57,10 +57,10 @@ whose `SoupCookie` API reads the `arl` cookie back out of the WebView.
 On first launch (no stored ARL) the app opens a **Log in to Deezer** window with
 a **Log in with Deezer** button that embeds the real Deezer web login
 (WebKitGTK). After you sign in, the `arl` cookie is captured automatically, used
-to start the session, and written to `~/.config/opendeezer/arl.txt` so the next
+to start the session, and written to `~/.config/purpledisc/arl.txt` so the next
 launch auto-logs-in — no manual ARL needed. A manual-ARL paste box stays on the
 same screen as a fallback. The ARL is still read from `$DEEZER_ARL` first, then
-`~/.config/opendeezer/arl.txt`, at startup.
+`~/.config/purpledisc/arl.txt`, at startup.
 
 ## Files
 

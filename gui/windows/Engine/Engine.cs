@@ -4,7 +4,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Engine
 {

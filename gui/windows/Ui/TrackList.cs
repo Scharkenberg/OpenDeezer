@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media.Animation;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal enum ListMode { Section, Full, Queue }
 

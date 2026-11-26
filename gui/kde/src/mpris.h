@@ -1,8 +1,8 @@
-// OpenDeezer — MPRIS2 (org.mpris.MediaPlayer2) bridge over QtDBus.
+// Purple Disc — MPRIS2 (org.mpris.MediaPlayer2) bridge over QtDBus.
 //
 // MPRIS2 is the freedesktop standard that the Plasma "Media Player" applet,
 // the system tray, the lock-screen and the multimedia keys all speak. Owning
-// the bus name org.mpris.MediaPlayer2.opendeezer on the *session* bus makes the
+// the bus name org.mpris.MediaPlayer2.purpledisc on the *session* bus makes the
 // now-playing track show up in the system overlay and lets those surfaces drive
 // transport (play/pause/next/prev/seek) — all wired back to MainWindow's own
 // existing handlers via the signals below; this class adds no playback logic.
@@ -39,8 +39,8 @@ class MprisRoot : public QDBusAbstractAdaptor {
 public:
     explicit MprisRoot(MprisController *c);
 
-    QString     identity() const { return QStringLiteral("OpenDeezer"); }
-    QString     desktopEntry() const { return QStringLiteral("org.opendeezer.OpenDeezer"); }
+    QString     identity() const { return QStringLiteral("Purple Disc"); }
+    QString     desktopEntry() const { return QStringLiteral("dev.scharkenberg.PurpleDisc"); }
     bool        canQuit() const { return true; }
     bool        canRaise() const { return true; }
     bool        hasTrackList() const { return false; }

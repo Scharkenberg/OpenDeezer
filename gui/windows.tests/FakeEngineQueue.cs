@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 
-namespace OpenDeezer.Tests;
+namespace PurpleDisc.Tests;
 
 /// <summary>An in-memory engine queue following the Go engine's rules
 /// (internal/engine/services.go engineQueue*, internal/queue/queue.go):

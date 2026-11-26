@@ -1,14 +1,16 @@
-# OpenDeezer
+# Purple Disc for Deezer
 
-**An open-source reimplementation of Deezer.** Log in once. The GUIs sign you in
+**Unofficial open-source client for Deezer.** Log in once. The GUIs sign you in
 with an embedded Deezer web view, so there's no ARL to go hunting for. Then
 browse your liked songs, playlists, charts, artists, and search. Every track
 plays **locally**: it's streamed in, Blowfish-decrypted, decoded, and played
 from memory (MP3, or FLAC on HiFi). Your ARL stays on your machine and only goes
-to Deezer in the requests OpenDeezer makes for you.
+to Deezer in the requests Purple Disc makes for you.
 
 One Go engine handles the whole streaming path (login, decrypt, decode,
-playback). Eight native front-ends sit on top of it. By **Cycl0o0**.
+playback). Eight native front-ends sit on top of it.
+
+By **Scharkenberg**, based on OpenDeezer by Cycl0o0.
 
 ## Clients
 
@@ -19,11 +21,11 @@ playback). Eight native front-ends sit on top of it. By **Cycl0o0**.
 | **Linux (unified)** | auto-picks GTK4 or Qt6 by desktop | x86_64 · aarch64 `gui/linux` |
 | **GNOME** | GTK4 · libadwaita | x86_64 · aarch64 `gui/gnome` |
 | **KDE** | Qt6 Widgets · Breeze | x86_64 · aarch64 `gui/kde` |
-| **Windows** | WinUI 3 · C# / .NET 8 · Fluent | x64 `gui/windows` |
+| **Windows** | WinUI 3 · C# / .NET 11 (Native AOT) · Fluent | x64 `gui/windows` |
 | **Android** | Kotlin · Jetpack Compose (phone + **Android TV** D-pad flavor) | arm64/arm/x86_64 (gomobile AAR) `gui/android` |
 | **iOS** | SwiftUI · Liquid Glass (iOS 26) | iPhone (gomobile xcframework) `gui/ios` |
 
-The **unified Linux** client is a single `opendeezer` command that picks the
+The **unified Linux** client is a single `purpledisc` command that picks the
 native toolkit for your desktop (Qt/Breeze on KDE-family, GTK4/libadwaita
 elsewhere), the way LibreOffice does. If you'd rather have one toolkit, the
 standalone `gui/gnome` and `gui/kde` binaries are there too.
@@ -38,7 +40,7 @@ Prebuilt binaries for everything are on the [Releases](../../releases) page.
 - **Artist pages** — top tracks, discography and related artists.
 - **Synced lyrics** — karaoke-style, line-by-line, kept in step with the audio
   (the reported position is compensated for your output device's buffered
-  latency, so lines no longer lead the sound); plain-text fallback.
+  latency, so lines stay in step with the sound); plain-text fallback.
 - **Deezer Flow** — your personalized, endless track stream.
 - **Podcasts** — search shows, browse episodes, play. A multi-hour episode
   streams through a bounded, disk-backed buffer instead of holding the whole
@@ -71,7 +73,7 @@ Prebuilt binaries for everything are on the [Releases](../../releases) page.
   and **Clear**. It surfaces as sheets on macOS/iOS, a dock on KDE, a sidebar on
   GNOME, a flyout on Windows, phone/TV screens on Android, and the TUI queue view.
 - **Gapless** transitions, **crossfade**, **ReplayGain** loudness normalization.
-- **Sleep timer** — pause after 15/30/45/60 min or at the end of the current
+- **Sleep timer** — pause after 5/10/20/30/45/60 min or at the end of the current
   track, with a smooth fade-out (on every client + the web remote).
 - **Output-device selection** (powered by the malgo/miniaudio backend).
 - **Perceptual volume** taper + anti-click micro-fades on skip/seek for clean,
@@ -80,14 +82,14 @@ Prebuilt binaries for everything are on the [Releases](../../releases) page.
 - Shows the **actual output format** that's playing (e.g. "FLAC · lossless").
 - **OS media controls + now-playing** — MPRIS on Linux (GNOME/KDE/TUI media keys
   + overlays), Now Playing + media keys on macOS, SMTC on Windows, and
-  lock-screen / MediaSession controls on Android and iOS — now with shuffle,
+  lock-screen / MediaSession controls on Android and iOS, with shuffle,
   repeat and skip (plus lock-screen artwork on Android and a buffering state on
   iOS).
 
-**Cast & remote (OpenDeezer Connect)**
-- **Cast between your devices** — hand playback to another OpenDeezer device on
+**Cast & remote (Purple Disc Connect)**
+- **Cast between your devices** — hand playback to another Purple Disc device on
   your LAN and drive it from any client. **Repeat and shuffle work in both
-  directions** now, each client mirrors the **host's real** playback modes while
+  directions**: each client mirrors the **host's real** playback modes while
   casting, and you can push your **whole queue** to the host in one go.
 - A **"Playing on `<device>`"** chip (with one-click **Play here**) shows where the
   sound is coming from, and remote controllers advance the **instant** a track
@@ -102,15 +104,15 @@ Prebuilt binaries for everything are on the [Releases](../../releases) page.
   playlists) instead of opening straight to Liked Songs.
 - **Update check** — each client checks GitHub on launch and shows a dismissible
   "update available" notice (opt-in "Check for updates" too); never auto-installs.
-- **Remote control in Settings** — the control API / phone remote is now
+- **Remote control in Settings** — the control API / phone remote is
   configurable in-app (enable, LAN, token), not only via env/config file.
 - Album art (truecolor half-blocks in the TUI; native everywhere else).
 - TUI extras: queue view, lyrics, help screen, themes, vim keys, resume.
-- Settings persisted to `~/.config/opendeezer/`; ARL stays local.
+- Settings persisted to `~/.config/purpledisc/`; ARL stays local.
 
 ## Languages
 
-OpenDeezer is fully localized into seven languages, across every client — the
+Purple Disc is fully localized into seven languages, across every client — the
 TUI, the phone web remote, and all the native GUIs:
 
 **English** · **简体中文** (`zh`) · **हिन्दी** (`hi`) · **Español** (`es`) ·
@@ -119,7 +121,7 @@ TUI, the phone web remote, and all the native GUIs:
 The UI follows your **system language** and falls back to English for anything a
 language is missing. The GUIs each have a **Language** setting to override it per
 app (Arabic switches them to a right-to-left layout). The TUI picks the language
-from your `LANG` environment variable, or from its in-app 🌐 **Language** menu.
+from your `LANG` environment variable, or from Settings > **Language** (key `,`).
 
 Adding a new language — or fixing an existing one — is documented in
 [`docs/TRANSLATIONS.md`](docs/TRANSLATIONS.md).
@@ -135,12 +137,12 @@ next time. No token to paste.
 **Terminal (TUI)** — build it and provide your ARL:
 
 ```sh
-make build          # -> ./opendeezer + ./opendeezer-mcp   (or: go build -o opendeezer ./cmd/opendeezer)
-./opendeezer -save-arl <your-arl>   # writes ~/.config/opendeezer/arl.txt (0600)
-./opendeezer
+make build          # -> ./purpledisc + ./purpledisc-mcp   (or: go build -o purpledisc ./cmd/purpledisc)
+./purpledisc -save-arl <your-arl>   # writes ~/.config/purpledisc/arl.txt (0600)
+./purpledisc
 ```
 
-Or pass it inline: `DEEZER_ARL=<your-arl> ./opendeezer`. For the GUIs, see each
+Or pass it inline: `DEEZER_ARL=<your-arl> ./purpledisc`. For the GUIs, see each
 `gui/<platform>/README.md` for build steps. A Homebrew formula is in
 `packaging/homebrew/`. See the [distribution status](packaging/README.md) for
 F-Droid, Obtainium, Snap, WinGet, AUR, Scoop, and other provider manifests.
@@ -154,7 +156,7 @@ access to your account.
 - A Deezer account. **Free works** — full-library streaming at 128 kbps. A
   **paid plan** unlocks higher
   quality (Premium for MP3 320, HiFi for FLAC) and **downloads**.
-- Building from source: **Go 1.25+**, a C compiler, and a working audio device.
+- Building from source: **Go 1.27+**, a C compiler, and a working audio device.
   The audio backend is [malgo](https://github.com/gen2brain/malgo) (miniaudio),
   so **cgo is required on every platform** (Linux/macOS/Windows).
 - **Linux**: ALSA dev headers (`libasound2-dev`); plus the toolkit dev packages
@@ -162,11 +164,11 @@ access to your account.
   web-login), and/or Qt6 **and `qt6-webengine-dev`** (KDE web-login).
 - **macOS GUI**: macOS 26 (Tahoe) + Xcode 26 for the Liquid Glass APIs (the login
   web view uses the system WebKit framework — no extra dependency).
-- **Windows GUI**: Windows 10 1809+/11, the **.NET 8 SDK** + Windows App SDK
-  workload, MinGW-w64 (Go cgo builds the engine DLL), and the Edge **WebView2**
+- **Windows GUI**: Windows 10 1809+/11, the **.NET 11 SDK** (Native AOT) + Windows App SDK,
+  Visual Studio's clang or MinGW-w64 (Go cgo builds the engine DLL), and the Edge **WebView2**
   runtime (preinstalled on Windows 11) for the login web view.
-- **Android**: Android 7.0+ (API 24). Building needs JDK 17, the Android SDK +
-  NDK, and gomobile. Two flavors ship from one codebase — `assembleMobileDebug`
+- **Android**: Android 7.0+ (API 24). Building needs JDK 21, the Android SDK
+  (platform 37.2), NDK r30, and gomobile. Two flavors ship from one codebase — `assembleMobileDebug`
   for phones/tablets and `assembleTvDebug` for **Android TV** (a D-pad-driven,
   10-foot UI on the leanback launcher).
 - **iOS**: iPhone on iOS 17+ (Liquid Glass on iOS 26). Building needs Xcode,
@@ -183,30 +185,33 @@ access to your account.
 | g / G | top / bottom | | r | cycle repeat (off→all→one) |
 | enter | open / play | | +/- | volume |
 | esc / ⌫ | back | | ←/→ | seek ±10s |
-| space | play / pause | | h | quality (Normal→High→HiFi) |
-| n / p | next / prev | | R | toggle ReplayGain |
-| f | like current track | | x | cycle crossfade |
-| / | search | | ctrl+g | toggle gapless |
-| l | lyrics (synced) | | d | output device |
-| u | queue view | | c | now-playing + art |
-| s | stop | | t | cycle theme |
+| space | play / pause | | e / E | add to queue / play next |
+| n / p | next / prev | | a | add to a playlist |
+| f | like / unlike | | b | go to album |
+| / | search | | ctrl+f | filter the list |
+| l | lyrics (synced) | | m | start a radio |
+| u | queue view | | c | now playing + cover |
+| s | stop | | , | settings (quality, sound, theme, language) |
 | T | sleep timer | | D | download track (paid plans) |
 | i | about | | ? | help · q quit |
 
-Home screen entries: Liked Songs · My Playlists · ⚡ Flow · 📈 Charts ·
-🎙 Podcasts · 🔍 Search (and ▶ Resume when a saved position exists).
+Home screen entries: Liked Songs · My Playlists · Flow · Flow moods · Charts ·
+Podcasts · Search · Stats · Remote control · Web Remote · Settings (and Resume
+when a saved position exists). From 100 columns a side panel shows the cover
+and track, or your recent listening; a click on it opens Now Playing. Symbols
+are limited to what every terminal font draws as text.
 
 ## Use it as a Go library (SDK)
 
 The engine is also a public Go SDK, so you can build your own tools on top of it —
-the Deezer API, track decode/download, OpenDeezer Connect, and the remote control.
+the Deezer API, track decode/download, Purple Disc Connect, and the remote control.
 
 ```sh
-go get github.com/Cycl0o0/OpenDeezer/v3
+go get github.com/Scharkenberg/PurpleDisc/v4
 ```
 
 ```go
-import dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+import dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 
 client := dz.New(os.Getenv("DEEZER_ARL"))
 client.Login()
@@ -225,20 +230,20 @@ Runnable examples in [`examples/`](examples); full docs in
 
 ## Remote control & automation (Control API)
 
-OpenDeezer can expose a small HTTP/JSON API so another OpenDeezer client (remote
+Purple Disc can expose a small HTTP/JSON API so another Purple Disc client (remote
 control) or an AI agent (MCP) can drive playback. It is **off by default**.
 
 This is engine-hosted, so it works in **every client** — the TUI *and* all native
-GUIs (the same `OPENDEEZER_CONTROL` / Discord settings apply). From a GUI the
+GUIs (the same `PURPLEDISC_CONTROL` / Discord settings apply). From a GUI the
 engine exposes play/pause, stop, seek, volume, restart, play-track/playlist and
 status (next/prev/shuffle/repeat live in the GUI's own queue).
 
 Enable it with an env var or a config file:
 
 ```sh
-export OPENDEEZER_CONTROL=1                 # localhost only (127.0.0.1:7654)
-export OPENDEEZER_CONTROL=:7654             # bind all interfaces (LAN remote)
-# or: echo 1 > ~/.config/opendeezer/control.txt
+export PURPLEDISC_CONTROL=1                 # localhost only (127.0.0.1:7654)
+export PURPLEDISC_CONTROL=:7654             # bind all interfaces (LAN remote)
+# or: echo 1 > ~/.config/purpledisc/control.txt
 ```
 
 Endpoints (reads are `GET`, mutations are `POST`):
@@ -257,13 +262,13 @@ Endpoints (reads are `GET`, mutations are `POST`):
 
 - **Account-based (default on LAN).** When bound to a non-loopback address with no
   token, a controller must prove it is logged into the **same Deezer account** by
-  sending its own user id in `X-OpenDeezer-Account`. Your own devices connect with
+  sending its own user id in `X-PurpleDisc-Account`. Your own devices connect with
   no token to copy; other accounts are rejected. `/whoami` deliberately does *not*
   reveal the user id (it's the credential), only the account name. This is
   LAN-trust grade — a Deezer user id is only semi-private. Disable with
-  `OPENDEEZER_CONTROL_SAMEACCOUNT=0`.
-- **Token (strongest).** Set `OPENDEEZER_CONTROL_TOKEN` (or
-  `~/.config/opendeezer/control-token.txt`); send it in `X-OpenDeezer-Token`.
+  `PURPLEDISC_CONTROL_SAMEACCOUNT=0`.
+- **Token (strongest).** Set `PURPLEDISC_CONTROL_TOKEN` (or
+  `~/.config/purpledisc/control-token.txt`); send it in `X-PurpleDisc-Token`.
 - **None.** Localhost binds with no token are open (loopback only).
 
 Mutations require `POST` and reject requests carrying a browser `Origin` header,
@@ -274,19 +279,19 @@ same-account or token auth, failing closed on a misconfiguration.
 
 > **Security note.** A Deezer user id is only *semi-private* (it appears in
 > profile URLs), so same-account auth is LAN-trust grade — fine for a home
-> network. On an untrusted network, set `OPENDEEZER_CONTROL_TOKEN` for a real
-> secret. OpenDeezer Connect authenticates to *discovered* devices with the
+> network. On an untrusted network, set `PURPLEDISC_CONTROL_TOKEN` for a real
+> secret. Purple Disc Connect authenticates to *discovered* devices with the
 > account id only (never the token), since a discovery reply is unauthenticated.
 
 ### Remote control (one client drives another)
 
-Enable the Control API on the target (`OPENDEEZER_CONTROL=:7654`), then on
-another OpenDeezer client open **📡 Remote control** from the menu, enter the
+Enable the Control API on the target (`PURPLEDISC_CONTROL=:7654`), then on
+another Purple Disc client open **Remote control** from the menu, enter the
 target's `host:port`, and connect. Transport keys (space/n/p/s, ←/→ seek, +/-
 volume, r/z) drive the remote; the screen shows its live now-playing. Same
 Deezer account auto-authenticates (or share a token).
 
-**OpenDeezer Connect** (GUIs + TUI) auto-discovers devices on the same LAN via
+**Purple Disc Connect** (GUIs + TUI) auto-discovers devices on the same LAN via
 UDP multicast/broadcast. That needs a network that carries multicast/broadcast —
 **Tailscale/VPN meshes don't** (they're unicast-only), and some routers filter it
 between Wi-Fi and Ethernet. For those, list peers explicitly so they always show
@@ -294,28 +299,28 @@ in the picker:
 
 ```sh
 # one host[:port] per line (port defaults to 7654)
-#   ~/.config/opendeezer/connect-peers.txt   (also read on macOS)
-echo "100.78.213.67:7654" >> ~/.config/opendeezer/connect-peers.txt
-# or: export OPENDEEZER_CONNECT_PEERS=100.78.213.67:7654,192.168.1.20
+#   ~/.config/purpledisc/connect-peers.txt   (also read on macOS)
+echo "100.78.213.67:7654" >> ~/.config/purpledisc/connect-peers.txt
+# or: export PURPLEDISC_CONNECT_PEERS=100.78.213.67:7654,192.168.1.20
 ```
 
 (You can always just type the address into "Enter address…" too.)
 
 ### MCP server (AI agent control)
 
-`opendeezer-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io)
+`purpledisc-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io)
 server that lets an AI assistant control playback through the Control API. Build
-it with `go build ./cmd/opendeezer-mcp` (or `make` builds it alongside the TUI),
+it with `go build ./cmd/purpledisc-mcp` (or `make` builds it alongside the TUI),
 enable the Control API (above), then register it with your MCP client:
 
 ```json
 {
   "mcpServers": {
-    "opendeezer": {
-      "command": "/path/to/opendeezer-mcp",
+    "purpledisc": {
+      "command": "/path/to/purpledisc-mcp",
       "env": {
-        "OPENDEEZER_CONTROL_URL": "http://127.0.0.1:7654",
-        "OPENDEEZER_CONTROL_TOKEN": "your-token-if-set"
+        "PURPLEDISC_CONTROL_URL": "http://127.0.0.1:7654",
+        "PURPLEDISC_CONTROL_TOKEN": "your-token-if-set"
       }
     }
   }
@@ -331,14 +336,14 @@ Tools: `get_status`, `play_pause`, `next`, `prev`, `stop`, `restart`,
 Show what you're listening to on your Discord profile. **Off by default** — it
 needs a Discord application id (create one at the [Discord Developer
 Portal](https://discord.com/developers/applications); optionally upload an art
-asset named `opendeezer`):
+asset named `purpledisc`):
 
 ```sh
-# Linux:   ~/.config/opendeezer/discord-app-id.txt
-# macOS:   ~/Library/Application Support/opendeezer/discord-app-id.txt
-# Windows: %AppData%\opendeezer\discord-app-id.txt
-echo your-application-id > ~/.config/opendeezer/discord-app-id.txt
-# (env var also works for the TUI: export OPENDEEZER_DISCORD_APP_ID=...)
+# Linux:   ~/.config/purpledisc/discord-app-id.txt
+# macOS:   ~/Library/Application Support/purpledisc/discord-app-id.txt
+# Windows: %AppData%\purpledisc\discord-app-id.txt
+echo your-application-id > ~/.config/purpledisc/discord-app-id.txt
+# (env var also works for the TUI: export PURPLEDISC_DISCORD_APP_ID=...)
 ```
 
 With Discord running, your now-playing track appears as "Listening to …" with a
@@ -348,8 +353,8 @@ it's silently skipped.
 > **GUI users (esp. macOS):** apps launched from Finder/Activities do **not**
 > inherit your shell environment, so set the id via the **file** above, not the
 > env var. The config file is read from the platform config dir *and*
-> `~/.config/opendeezer/` (so either path works). Check
-> `~/Library/Application Support/opendeezer/opendeezer.log` (macOS) — it logs
+> `~/.config/purpledisc/` (so either path works). Check
+> `~/Library/Application Support/purpledisc/purpledisc.log` (macOS) — it logs
 > `rich presence enabled (app …)` / `connected` once it's working.
 
 ## How it works
@@ -360,7 +365,7 @@ ARL ─login (gw-light)→ browse (gw + public REST): search, charts, artists,
                      → resolve track → encrypted CDN URL (MP3 128/320 or FLAC)
                      → streaming download → Blowfish BF_CBC_STRIPE decrypt
                        (plain stream for podcast episodes)
-                     → MP3 (go-mp3) / FLAC (mewkiz) decode → PCM ring
+                     → MP3 (minimp3; go-mp3 without cgo) / FLAC (dr_flac; mewkiz without cgo) decode → PCM ring
                      → malgo (miniaudio) output device → speakers
 ```
 
@@ -370,11 +375,11 @@ ARL ─login (gw-light)→ browse (gw + public REST): search, charts, artists,
   seek, ReplayGain, gapless, crossfade and output-device selection.
 - `internal/queue` — the shared playback queue (shuffle/repeat/history).
 - `internal/mpris` — Linux MPRIS media controls.
-- `internal/log` — leveled file logging (`$OPENDEEZER_LOG`).
+- `internal/log` — leveled file logging (`$PURPLEDISC_LOG`).
 - `internal/ui` — the Bubble Tea TUI.
 - `corelib` — the engine exposed as a C ABI (`-buildmode=c-archive` for
   macOS/Linux, `-buildmode=c-shared` DLL for Windows) so the native GUIs link it.
-- `mobile` — the engine exposed for **gomobile** (`Odmobile` AAR) so the Android
+- `mobile` — the engine exposed for **gomobile** (`Pdmobile` AAR) so the Android
   app drives it from Kotlin.
 
 ## Build from source
@@ -383,50 +388,51 @@ Clone the repo and build whichever client you want. They all use the same Go
 engine (`corelib`) underneath; each `build.sh` / `build.ps1` compiles the engine
 first, then the native app.
 
-**Terminal (any OS)** — Go 1.25+ and a C compiler (the malgo audio backend needs
+**Terminal (any OS)** — Go 1.27+ and a C compiler (the malgo audio backend needs
 cgo on every platform; Linux also needs `libasound2-dev`, Windows needs
-MinGW-w64):
+Visual Studio's clang or MinGW-w64):
 ```sh
-CGO_ENABLED=1 go build -o opendeezer ./cmd/opendeezer      # or: make build (also builds opendeezer-mcp)
+CGO_ENABLED=1 go build -o purpledisc ./cmd/purpledisc      # or: make build (also builds purpledisc-mcp)
 ```
 
 **macOS app** — macOS 26 (Tahoe) + Xcode 26, Go:
 ```sh
-cd gui/macos && make app        # -> OpenDeezer.app (universal: Apple Silicon + Intel)
+cd gui/macos && make app        # -> PurpleDisc.app (universal: Apple Silicon + Intel)
 ```
 
 **Linux — unified** (auto-picks GTK/Qt) — `libgtk-4-dev libadwaita-1-dev
 libjson-glib-dev libwebkitgtk-6.0-dev libsoup-3.0-dev qt6-base-dev
 qt6-webengine-dev libasound2-dev meson ninja-build cmake` + gcc, Go:
 ```sh
-cd gui/linux && ./build.sh && ./dist/opendeezer
+cd gui/linux && ./build.sh && ./dist/purpledisc
 ```
 
 **Linux — single toolkit:**
 ```sh
-cd gui/gnome && ./build.sh && ./opendeezer-gnome     # GTK4 / libadwaita
-cd gui/kde   && ./build.sh && ./opendeezer-kde       # Qt6 / Breeze
+cd gui/gnome && ./build.sh && ./purpledisc-gnome     # GTK4 / libadwaita
+cd gui/kde   && ./build.sh && ./purpledisc-kde       # Qt6 / Breeze
 ```
 
-**Windows app** — Windows 10/11, .NET 8 SDK + Windows App SDK,
-MinGW-w64 (Go cgo), Go:
+**Windows app** — Windows 10/11, .NET 11 SDK (Native AOT) + Windows App SDK,
+Visual Studio's clang or MinGW-w64 (Go cgo), Go:
 ```powershell
-cd gui\windows; .\build.ps1     # MinGW builds the engine DLL, then `dotnet publish`
+cd gui\windows; .\build.ps1     # cgo builds the engine DLL, then `dotnet publish`
 ```
 
-**Android app** — Go, JDK 17, Android SDK + NDK, and gomobile. `build.sh` binds
-the engine to an `Odmobile` AAR, then Gradle assembles the APK:
+**Android app** — Go, JDK 21, Android SDK (platform 37.2), NDK r30, and gomobile. `build.sh` binds
+the engine to an `Pdmobile` AAR, then Gradle assembles the APK:
 ```sh
-cd gui/android && ./build.sh    # -> app/build/outputs/apk/debug/*.apk
+cd gui/android && ./build.sh    # -> app/build/outputs/apk/mobile/debug/app-mobile-debug.apk
+                                #    app/build/outputs/apk/tv/debug/app-tv-debug.apk
 ```
 
 ## FAQ
 
 **How do I log in?**
 In the GUIs, click **Log in with Deezer** — an embedded web view opens the real
-Deezer login, and once you sign in, OpenDeezer reads the `arl` session cookie
+Deezer login, and once you sign in, Purple Disc reads the `arl` session cookie
 automatically and saves it locally. Manual ARL entry is still there as a
-fallback. The TUI uses `DEEZER_ARL` / `opendeezer -save-arl <arl>`.
+fallback. The TUI uses `DEEZER_ARL` / `purpledisc -save-arl <arl>`.
 
 **Does it have Flow / podcasts / charts / lyrics?**
 Yes — Deezer Flow (personalized stream), podcast search + episode playback,
@@ -438,13 +444,13 @@ playlists.
 
 **Can I choose the output device or use gapless/crossfade?**
 Yes. The audio engine (malgo/miniaudio) supports output-device selection,
-gapless transitions, crossfade and ReplayGain — all in settings (or TUI keys
-`d` / `ctrl+g` / `x` / `R`).
+gapless transitions, crossfade and ReplayGain — all in settings (the TUI's
+Settings screen, key `,`).
 
 **Is there a sleep timer?**
-Yes. Pause after 15/30/45/60 minutes or at the end of the current track, with a
-smooth fade-out. It's in each app's settings, on the phone web remote, and on the
-TUI key `T` (cycles off → 15 → 30 → 45 → 60 min → end of track).
+Yes. Pause after 5/10/20/30/45/60 minutes or at the end of the current track, with
+a smooth fade-out. It's in each app's settings, on the phone web remote, and on the
+TUI key `T` (cycles off → 5 → 10 → 20 → 30 → 45 → 60 min → end of track).
 
 **What's an ARL?**
 Your Deezer session token — the `arl` cookie from a logged-in `deezer.com`
@@ -458,14 +464,14 @@ your session (the ARL).
 
 **Do I need Deezer Premium?**
 No — a **free** Deezer account works. Deezer Free streams the full library at
-128 kbps. OpenDeezer plays full tracks, as Deezer's own web player does, but none
+128 kbps. Purple Disc plays full tracks, as Deezer's own web player does, but none
 of the audio ads Deezer plays on the free tier. It reports your plays to Deezer as
 the web player does, which credits artists. Free settings include an
 at-your-own-risk toggle to turn play reporting off. A
 **paid plan** unlocks higher quality (Premium for MP3 320, HiFi for FLAC) and
 downloads. (A track with no full-length source for your account falls back to
 Deezer's 30-second preview, marked as such — the exception, not the rule.)
-OpenDeezer only plays what your own account can already reach.
+Purple Disc only plays what your own account can already reach.
 
 **Can I download tracks?**
 Yes, with a **paid plan** — the current or selected track saves to disk as a
@@ -477,8 +483,7 @@ what you save for personal use.
 
 **Does my ARL get uploaded anywhere?**
 No. Login, decrypt and decode all run on your machine; the only requests that
-leave are to Deezer itself. The in-browser config generator never uploads your
-token either.
+leave are to Deezer itself.
 
 **Is this legal? Will my account get banned?**
 Grey zone. It reaches Deezer the unofficial way and plays/decrypts your own
@@ -487,8 +492,8 @@ third-party apps. Personal/educational use, your own account, your own risk. Not
 affiliated with Deezer.
 
 **Does it support HiFi / FLAC?**
-Yes — if your account is HiFi-entitled. Pick HiFi in settings (or press `h` in
-the TUI); it streams lossless FLAC.
+Yes — if your account is HiFi-entitled. Pick HiFi in settings (in the TUI,
+Settings > Audio quality); it streams lossless FLAC.
 
 **Why not just use the official app?**
 Mostly because it's a reverse-engineering project and a learning exercise. You

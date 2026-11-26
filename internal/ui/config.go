@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // LoadARL resolves the Deezer ARL from, in order: $DEEZER_ARL, then
-// ~/.config/opendeezer/arl.txt. Returns "" if neither is set.
+// ~/.config/purpledisc/arl.txt. Returns "" if neither is set.
 func LoadARL() string {
 	if v := strings.TrimSpace(os.Getenv("DEEZER_ARL")); v != "" {
 		return v
@@ -28,7 +28,7 @@ func LoadARL() string {
 	return strings.TrimSpace(string(b))
 }
 
-// SaveARL writes the ARL to ~/.config/opendeezer/arl.txt (0600, atomically).
+// SaveARL writes the ARL to ~/.config/purpledisc/arl.txt (0600, atomically).
 func SaveARL(arl string) error {
 	return config.WriteFile("arl.txt", strings.TrimSpace(arl)+"\n")
 }
@@ -43,7 +43,7 @@ func loadPlayback() config.Playback {
 	}
 	pb = config.Playback{Gapless: true}
 	if err := config.SavePlayback(pb); err != nil {
-		odlog.Warn("playback.json: %v", err)
+		pdlog.Warn("playback.json: %v", err)
 	}
 	return pb
 }
@@ -56,7 +56,7 @@ func (m *Model) savePlayback(edit func(*config.Playback)) {
 			CrossfadeMS: m.player.CrossfadeMS(), ReplayGain: m.player.ReplayGain(), GainTarget: m.player.ReplayGainTarget()}
 	}
 	if err := config.UpdatePlayback(current, edit); err != nil {
-		odlog.Warn("playback.json: %v", err)
+		pdlog.Warn("playback.json: %v", err)
 	}
 }
 func saveStringFile(name, v string) error {

@@ -1,9 +1,9 @@
 #!/bin/bash -eu
-# Compile OpenDeezer's native Go fuzzers (testing.F) into libFuzzer targets.
+# Compile Purple Disc's native Go fuzzers (testing.F) into libFuzzer targets.
 # Invoked by ClusterFuzzLite and OSS-Fuzz inside the base-builder-go image.
-cd "$SRC/opendeezer"
+cd "$SRC/purpledisc"
 
-MOD=github.com/Cycl0o0/OpenDeezer/v3
+MOD=github.com/Scharkenberg/PurpleDisc/v4
 
 # compile_native_go_fuzzer rewrites each testing.F harness to use go-118-fuzz-
 # build's shim, so that package must resolve in the module. Add it here (the

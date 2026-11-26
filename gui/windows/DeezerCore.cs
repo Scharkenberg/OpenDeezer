@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization.Metadata;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static partial class DeezerCore
 {
@@ -46,6 +46,8 @@ internal static partial class DeezerCore
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZAccountJSON();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZChartsJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZGenresJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZGenreChartsJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistProfileJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZArtistTopJSON(string id);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZTrackInfoJSON(string id);
@@ -98,6 +100,7 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetClientInfo(string client, string device);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDiscoverDevices(int timeoutMS);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZConnectDevice(string addr);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZTakeOverJSON(string trackId);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZDisconnectDevice();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZConnectedDevice();
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZNowPlayingJSON();
@@ -211,6 +214,7 @@ internal static partial class DeezerCore
     }
 
     internal static Elsewhere Elsewhere() => Read(DZElsewhereJSON(), WireJson.Default.Elsewhere);
+    internal static TakeOver TakeOver(string trackId) => Read(DZTakeOverJSON(trackId), WireJson.Default.TakeOver);
     internal static Dictionary<string, EpisodeBookmark> EpisodeBookmarks() => Read(DZEpisodeBookmarksJSON(), WireJson.Default.DictionaryStringEpisodeBookmark);
 
     // The now-playing reply as UTF-8 bytes (the poll reads it when the now-playing version moved).
@@ -227,6 +231,8 @@ internal static partial class DeezerCore
     internal static Account Account() => Read(DZAccountJSON(), WireJson.Default.Account);
     internal static HomeReply Home() => Read(DZHomeJSON(), WireJson.Default.HomeReply);
     internal static CatalogReply Charts() => Read(DZChartsJSON(), WireJson.Default.CatalogReply);
+    internal static CatalogReply GenreCharts(string id) => Read(DZGenreChartsJSON(id), WireJson.Default.CatalogReply);
+    internal static GenresReply Genres() => Read(DZGenresJSON(), WireJson.Default.GenresReply);
     internal static CatalogReply Search(string q) => Read(DZSearchJSON(q), WireJson.Default.CatalogReply);
     internal static PlaylistsReply Playlists() => Read(DZPlaylistsJSON(), WireJson.Default.PlaylistsReply);
     internal static TracksReply Favorites() => Read(DZFavoritesJSON(), WireJson.Default.TracksReply);

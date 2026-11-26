@@ -1,13 +1,13 @@
-# Build the macOS SwiftUI app. `make app` produces OpenDeezer.app; `make run` opens it.
+# Build the macOS SwiftUI app. `make app` produces PurpleDisc.app; `make run` opens it.
 ROOT    := ../..
 CONFIG  := release
-APP     := OpenDeezer.app
-BIN     := OpenDeezer
+APP     := PurpleDisc.app
+BIN     := PurpleDisc
 BUILDIR := .build/$(CONFIG)
 # Match the SDK so the Go archive and Swift link target agree.
 export MACOSX_DEPLOYMENT_TARGET := 26.0
 
-.PHONY: all corelib build app run clean
+.PHONY: all corelib fonts build app run clean
 
 all: app
 
@@ -25,7 +25,12 @@ corelib:
 		-output Clib/libdeezercore.a
 	cp Clib/libdeezercore-arm64.h Clib/libdeezercore.h
 
-build: corelib
+# Inter is kept once, in assets/fonts; SwiftPM bundles only what is under the package.
+fonts:
+	mkdir -p Sources/PurpleDisc/Resources/Fonts
+	cp $(ROOT)/assets/fonts/InterVariable.ttf $(ROOT)/assets/fonts/Inter-OFL.txt Sources/PurpleDisc/Resources/Fonts/
+
+build: corelib fonts
 	swift build -c $(CONFIG) --arch arm64 --arch x86_64
 
 # Assemble a double-clickable universal .app bundle.
@@ -34,11 +39,11 @@ app: build
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp Info.plist $(APP)/Contents/Info.plist
 	cp .build/apple/Products/$(CONFIG)/$(BIN) $(APP)/Contents/MacOS/$(BIN)
-	cp $(ROOT)/assets/OpenDeezer.icns $(APP)/Contents/Resources/OpenDeezer.icns
+	cp $(ROOT)/assets/PurpleDisc.icns $(APP)/Contents/Resources/PurpleDisc.icns
 	# Localized resources (Bundle.module). Its generated accessor searches
 	# Bundle.main.resourceURL, so the .bundle must sit in Contents/Resources —
 	# without this copy Bundle.module fatalErrors at runtime.
-	cp -R .build/apple/Products/$(CONFIG)/OpenDeezer_OpenDeezer.bundle \
+	cp -R .build/apple/Products/$(CONFIG)/PurpleDisc_PurpleDisc.bundle \
 		$(APP)/Contents/Resources/
 	@echo "built $(APP) (universal)"
 

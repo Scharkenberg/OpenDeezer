@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // pumpPCM pulls PCM from p as fast as it decodes until the test ends.

@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// setReusePort enables SO_REUSEADDR + SO_REUSEPORT so several OpenDeezer
+// setReusePort enables SO_REUSEADDR + SO_REUSEPORT so several Purple Disc
 // instances on one host can all bind UDP :Port and receive multicast probes.
 func setReusePort(c syscall.RawConn) error {
 	var serr error

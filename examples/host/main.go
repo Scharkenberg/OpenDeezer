@@ -1,5 +1,5 @@
-// host is the inbound side of OpenDeezer Connect: it makes this process a
-// device that other OpenDeezer clients can discover on the LAN and control.
+// host is the inbound side of Purple Disc Connect: it makes this process a
+// device that other Purple Disc clients can discover on the LAN and control.
 // It is the mirror of examples/connect (which discovers and drives a device).
 //
 // Usage: DEEZER_ARL=<your_arl> go run ./examples/host
@@ -18,8 +18,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/sdk/connect"
-	dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/sdk/connect"
+	dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 func main() {
@@ -101,7 +101,7 @@ func main() {
 	}
 	defer host.Close()
 
-	fmt.Printf("\nOpenDeezer Connect host advertising on the LAN.\n")
+	fmt.Printf("\nPurpleDisc Connect host advertising on the LAN.\n")
 	fmt.Printf("Control endpoint: %s\n", host.Addr())
 	fmt.Println("Other devices can now discover and control this one.")
 	fmt.Println("Press Ctrl-C to stop.")

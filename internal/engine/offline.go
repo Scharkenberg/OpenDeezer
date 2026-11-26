@@ -21,12 +21,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 const offlineFileName = "offline.json"
@@ -76,7 +76,7 @@ func offlineLocked() *offlineData {
 		if dir, err := config.Dir(); err == nil {
 			if b, err := os.ReadFile(filepath.Join(dir, offlineFileName)); err == nil {
 				if err := json.Unmarshal(b, &off); err != nil {
-					odlog.Warn("%s: %v", offlineFileName, err)
+					pdlog.Warn("%s: %v", offlineFileName, err)
 					off = offlineData{}
 				}
 			}
@@ -234,7 +234,7 @@ func rememberUser(uid string) {
 		return
 	}
 	if err := saveOffline(); err != nil {
-		odlog.Warn("%s: %v", offlineFileName, err)
+		pdlog.Warn("%s: %v", offlineFileName, err)
 	}
 }
 
@@ -469,7 +469,7 @@ func syncPinned(c *deezer.Client, kind, id string, ts []deezer.Track, total int)
 	dropUnusedTracksLocked()
 	offMu.Unlock()
 	if err := pinsChanged(); err != nil {
-		odlog.Warn("offline %s %s: %v", kind, id, err)
+		pdlog.Warn("offline %s %s: %v", kind, id, err)
 	}
 	startJob(c, coll)
 }
@@ -513,7 +513,10 @@ func AlbumTracks(id string) ([]deezer.Track, error) {
 // every pin of every account, with their fetches.
 func ClearCache(includePinned bool) error {
 	if includePinned {
-		dropJobs(func(*offlineJob) bool { return true })
+		// A stopped fetch still under way would record its track after the wipe.
+		for _, j := range dropJobs(func(*offlineJob) bool { return true }) {
+			<-j.done
+		}
 		offMu.Lock()
 		d := offlineLocked()
 		d.Collections, d.Tracks = nil, map[string]offlineTrack{}
@@ -670,7 +673,7 @@ loop:
 				j.cancel()
 			default:
 				j.Failed++
-				odlog.Warn("offline %s %s: track %s: %v", coll.Kind, coll.ID, id, err)
+				pdlog.Warn("offline %s %s: track %s: %v", coll.Kind, coll.ID, id, err)
 			}
 			jobMu.Unlock()
 		})
@@ -680,6 +683,9 @@ loop:
 		storePictures(ctx, mc, coll) // after the tracks: a single track's metadata comes with its fetch
 	}
 	applyPins(caches.Current())
+	if mc != nil {
+		mc.Flush()
+	}
 	// The fetched tracks' stream meta, kept in the index until this point.
 	serr := saveOffline()
 	jobMu.Lock()
@@ -783,8 +789,8 @@ func setTrackFetched(id string, dto deezer.Track, m mediacache.StreamMeta) (pins
 	return all[id+"."+m.Format], named
 }
 
-// storePictures stores coll's cover and its tracks' pictures, pinned. A picture that
-// fails to store is shown from its CDN URL.
+// storePictures stores coll's cover and its tracks' pictures, pinned, as many at once as
+// the tracks (fetchSlots). A picture that fails to store is shown from its CDN URL.
 func storePictures(ctx context.Context, mc *mediacache.Cache, coll offlineColl) {
 	offMu.Lock()
 	urls := []string{coll.Cover}
@@ -794,6 +800,8 @@ func storePictures(ctx context.Context, mc *mediacache.Cache, coll offlineColl) 
 	pins, _ := wantedPinsLocked()
 	offMu.Unlock()
 	seen := map[string]bool{}
+	var wg sync.WaitGroup
+	defer wg.Wait()
 	for _, u := range urls {
 		k := pictureKey(u)
 		if k == "" || seen[k] {
@@ -803,9 +811,17 @@ func storePictures(ctx context.Context, mc *mediacache.Cache, coll offlineColl) 
 		if _, ok := mc.Path(k); ok {
 			continue
 		}
-		if err := storePicture(ctx, mc, u, k, pins[k]); err != nil {
-			odlog.Debug("offline picture %s: %v", u, err)
+		select {
+		case fetchSlots <- struct{}{}:
+		case <-ctx.Done():
+			return
 		}
+		wg.Go(func() {
+			defer func() { <-fetchSlots }()
+			if err := storePicture(ctx, mc, u, k, pins[k]); err != nil {
+				pdlog.Debug("offline picture %s: %v", u, err)
+			}
+		})
 	}
 }
 

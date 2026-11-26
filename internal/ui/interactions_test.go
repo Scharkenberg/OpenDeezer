@@ -5,28 +5,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/listens"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/preload"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/queue"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // interactionModel builds a UI-only model (no client / audio device) with the
 // production browse-list configuration, for exercising key handling. The zero
 // audio.Player has no output: it reports Stopped and its non-output calls work.
 func interactionModel(s screen) *Model {
-	l := newBrowseList()
-	l.SetSize(80, 24)
 	m := &Model{
 		screen: s,
-		list:   l,
 		search: textinput.New(),
 		q:      queue.New(),
 		player: &audio.Player{},
@@ -34,6 +33,8 @@ func interactionModel(s screen) *Model {
 		width:  80,
 		height: 24,
 	}
+	m.list = newBrowseList(m)
+	m.list.SetSize(80, 24)
 	m.preloads = preload.New(func() *audio.Player { return m.player }, m.resolvePreload)
 	m.listens = listens.New(func() listens.Sender { return nil })
 	return m
@@ -152,19 +153,22 @@ func TestArtistPageBuildsSectionedList(t *testing.T) {
 		t.Fatalf("screen = %v, want list", m.screen)
 	}
 	items := m.list.Items()
-	// 3 headers + 2 tracks + 1 album + 1 related.
-	if len(items) != 7 {
-		t.Fatalf("items = %d, want 7", len(items))
+	// 3 headers (the later two after a blank row) + 2 tracks + 1 album + 1 related.
+	if len(items) != 9 {
+		t.Fatalf("items = %d, want 9", len(items))
 	}
 	kinds := make([]rowKind, len(items))
 	for i, it := range items {
 		kinds[i] = it.(row).kind
 	}
-	want := []rowKind{rowSection, rowTrack, rowTrack, rowSection, rowAlbum, rowSection, rowArtist}
+	want := []rowKind{rowSection, rowTrack, rowTrack, rowSection, rowSection, rowAlbum, rowSection, rowSection, rowArtist}
 	for i := range want {
 		if kinds[i] != want[i] {
 			t.Fatalf("item %d kind = %v, want %v (%v)", i, kinds[i], want[i], kinds)
 		}
+	}
+	if items[3].(row).title != "" || items[4].(row).title == "" {
+		t.Fatalf("no blank row above the second section: %+v %+v", items[3], items[4])
 	}
 	if len(m.browse) != 2 || m.browse[0].ID != "a" {
 		t.Fatalf("browse should hold only the top tracks: %+v", m.browse)
@@ -173,13 +177,13 @@ func TestArtistPageBuildsSectionedList(t *testing.T) {
 		t.Fatalf("selection should start on the first entry, not the header: %d", m.list.Index())
 	}
 	// Enter on the album row opens it (returns a fetch command).
-	m.list.Select(4)
+	m.list.Select(5)
 	_, cmd := m.activate()
 	if cmd == nil {
 		t.Fatal("activating an album row should return a command")
 	}
 	// Section headers do nothing.
-	m.list.Select(3)
+	m.list.Select(4)
 	_, cmd = m.activate()
 	if cmd != nil {
 		t.Fatal("activating a section header should be a no-op")
@@ -321,8 +325,17 @@ func TestPlaylistOpsIgnoredOffPlaylistsScreen(t *testing.T) {
 	if m.plConfirm {
 		t.Fatal("X must not arm a delete outside the playlists screen")
 	}
-	if !m.updateDismissed {
-		t.Fatal("X should keep its update-dismiss role elsewhere")
+}
+
+// An available update is the home menu's first row, added when the check answers.
+func TestUpdateNoticeIsFirstMenuRow(t *testing.T) {
+	useTempConfig(t)
+	m := interactionModel(screenMenu)
+	m.showMenu()
+	_, _ = m.Update(updateCheckMsg{info: update.Info{Latest: "9.9.9", HasUpdate: true, URL: "https://example.invalid"}})
+	r := m.list.Items()[0].(row)
+	if r.action != actUpdate || !strings.Contains(r.title, "9.9.9") {
+		t.Fatalf("first menu row %+v", r)
 	}
 }
 
@@ -393,9 +406,9 @@ func TestBrowsePlayNextAndAddToEnd(t *testing.T) {
 	setTrackList(m, ts)
 	m.q.Set([]deezer.Track{{ID: "z", Name: "Playing"}}, 0)
 
-	// n on a selected track row queues it right after the current track.
+	// E on a selected track row queues it right after the current track.
 	m.list.Select(1) // track "b"
-	keyRunes(m, 'n')
+	keyRunes(m, 'E')
 	if m.q.Len() != 2 || m.q.Tracks()[1].ID != "b" || m.q.Index() != 0 {
 		t.Fatalf("play-next: tracks=%v idx=%d", m.q.Tracks(), m.q.Index())
 	}
@@ -405,12 +418,11 @@ func TestBrowsePlayNextAndAddToEnd(t *testing.T) {
 	if m.q.Len() != 3 || m.q.Tracks()[2].ID != "c" {
 		t.Fatalf("append: tracks=%v", m.q.Tracks())
 	}
-	// n with no track row selected falls back to "next track".
-	m.list.SetItems(nil)
+	// n is the next track, also with a track row selected.
 	before := m.q.Index()
 	keyRunes(m, 'n')
-	if m.q.Index() != before+1 {
-		t.Fatalf("n without a track row should advance playback: %d -> %d", before, m.q.Index())
+	if m.q.Index() != before+1 || m.q.Len() != 3 {
+		t.Fatalf("n should advance playback: %d -> %d, queue %d", before, m.q.Index(), m.q.Len())
 	}
 }
 
@@ -460,20 +472,83 @@ func TestMouseWheelScrollsListAndClickSelectsRow(t *testing.T) {
 		t.Fatalf("wheel up should move the cursor back, index=%d", m.list.Index())
 	}
 
-	// Click on the third row: y = header(2) + 2*stride(3) = 8.
-	_, _ = m.Update(tea.MouseMsg{X: 4, Y: 8, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	if m.list.Index() != 2 {
-		t.Fatalf("click should select row 2, index=%d", m.list.Index())
-	}
-	// A click on the spacing row between items is ignored.
-	_, _ = m.Update(tea.MouseMsg{X: 4, Y: 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	if m.list.Index() != 2 {
-		t.Fatalf("spacing-row click must be ignored, index=%d", m.list.Index())
+	// Row n of a track list is under the header and the column header, at 80 and at
+	// 120 columns (where the side panel starts).
+	for _, w := range []int{80, 120} {
+		m.width = w
+		m.list.Select(0)
+		l := m.layout()
+		if (w == 120) != (l.panel > 0) || l.head != 1 {
+			t.Fatalf("width %d: panel %d, head %d", w, l.panel, l.head)
+		}
+		y := l.top + l.head + 2
+		_, _ = m.Update(tea.MouseMsg{X: 4, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		if m.list.Index() != 2 {
+			t.Fatalf("width %d: click should select row 2, index=%d", w, m.list.Index())
+		}
+		// The title row, the column header and below the last item do nothing.
+		for _, y := range []int{0, l.top, l.top + l.head + 5} {
+			_, _ = m.Update(tea.MouseMsg{X: 4, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+			if m.list.Index() != 2 || m.screen != screenList {
+				t.Fatalf("width %d: click on row %d must be ignored, index=%d", w, y, m.list.Index())
+			}
+		}
 	}
 	// A second click on the selected row activates it (play => queue commit).
-	_, cmd := m.Update(tea.MouseMsg{X: 4, Y: 8, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m.width = 80
+	_, cmd := m.Update(tea.MouseMsg{X: 4, Y: 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	if cmd == nil || m.q.Len() != 5 || m.q.Index() != 2 {
 		t.Fatalf("click-on-selected should activate: qlen=%d idx=%d", m.q.Len(), m.q.Index())
+	}
+}
+
+// A click on a header view opens it; Browse goes back to the list. A click on the
+// queue's row n selects entry n. A click in the side panel opens Now Playing.
+func TestMouseClickHeaderViewsQueueRowsAndPanel(t *testing.T) {
+	m := interactionModel(screenList)
+	setTrackList(m, testTracks(3))
+	m.q.Set(testTracks(4), 0)
+	click := func(x, y int) {
+		_, _ = m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	}
+	tabs := m.layout().tabs
+	if len(tabs) != len(views) {
+		t.Fatal("no view switches at 80 columns")
+	}
+	click(tabs[2][0], 0)
+	if m.screen != screenQueue {
+		t.Fatalf("click on Queue opened %v", m.screen)
+	}
+	click(2, 4) // under the header and the column header: entry 2 ("c")
+	if m.queueSel != 2 {
+		t.Fatalf("queue click selected %d, want 2", m.queueSel)
+	}
+	click(tabs[0][0], 0)
+	if m.screen != screenList {
+		t.Fatalf("click on Browse went to %v", m.screen)
+	}
+	m.width = 120
+	click(110, 5)
+	if m.screen != screenNowPlaying {
+		t.Fatalf("click in the panel opened %v", m.screen)
+	}
+}
+
+// The progress bar is the footer's first row: position, the bar with its knob, length.
+// A click at a quarter of the bar asks a seek to a quarter of the track.
+func TestProgressBarRowAndSeek(t *testing.T) {
+	m := interactionModel(screenList)
+	m.ready = true
+	l := m.layout()
+	bar := ansi.Strip(strings.Split(m.View(), "\n")[l.bar])
+	if !strings.HasPrefix(bar, " 0:00 ●─") || !strings.HasSuffix(bar, "─ 0:00") {
+		t.Fatalf("bar row %q", bar)
+	}
+	if ms, ok := l.seekAt(l.barX+l.barW/4, 240000); !ok || ms != 60000 {
+		t.Fatalf("a click at 25%% seeks to %d (%v)", ms, ok)
+	}
+	if _, ok := l.seekAt(l.barX-1, 240000); ok {
+		t.Fatal("a click on the position seeks")
 	}
 }
 
@@ -829,7 +904,8 @@ func TestSpinnerTicksOnlyWhileLoading(t *testing.T) {
 	if _, cmd := m.Update(spinner.TickMsg{}); cmd != nil || m.spinning {
 		t.Fatal("idle spinner kept ticking")
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}) // starts a load
+	m.q.Set(testTracks(1), 0)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}) // starts a load
 	if cmd == nil || !m.spinning {
 		t.Fatal("loading did not restart the spinner")
 	}
@@ -934,5 +1010,110 @@ func TestRadioMoreAppendsToItsQueueOnly(t *testing.T) {
 	_, _ = m.Update(radioMoreMsg{ctx: flow, tracks: []deezer.Track{{ID: "x"}, {ID: "y"}}})
 	if ts := m.q.Tracks(); len(ts) != 5 || ts[3].ID != "x" || ts[4].ID != "y" {
 		t.Fatalf("queue %v", ts)
+	}
+}
+
+func activateMenuRow(m *Model, r row) tea.Cmd {
+	m.list.SetItems([]list.Item{r})
+	m.list.ResetSelected()
+	_, cmd := m.activate()
+	return cmd
+}
+
+// Flow is one tap: choosing it requests a stream that plays at once, with no
+// tracklist in between; choosing it again while it plays toggles play/pause.
+func TestFlowPlaysAtOnceAndTogglesWhenPlaying(t *testing.T) {
+	m := interactionModel(screenMenu)
+	flowRow := row{kind: rowMenu, action: actFlow}
+	if cmd := activateMenuRow(m, flowRow); cmd == nil || !m.loading || m.screen != screenMenu || m.q.Len() != 0 {
+		t.Fatalf("flow: cmd %v, loading %v, screen %v, queue %d", cmd != nil, m.loading, m.screen, m.q.Len())
+	}
+
+	flow := listens.Context{Type: "dynamic_page_user_radio", ID: "7"}
+	m.spinning = true
+	if _, cmd := m.Update(navMsg{gen: m.nav, msg: playNowMsg{tracks: testTracks(3), ctx: flow}}); cmd == nil {
+		t.Fatal("the Flow batch did not start playing")
+	}
+	if curID(m) != "a" || m.playCtx != flow || !m.resolving {
+		t.Fatalf("playing %q from %v, resolving %v", curID(m), m.playCtx, m.resolving)
+	}
+
+	m.playing, m.resolving, m.loading = true, false, false
+	seq := m.pickSeq.Load()
+	if cmd := activateMenuRow(m, flowRow); cmd != nil || m.loading || m.pickSeq.Load() != seq || m.q.Len() != 3 {
+		t.Fatalf("flow while playing restarted it: cmd %v, loading %v", cmd != nil, m.loading)
+	}
+}
+
+// A mood starts its own stream unless that mood is what plays.
+func TestFlowMoodTogglesOnlyItself(t *testing.T) {
+	m := interactionModel(screenList)
+	m.q.Set(testTracks(2), 0)
+	m.playing = true
+	m.playCtx = listens.Context{Type: "dynamic_page_flow_config", ID: "chill"}
+	if cmd := activateMenuRow(m, row{kind: rowMenu, action: actFlowMood, id: "chill"}); cmd != nil || m.loading {
+		t.Fatal("the playing mood was restarted")
+	}
+	if cmd := activateMenuRow(m, row{kind: rowMenu, action: actFlowMood, id: "focus"}); cmd == nil || !m.loading {
+		t.Fatal("another mood did not start")
+	}
+	m.loading = false
+	if cmd := activateMenuRow(m, row{kind: rowMenu, action: actFlow}); cmd == nil || !m.loading {
+		t.Fatal("Flow did not start while a mood played")
+	}
+}
+
+// The moods list offers each mood as a row that starts it.
+func TestFlowMoodsList(t *testing.T) {
+	m := interactionModel(screenMenu)
+	_, _ = m.Update(flowMoodsMsg{moods: []deezer.FlowMood{{ID: "chill", Title: "Chill"}, {ID: "focus"}}})
+	items := m.list.Items()
+	if m.screen != screenList || len(items) != 2 {
+		t.Fatalf("screen %v, %d rows", m.screen, len(items))
+	}
+	for i, want := range []row{{title: "Chill", id: "chill"}, {title: "focus", id: "focus"}} {
+		r := items[i].(row)
+		if r.kind != rowMenu || r.action != actFlowMood || r.id != want.id || r.title != want.title {
+			t.Fatalf("row %d: %+v", i, r)
+		}
+	}
+	found := false
+	for _, it := range m.menuRows() {
+		found = found || it.(row).action == actFlowMoods
+	}
+	if !found {
+		t.Fatal("no Flow moods row on the home menu")
+	}
+}
+
+// The sleep timer cycles through the apps' presets.
+func TestSleepTimerPresets(t *testing.T) {
+	m := interactionModel(screenMenu)
+	var got []string
+	for range len(sleepMinutes) {
+		m.cycleSleepTimer()
+		switch p := m.player; {
+		case !p.SleepActive():
+			got = append(got, "off")
+		case p.SleepEndOfTrack():
+			got = append(got, "eot")
+		default:
+			got = append(got, fmtMS((p.SleepRemainingMS()+59999)/60000*60000))
+		}
+	}
+	want := "5:00 10:00 20:00 30:00 45:00 60:00 eot off"
+	if s := strings.Join(got, " "); s != want {
+		t.Fatalf("cycle %q, want %q", s, want)
+	}
+}
+
+// The format label names the codec only.
+func TestCodecLabel(t *testing.T) {
+	for raw, want := range map[string]string{
+		"": "", "MP3_128": "MP3", "MP3_320": "MP3", "mp3_64": "MP3", "FLAC": "FLAC", "AAC_96": "AAC", "OPUS": "OPUS",
+	} {
+		if got := codecLabel(raw); got != want {
+			t.Errorf("codecLabel(%q) = %q, want %q", raw, got, want)
+		}
 	}
 }

@@ -9,7 +9,7 @@ package main
 import "C"
 
 import (
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/engine"
 )
 
 // DZControlConfigJSON returns the remote-control settings {enabled, addr, token, lan,

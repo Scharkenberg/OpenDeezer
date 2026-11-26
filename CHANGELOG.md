@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to OpenDeezer are documented here. The format follows
+All notable changes to Purple Disc are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.0.0]
 
 ### Added
-- **One player at a time, like Deezer's own players.** OpenDeezer pauses when
+- **One player at a time, like Deezer's own players.** Purple Disc pauses when
   another player of the account (the Deezer web player, a phone) starts a
   track, and announces its own starts so those players pause. Settings ›
   Playback › *One player at a time* turns it off (`playAlongside` in
@@ -65,18 +65,53 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Deezer's apps. *Unpin from Home* takes them off.
 
 ### Changed
-- **OpenDeezer presents itself to Deezer as Deezer's web player**, whose
+- **OpenDeezer is now Purple Disc for Deezer** ("Purple Disc" for short,
+  `PurpleDisc` where a name cannot hold a space), by Scharkenberg, based on
+  OpenDeezer by Cycl0o0. The source lives at
+  <https://github.com/Scharkenberg/PurpleDisc>; the Go module is
+  `github.com/Scharkenberg/PurpleDisc/v4`. Everything that carried the old name
+  carries the new one: binaries (`purpledisc`, `purpledisc-mcp`,
+  `PurpleDisc.exe`), the settings and cache folders (`purpledisc`,
+  `purpledisc-cache`), environment variables (`PURPLEDISC_*`), the web
+  remote's headers (`X-PurpleDisc-*`), the Android package
+  `dev.scharkenberg.purpledisc` and the desktop and Apple ids
+  `dev.scharkenberg.PurpleDisc`. Nothing is migrated: sign in again after
+  updating, and the old app stays installed beside the new one until you
+  remove it.
+- **Purple Disc presents itself to Deezer as Deezer's web player**, whose
   session it uses: a current browser's User-Agent, the web player's headers
   on gateway calls, and its current build number in listen reports and on the
   live connection. The build number is read after each login and kept.
-  Before, requests said `OpenDeezer/0.1`.
+  Before, requests said `PurpleDisc/0.1`.
+- **The terminal app redrawn.** One header row (the list's title and count,
+  or the search box, and the views `Browse · c Playing · u Queue · l Lyrics`),
+  one line per item, and a footer of three rows: progress, now playing with
+  its badges (like, codec, shuffle, repeat, sleep, volume), and the keys of
+  the screen in front. Status messages clear after 4 s. Now playing centers
+  the cover and the track with what plays next; lyrics are centered and follow
+  the song to the line. Track lists have columns (title, artist, album) under
+  a header row; from 100 columns a side panel shows the cover and track, or
+  the app's mark, the account and recent listening. Covers are averaged
+  rather than sampled and lend their color to the progress bar. Only symbols
+  every terminal font draws as text are used (no emoji forms), and shuffle,
+  repeat, sleep and volume are labeled chips.
+- **Terminal app keys.** `n` / `p` are next and previous track everywhere;
+  `e` adds the selected track to the queue and `E` plays it next. The new
+  Settings screen (`,`) shows and changes quality, ReplayGain, equalizer and
+  preset, mono, crossfade, gapless, output device, stream cache, theme,
+  language and play reporting, which had keys of their own: `h`, `x`, `C`,
+  `ctrl+g`, `R`, `E`, `ctrl+e`, `M`, `d`, `A` and `t` are gone. The update
+  notice is the first row of the home menu (`U` and `X` are gone); on the
+  About screen, enter checks for updates. Flow moods, charts by genre and
+  Go to album (`b`) came to the terminal app, and its sleep timer cycles
+  5, 10, 20, 30, 45 and 60 min, then end of track.
 
 ### Removed
-- **The unused free-tier ad schedule.** OpenDeezer read Deezer's audio-ad
+- **The unused free-tier ad schedule.** Purple Disc read Deezer's audio-ad
   cadence but never played an ad; the code and the README's claim that Free is
   "ad-supported like the web player" are gone. Play reporting is unchanged.
 - **The setting that said it disables ads** is now *Don't report my plays*,
-  under *Play reporting*, in every app and language: OpenDeezer plays no ads
+  under *Play reporting*, in every app and language: Purple Disc plays no ads
   either way, and the text says what the switch really does.
 
 ### Fixed
@@ -125,7 +160,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   account's target loudness is turned down to it; quieter tracks are left as
   they are. Before, quieter tracks were turned down further.
 - **No 30-second preview when the session needs renewing.** When Deezer
-  refuses an expired license, OpenDeezer now renews it, and an expired track
+  refuses an expired license, Purple Disc now renews it, and an expired track
   token is fetched again. Before, both played the preview. The preview now
   plays only when Deezer refuses the track itself, and it comes from Deezer's
   media service, as in its own players. Requests go to the media host Deezer
@@ -139,7 +174,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [3.1.4]
 
 ### Added
-- **Store-ready distribution packaging.** OpenDeezer now includes source-build
+- **Store-ready distribution packaging.** Purple Disc now includes source-build
   metadata for F-Droid, phone and TV configurations for Obtainium, a strictly
   confined Snap recipe, and a Scoop manifest. Homebrew, WinGet and AUR metadata
   now carry verified release checksums, with one release helper keeping every
@@ -197,7 +232,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **A configured control token is honored on the LAN control server.** A token
-  set via `OPENDEEZER_CONTROL_TOKEN` (or `control-token.txt`) is now applied by
+  set via `PURPLEDISC_CONTROL_TOKEN` (or `control-token.txt`) is now applied by
   the phone remote / Connect host even when the control API was not separately
   enabled, instead of silently falling back to same-account authentication.
 - Made the LAN discovery rebind and the mobile control-server token check
@@ -215,7 +250,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [3.0.0]
 
 ### Added
-- **OpenDeezer Connect, done right.** Repeat and shuffle now work in both
+- **Purple Disc Connect, done right.** Repeat and shuffle now work in both
   directions between any host and controller (the command was silently dropped
   before, depending on which client you used), and every client shows the host's
   real modes while casting. A controller can push its whole queue to the host,
@@ -253,8 +288,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Android reliability:** manual next/previous honor shuffle and repeat; the app
   adopts the engine queue when it changes; swipe-from-recents no longer leaves
   zombie playback; audio resumes after a transient focus loss.
-- **The Go module path is now `/v3`** (`go get github.com/Cycl0o0/OpenDeezer/v3`)
-  and `make` also builds `opendeezer-mcp`.
+- **The Go module path is now `/v3`** (`go get github.com/Scharkenberg/PurpleDisc/v4`)
+  and `make` also builds `purpledisc-mcp`.
 
 ### Fixed
 - **Connect security &amp; lifecycle:** a token-protected LAN control server can no
@@ -385,7 +420,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **More robust LAN discovery.** Connect re-probes periodically, also probes
   configured peers over unicast (so multicast-filtered networks like VPNs work),
   and rebinds when network interfaces change.
-- **Go module path is now `/v2`.** `go get github.com/Cycl0o0/OpenDeezer/v2`
+- **Go module path is now `/v2`.** `go get github.com/Scharkenberg/PurpleDisc/v2`
   resolves the current release; the v2.x SDK is reachable to third-party
   developers again (v2 tags were previously invisible to `go get`). The SDK now
   documents an additive-only stability guarantee across minor versions.
@@ -482,12 +517,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   playback falls back to Deezer's 30-second preview (`StreamPlan.Preview`, marked
   in the UI) — the exception, not the rule.
 - **Free-tier ads / play reporting, with an opt-out.** Like the official free
-  tier, OpenDeezer reports each play (`log.listen`) and reads the audio-ad
+  tier, Purple Disc reports each play (`log.listen`) and reads the audio-ad
   cadence (`deezer.adConfig`) so plays are counted (crediting artists) and ads
   are driven server-side. Free-account settings on every client expose an
   **at-your-own-risk "Disable ads" toggle** (stops play reporting — ad-free but
   denies artists their play count and breaks Deezer's terms), with a disclaimer.
-  Persisted via `$OPENDEEZER_DISABLE_ADS` / `ads-disabled.txt`; engine API
+  Persisted via `$PURPLEDISC_DISABLE_ADS` / `ads-disabled.txt`; engine API
   `Client.NowPlaying`/`SetAdsDisabled`; exports `DZSetAdsDisabled`/`DZAdsDisabled`
   (+ gomobile mirrors). (The audio ad itself is served by a third-party ad
   network and is not fetched/played; the schedule hook is in place for the
@@ -495,8 +530,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Download tracks to disk, on every client.** Save the current or selected
   track as a decrypted MP3/FLAC — TUI key `D`, and a "Download" action in the
   track menu of the macOS, GNOME, KDE, Windows and Android GUIs. The download
-  folder is configurable and shared across clients (`$OPENDEEZER_DOWNLOAD_DIR` /
-  `~/.config/opendeezer/download-dir.txt`, default `~/Music/OpenDeezer`).
+  folder is configurable and shared across clients (`$PURPLEDISC_DOWNLOAD_DIR` /
+  `~/.config/purpledisc/download-dir.txt`, default `~/Music/PurpleDisc`).
   Downloads require a paid plan (a free account has no full-length source to
   save) and are refused for preview-only tracks. New engine API
   `Client.SaveTrack`, `internal/deezer.DownloadTrack`; exports
@@ -513,7 +548,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signatures. Falls back to the previous debug build when the keystore secret is
   absent. See `docs/ANDROID_SIGNING.md`.
 - **Windows signing scaffolding** added (Azure Trusted Signing, opt-in via repo
-  secrets) so `OpenDeezer.exe` can be Authenticode-signed against SmartScreen once
+  secrets) so `PurpleDisc.exe` can be Authenticode-signed against SmartScreen once
   a certificate is configured; inert until the secrets are set. See
   `docs/WINDOWS_SIGNING.md`.
 
@@ -756,7 +791,7 @@ core and all eight clients:
 ## [1.5.2]
 
 ### Added
-- **Android TV**: a second Gradle flavor (`tv`, app id `fr.cyclooo.opendeezer.tv`)
+- **Android TV**: a second Gradle flavor (`tv`, app id `dev.scharkenberg.purpledisc.tv`)
   ships a D-pad-driven, 10-foot Compose UI on the leanback launcher. A
   Netflix/YouTube-style **left navigation rail** (Home / Search / Library /
   Settings) that expands with labels on focus; a cinematic **featured hero**;
@@ -768,7 +803,7 @@ core and all eight clients:
 - **WebView sign-in on Android TV**: log in with your real Deezer account and the
   ARL is captured automatically — no token to type on a remote (manual-paste
   fallback kept).
-- **Android remote settings** (phone + TV): Settings now has an *OpenDeezer
+- **Android remote settings** (phone + TV): Settings now has an *Purple Disc
   Connect — make this device reachable* toggle (advertise as a Connect host, with
   the LAN address shown) and a *phone remote* toggle with QR + pairing code, plus
   a *play on another device* picker (discover / connect / disconnect). All persist
@@ -800,7 +835,7 @@ core and all eight clients:
 ### Fixed
 - **Home** now loads after login on GNOME/KDE (was empty when the sidebar's first
   row was current before sign-in).
-- **Repeat/shuffle over OpenDeezer Connect** now take effect: the controller
+- **Repeat/shuffle over Purple Disc Connect** now take effect: the controller
   auto-advances when the remote finishes a track and applies repeat/shuffle.
 
 ## [1.5.0]
@@ -814,7 +849,7 @@ core and all eight clients:
 ### Security
 - **Continuous fuzzing**: native Go fuzz harnesses for the BF_CBC_STRIPE decrypt
   and FLAC decode paths, wired into CI via ClusterFuzzLite (OSS-Fuzz's engine).
-  Added `SECURITY.md` (report to security@cyclooo.fr) + `docs/FUZZING.md`.
+  Added `SECURITY.md` (private reports through GitHub's vulnerability reporting) + `docs/FUZZING.md`.
 
 ## [1.2.0]
 
@@ -836,7 +871,7 @@ core and all eight clients:
 
 ### Added
 - **Public Go SDK**: the engine is now a public library you can build on —
-  `sdk/deezer` (Deezer API + track decode/download), `sdk/connect` (OpenDeezer
+  `sdk/deezer` (Deezer API + track decode/download), `sdk/connect` (Purple Disc
   Connect LAN discovery + drive/host a device), `sdk/control` (control server +
   client and phone web remote), and `sdk/player` (in-process playback, cgo).
   Symmetric in/out APIs, runnable `examples/`, and full docs in `sdk/README.md`.
@@ -850,11 +885,11 @@ core and all eight clients:
   client (TUI + all GUIs).
 
 ### Fixed
-- **OpenDeezer Connect — disconnect**: disconnecting a device now stops playback
+- **Purple Disc Connect — disconnect**: disconnecting a device now stops playback
   on it instead of leaving it playing unattended.
-- **OpenDeezer Connect — Artist/Lyrics**: now resolve to the track actually
+- **Purple Disc Connect — Artist/Lyrics**: now resolve to the track actually
   playing on the connected device (previously showed the wrong track, or nothing).
-- **OpenDeezer Connect — repeat/shuffle**: changes are now forwarded to the
+- **Purple Disc Connect — repeat/shuffle**: changes are now forwarded to the
   connected device.
 - **Podcasts**: playing an episode after a song now shows the episode's
   now-playing info (title / show / artwork) instead of the previous track's.
@@ -877,7 +912,7 @@ core and all eight clients:
   the choppy intro / streaming glitches.
 
 ### Fixed
-- **KDE login**: the Deezer web login runs in a separate `opendeezer-login`
+- **KDE login**: the Deezer web login runs in a separate `purpledisc-login`
   helper process (QtWebEngine out-of-process), so it works in the dlopen'd
   unified launcher and can't crash the app (manual ARL remains a fallback).
 
@@ -953,8 +988,8 @@ core and all eight clients:
 - **Vim keys**: `j`/`k` move, `g`/`G` jump to top/bottom.
 - **Themes**: cycle color schemes with `t` (deezer · ocean · sunset · mono · matrix).
 - **Podcast-ready playback**: the player can play plain (unencrypted) CDN streams.
-- **Leveled file logging** (`internal/log`), level via `$OPENDEEZER_LOG`, written
-  to `opendeezer.log` (never stdout, so the TUI is unaffected).
+- **Leveled file logging** (`internal/log`), level via `$PURPLEDISC_LOG`, written
+  to `purpledisc.log` (never stdout, so the TUI is unaffected).
 - **CI**: build · vet · `go test -race` + coverage · golangci-lint · govulncheck,
   plus Dependabot for Go modules and GitHub Actions.
 

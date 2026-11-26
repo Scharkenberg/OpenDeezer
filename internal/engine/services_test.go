@@ -8,22 +8,21 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/preload"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/queue"
 )
 
 // clearRoutedRemote resets the Connect routing globals so a test that installs a
@@ -1118,18 +1117,28 @@ func resetOfflineGlobals() {
 	quality.Store(0)
 }
 
-// waitJobsDone waits until no offline fetch runs (failing t when one still
-// runs after 10 s; t nil just stops waiting).
+// waitJobsDone waits until no offline fetch runs. Fetches still running after 10 s are
+// canceled and waited for, so no cleanup swaps globals under them; then t fails (t nil
+// only stops waiting).
 func waitJobsDone(t *testing.T) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		jobMu.Lock()
-		running := slices.ContainsFunc(jobs, func(j *offlineJob) bool { return j.running })
+		var live []*offlineJob
+		for _, j := range jobs {
+			if j.running {
+				live = append(live, j)
+			}
+		}
 		jobMu.Unlock()
-		if !running {
+		if len(live) == 0 {
 			return
 		}
 		if time.Now().After(deadline) {
+			for _, j := range live {
+				j.cancel()
+				<-j.done
+			}
 			if t != nil {
 				t.Fatal("offline fetches still running")
 			}
@@ -1409,7 +1418,7 @@ func TestWebRemoteOffRestoresPriorServer(t *testing.T) {
 // The configured control server started at login replaces a phone-remote
 // server started before it, so turning the remote off later restores nothing.
 func TestStartServicesForgetsPhoneRemotePrior(t *testing.T) {
-	t.Setenv("OPENDEEZER_CONTROL", "127.0.0.1:0")
+	t.Setenv("PURPLEDISC_CONTROL", "127.0.0.1:0")
 	t.Cleanup(func() {
 		ctrlMu.Lock()
 		rebuildControlServer(control.Config{}, nil)
@@ -1456,6 +1465,84 @@ func TestAutoAdvanceSkipsUnresolvableWithNext(t *testing.T) {
 	}
 }
 
+// The engine's auto-advance steps over unavailable rows without asking for them: four
+// of them, then a playable track, which is the one it plays.
+func TestAutoAdvanceSkipsUnavailable(t *testing.T) {
+	t.Cleanup(resetEngineQueue)
+	u := func(id string) deezer.Track { return deezer.Track{ID: id, Unavailable: true} }
+	queueMu.Lock()
+	engineQ.Set([]deezer.Track{{ID: "a"}, u("u1"), u("u2"), u("u3"), u("u4"), {ID: "e"}}, 0)
+	queueMu.Unlock()
+
+	next, ok := engineQueueAdvance("a")
+	// The track returned is the only one engineAutoAdvance resolves.
+	if !ok || next.ID != "e" {
+		t.Fatalf("auto-advance gave %q (%v), want e", next.ID, ok)
+	}
+	if i := QueueIndex(); i != 5 {
+		t.Fatalf("cursor %d, want 5", i)
+	}
+}
+
+// Under shuffle and repeat-all with every other row unavailable, the one playable track
+// plays again at each finish; with no repeat and only unavailable rows ahead, Next leaves
+// the cursor where it was.
+func TestShuffleRepeatSkipsUnavailableToThePlayable(t *testing.T) {
+	t.Cleanup(resetEngineQueue)
+	queueMu.Lock()
+	engineQ.Set([]deezer.Track{{ID: "c"}, {ID: "a", Unavailable: true}, {ID: "b", Unavailable: true}}, 0)
+	engineQ.SetShuffle(true)
+	engineQ.SetRepeat(queue.RepeatAll)
+	queueMu.Unlock()
+	for i := range 20 {
+		if next, ok := engineQueueAdvance("c"); !ok || next.ID != "c" {
+			t.Fatalf("finish %d: next %q (%v), want c", i+1, next.ID, ok)
+		}
+	}
+
+	queueMu.Lock()
+	engineQ.Set([]deezer.Track{{ID: "x"}, {ID: "u1", Unavailable: true}, {ID: "u2", Unavailable: true}}, 0)
+	engineQ.SetShuffle(false)
+	engineQ.SetRepeat(queue.RepeatOff)
+	moved := stepPlayable(engineQ.Next)
+	at := engineQ.Index()
+	queueMu.Unlock()
+	if moved || at != 0 {
+		t.Fatalf("Next over unavailable rows only: moved %v, cursor %d; want false at 0", moved, at)
+	}
+}
+
+// A Next that finds nothing playable leaves the history as it was: Prev then goes to the
+// row before the cursor.
+func TestFailedStepKeepsHistory(t *testing.T) {
+	t.Cleanup(resetEngineQueue)
+	queueMu.Lock()
+	defer queueMu.Unlock()
+	engineQ.Set([]deezer.Track{{ID: "p0"}, {ID: "x"}, {ID: "u1", Unavailable: true}, {ID: "u2", Unavailable: true}}, 0)
+	engineQ.Next()
+	if stepPlayable(engineQ.Next) {
+		t.Fatal("Next over unavailable rows only moved")
+	}
+	if !stepPlayable(engineQ.Prev) {
+		t.Fatal("Prev did not move")
+	}
+	if c, _ := engineQ.Current(); c.ID != "p0" {
+		t.Fatalf("Prev after a failed Next gave %q, want p0", c.ID)
+	}
+}
+
+// The status carries the queue's current row, so a remote can show the track a Play starts.
+func TestStatusCarriesQueueIndex(t *testing.T) {
+	t.Cleanup(resetEngineQueue)
+	queueMu.Lock()
+	engineQ.Set([]deezer.Track{{ID: "a"}, {ID: "b"}}, 0)
+	engineQ.AlignIndex(1)
+	queueMu.Unlock()
+	if st := engineState(); st.QueueIndex == nil || *st.QueueIndex != 1 {
+		t.Fatalf("queueIndex %v, want 1", st.QueueIndex)
+	}
+}
+
 // An auto-advance whose queue ends before maxAdvanceFailures unresolvable
 // tracks still reports why it stopped.
 func TestAutoAdvanceFailsWhenQueueEnds(t *testing.T) {
@@ -1495,6 +1582,20 @@ func TestListenEntryKeepsArtworkAndLength(t *testing.T) {
 
 // Songs recorded without artwork or length get them from a track lookup, once
 // per id, also when the lookup fails; episodes are not looked up.
+func TestHistoryStatsTopTracksCarryArtwork(t *testing.T) {
+	setHistoryStore(history.New(filepath.Join(t.TempDir(), "history.jsonl")))
+	trackMetaMu.Lock()
+	trackMeta = map[string]deezer.Track{"7": {ArtworkURL: "pic7", DurationMS: 200000}}
+	trackMetaMu.Unlock()
+	if err := historyStore().Record(history.Entry{TrackID: "7", Title: "Seven", Artist: "A", StartedAt: time.Now().Unix(), DurationPlayedSec: 60}); err != nil {
+		t.Fatal(err)
+	}
+	top := HistoryStats(0)["topTracks"].([]jTrackStat)
+	if len(top) != 1 || top[0].ArtworkURL != "pic7" || top[0].DurationMS != 200000 {
+		t.Fatalf("top tracks = %+v, want track 7 with its artwork and length", top)
+	}
+}
+
 func TestFillHistoryMetaLooksUpEachTrackOnce(t *testing.T) {
 	var mu sync.Mutex
 	lookups := map[string]int{}

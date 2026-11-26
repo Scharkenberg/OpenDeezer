@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+PackageIdentifier: Scharkenberg.PurpleDisc
+PackageVersion: 4.0.0
+PackageLocale: en-US
+Publisher: Scharkenberg
+PublisherUrl: https://github.com/Scharkenberg
+PublisherSupportUrl: https://github.com/Scharkenberg/PurpleDisc/issues
+PackageName: PurpleDisc
+PackageUrl: https://github.com/Scharkenberg/PurpleDisc
+License: AGPL-3.0-only
+LicenseUrl: https://github.com/Scharkenberg/PurpleDisc/blob/v4.0.0/LICENSE
+PrivacyUrl: https://github.com/Scharkenberg/PurpleDisc/blob/main/PRIVACY.md
+ShortDescription: Native terminal client for browsing and streaming a Deezer library.
+Description: >-
+  PurpleDisc is an open-source terminal client that browses and streams a
+  Deezer library. It supports favorites, playlists, charts, artists, podcasts,
+  Flow, synchronized lyrics and library management. A Deezer account and access
+  to Deezer's proprietary service are required. PurpleDisc is not affiliated
+  with or endorsed by Deezer.
+ReleaseNotesUrl: https://github.com/Scharkenberg/PurpleDisc/releases/tag/v4.0.0
+Moniker: purpledisc
+Tags:
+  - deezer
+  - music
+  - tui
+  - terminal
+  - streaming
+  - download
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

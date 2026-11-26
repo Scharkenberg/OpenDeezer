@@ -1,4 +1,4 @@
-// connect discovers OpenDeezer devices on the local network and sends a
+// connect discovers Purple Disc devices on the local network and sends a
 // play/pause command to the first one found.
 //
 // Usage: DEEZER_ARL=<your_arl> go run ./examples/connect
@@ -13,8 +13,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/sdk/connect"
-	dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/sdk/connect"
+	dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 func main() {
@@ -31,14 +31,14 @@ func main() {
 	myID := client.UserID()
 	fmt.Printf("My Deezer user id: %s\n", myID)
 
-	// Discover OpenDeezer instances on the LAN.
+	// Discover Purple Disc instances on the LAN.
 	fmt.Println("Discovering devices (2 s)...")
 	devices, err := connect.Discover(2*time.Second, 0)
 	if err != nil {
 		log.Fatalf("discover: %v", err)
 	}
 	if len(devices) == 0 {
-		fmt.Println("No devices found. Make sure another OpenDeezer instance is running with the control API enabled.")
+		fmt.Println("No devices found. Make sure another Purple Disc instance is running with the control API enabled.")
 		return
 	}
 

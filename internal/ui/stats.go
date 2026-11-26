@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -68,11 +68,11 @@ func statsItems(s statsMsg) []list.Item {
 	}
 	items := []list.Item{row{
 		kind:  rowInfo,
-		title: "⏱  " + i18n.Tf("Listening time (last 30 days): %s", fmtListened(s.totalSec)),
+		title: i18n.Tf("Listening time (last 30 days): %s", fmtListened(s.totalSec)),
 		desc:  i18n.T("local history — never leaves this machine"),
 	}}
 	if len(s.recent) > 0 {
-		items = append(items, sectionRow(i18n.T("Recently played")))
+		items = withSection(items, i18n.T("Recently played"))
 		for _, e := range s.recent {
 			items = append(items, row{
 				kind: rowHistory, histID: e.TrackID, title: e.Title,
@@ -81,7 +81,7 @@ func statsItems(s statsMsg) []list.Item {
 		}
 	}
 	if len(s.top) > 0 {
-		items = append(items, sectionRow(i18n.T("Top tracks (last 30 days)")))
+		items = withSection(items, i18n.T("Top tracks (last 30 days)"))
 		for i, st := range s.top {
 			items = append(items, row{
 				kind: rowHistory, histID: st.TrackID,
@@ -92,7 +92,7 @@ func statsItems(s statsMsg) []list.Item {
 		}
 	}
 	if len(s.artists) > 0 {
-		items = append(items, sectionRow(i18n.T("Top artists (last 30 days)")))
+		items = withSection(items, i18n.T("Top artists (last 30 days)"))
 		for i, st := range s.artists {
 			items = append(items, row{
 				kind:  rowInfo,

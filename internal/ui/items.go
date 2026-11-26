@@ -1,8 +1,9 @@
 package ui
 
 import (
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
+	"github.com/charmbracelet/bubbles/list"
 )
 
 // rowKind identifies what a list row represents.
@@ -17,11 +18,15 @@ const (
 	rowPodcast
 	rowEpisode
 	rowDevice
-	rowPeer    // a discovered OpenDeezer Connect device
+	rowPeer    // a discovered PurpleDisc Connect device
 	rowSection // non-activatable section header (artist page)
 	rowHistory // a history entry on the stats screen (playable by track id)
 	rowInfo    // non-activatable info line (stats totals, top artists)
+	rowSetting // a Settings row (settings()[row.setting])
 )
+
+// kindGlyphs mark the rows that open something other than a track.
+var kindGlyphs = map[rowKind]string{rowAlbum: "●", rowArtist: "♪", rowPlaylist: "≡", rowPodcast: "○"}
 
 // menuAction is the action a rowMenu triggers.
 type menuAction int
@@ -37,9 +42,14 @@ const (
 	actRemote
 	actRemoteManual // enter a device address by hand
 	actWebRemote    // phone web remote (QR + pairing code)
-	actLanguage     // cycle the UI language
+	actSettings     // the Settings screen
+	actUpdate       // open the available update's release page
 	actNewPlaylist  // "New playlist…" entry in the add-to-playlist picker
 	actStats        // local listening stats (history + top tracks/artists)
+	actFlowMoods    // list Flow's moods
+	actFlowMood     // play the mood in row.id
+	actChartGenres  // list the chart genres
+	actChartGenre   // open the charts of the genre in row.id
 )
 
 // row is a single list entry. It implements bubbles/list.Item.
@@ -47,6 +57,8 @@ type row struct {
 	kind     rowKind
 	title    string
 	desc     string
+	right    string            // right column: a track's duration, a setting's value
+	glyph    string            // a Home row's mark, drawn in the accent
 	action   menuAction        // for rowMenu
 	track    deezer.Track      // for rowTrack
 	playlist deezer.Playlist   // for rowPlaylist
@@ -57,6 +69,8 @@ type row struct {
 	deviceID string            // for rowDevice ("" = system default)
 	peerAddr string            // for rowPeer (host:port)
 	histID   string            // for rowHistory (Deezer track id; may be "")
+	id       string            // for actFlowMood (mood id) and actChartGenre (genre id)
+	setting  int               // for rowSetting
 }
 
 func (r row) Title() string       { return r.title }
@@ -74,17 +88,27 @@ func (r row) FilterValue() string {
 	return r.title + " " + r.desc
 }
 
-// sectionRow renders a non-activatable header separating artist-page sections.
+// sectionRow is a non-activatable header separating artist-page sections; an empty
+// title is a blank row.
 func sectionRow(title string) row {
-	return row{kind: rowSection, title: "── " + title + " ──"}
+	return row{kind: rowSection, title: title}
+}
+
+// withSection appends a section header to items, after a blank row unless it opens
+// the list.
+func withSection(items []list.Item, title string) []list.Item {
+	if len(items) > 0 {
+		items = append(items, sectionRow(""))
+	}
+	return append(items, sectionRow(title))
 }
 
 func trackRow(t deezer.Track) row {
-	title := t.Name
-	if t.Explicit {
-		title = "🅴 " + title // explicit-content badge
+	r := row{kind: rowTrack, title: t.Name, desc: t.ArtistLine() + " · " + t.AlbumName, track: t}
+	if t.DurationMS > 0 {
+		r.right = fmtMS(t.DurationMS)
 	}
-	return row{kind: rowTrack, title: title, desc: t.ArtistLine() + " · " + t.AlbumName, track: t}
+	return r
 }
 
 func playlistRow(p deezer.Playlist) row {
@@ -100,15 +124,15 @@ func albumRow(a deezer.Album) row {
 	if len(a.Artists) > 0 {
 		name = a.Artists[0].Name
 	}
-	return row{kind: rowAlbum, title: "💿 " + a.Name, desc: name, album: a}
+	return row{kind: rowAlbum, title: a.Name, desc: name, album: a}
 }
 
 func artistRow(a deezer.ArtistInfo) row {
-	return row{kind: rowArtist, title: "♪ " + a.Name, desc: i18n.T("artist"), artist: a}
+	return row{kind: rowArtist, title: a.Name, desc: i18n.T("artist"), artist: a}
 }
 
 func podcastRow(p deezer.Podcast) row {
-	return row{kind: rowPodcast, title: "🎙 " + p.Name, desc: i18n.T("podcast"), podcast: p}
+	return row{kind: rowPodcast, title: p.Name, desc: i18n.T("podcast"), podcast: p}
 }
 
 func episodeRow(e deezer.Episode) row {
@@ -136,7 +160,7 @@ func peerRow(p peerDevice) row {
 		desc += " · v" + p.dev.Version
 	}
 	desc += " · " + p.dev.Addr
-	return row{kind: rowPeer, title: "🔊 " + p.dev.Name, desc: desc, peerAddr: p.dev.Addr}
+	return row{kind: rowPeer, title: p.dev.Name, desc: desc, peerAddr: p.dev.Addr}
 }
 
 // deviceTypeLabel maps a client id to a friendly device type.
@@ -151,7 +175,7 @@ func deviceTypeLabel(client string) string {
 	case "linux", "gnome", "kde":
 		return "Linux"
 	case "":
-		return "OpenDeezer"
+		return "Purple Disc"
 	default:
 		return client
 	}

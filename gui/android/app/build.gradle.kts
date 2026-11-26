@@ -2,7 +2,6 @@ import com.android.build.api.variant.FilterConfiguration
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -34,16 +33,28 @@ val abiSplitsEnabled =
     providers.gradleProperty("abiSplits").orNull == "true" || fdroidAbi != null
 
 android {
-    namespace = "fr.cyclooo.opendeezer"
-    compileSdk = 34
+    namespace = "dev.scharkenberg.purpledisc"
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
-        applicationId = "fr.cyclooo.opendeezer"
+        applicationId = "dev.scharkenberg.purpledisc"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 26
-        versionName = "3.1.4"
+        targetSdk = 37
+        versionCode = 27
+        versionName = "4.0.0"
         buildConfigField("boolean", "ENABLE_UPSTREAM_UPDATES", upstreamUpdatesEnabled.toString())
+        // -Pabi=<ABI> (release.ps1): an APK with the engine for that one CPU type.
+        providers.gradleProperty("abi").orNull?.let { ndk { abiFilters += it } }
+    }
+
+    // The app's seven languages; the libraries' other translations stay out.
+    androidResources {
+        localeFilters += listOf("en", "ar", "es", "fr", "hi", "ru", "zh-rCN")
     }
 
     // Release signing is driven by env vars set by CI from repo secrets (see
@@ -60,11 +71,10 @@ android {
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
                 keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-                // Sign with every scheme explicitly. Google's sideload developer
-                // verification checks the APK Signature Scheme v2/v3 certificate
-                // against the registered developer key, so v2/v3 must be present;
-                // v1 stays on for install compatibility on pre-Android-7 devices.
-                enableV1Signing = true
+                // Google's sideload developer verification checks the APK Signature
+                // Scheme v2/v3 certificate against the registered developer key, so
+                // v2/v3 must be present. No v1: Android 7 (minSdk 24) reads v2.
+                enableV1Signing = false
                 enableV2Signing = true
                 enableV3Signing = true
             }
@@ -73,11 +83,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+            // R8 code and resource optimization. The engine's JNI classes are kept by the rules the
+            // gomobile AAR carries (proguard.txt: go.**, pdmobile.**).
+            optimization {
+                enable = true
+                keepRules { files.add(file("proguard-rules.pro")) }
+            }
             // Sign with the release key only when the keystore env is present (CI
             // with secrets); otherwise leave unsigned so local builds still work.
             if (System.getenv("ANDROID_KEYSTORE_FILE") != null) {
@@ -118,12 +129,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     buildFeatures {
@@ -134,6 +141,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += listOf("/META-INF/**/LICENSE.txt", "/kotlin/**.kotlin_builtins", "DebugProbesKt.bin")
+            // The libraries' version stamps, read only by tools that inspect an APK.
+            excludes += "/META-INF/*.version"
         }
     }
 }
@@ -159,34 +169,48 @@ if (abiSplitsEnabled) {
 }
 
 dependencies {
-    // OpenDeezer Go engine, bound by gomobile (built by CI into libs/odmobile.aar).
-    implementation(files("libs/odmobile.aar"))
+    // Purple Disc Go engine, bound by gomobile (built by CI into libs/pdmobile.aar).
+    implementation(files("libs/pdmobile.aar"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
+    val composeBom = platform("androidx.compose:compose-bom:2026.11.01")
     implementation(composeBom)
-    androidTestImplementation(composeBom)
 
-    implementation("androidx.core:core-ktx:1.13.1")
-    // MediaSessionCompat + MediaStyle notification for the playback service.
-    implementation("androidx.media:media:1.7.0")
-    implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation("androidx.core:core-ktx:1.19.1")
+    // The media session, its notification and the media button receiver (Media3).
+    implementation("androidx.media3:media3-session:1.11.1")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.1")
+    implementation("androidx.lifecycle:lifecycle-process:2.11.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation("androidx.navigation:navigation-compose:2.10.2")
 
     // Foldable posture (FoldingFeature: tabletop/book) for the split layouts.
     implementation("androidx.window:window:1.5.1")
 
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.6.3")
+    // Coil's network fetcher without a client of its own: covers download through the engine.
+    implementation("io.coil-kt.coil3:coil-network-core:3.6.3")
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
 }
+// Inter is kept once, in the repository's assets/fonts: res/font takes it under a lower-case
+// name, and its license goes with the app's assets. Both copies are git-ignored.
+val interFont = tasks.register<Copy>("interFont") {
+    from(rootProject.file("../../assets/fonts/InterVariable.ttf")) { rename { "inter.ttf" } }
+    // Static weights for Android 7, which cannot open the variable file.
+    from(rootProject.file("../../assets/fonts/Inter-Regular.ttf")) { rename { "inter_regular.ttf" } }
+    from(rootProject.file("../../assets/fonts/Inter-SemiBold.ttf")) { rename { "inter_semibold.ttf" } }
+    into(layout.projectDirectory.dir("src/main/res/font"))
+}
+val interLicense = tasks.register<Copy>("interLicense") {
+    from(rootProject.file("../../assets/fonts/Inter-OFL.txt"))
+    into(layout.projectDirectory.dir("src/main/assets/fonts"))
+}
+tasks.named("preBuild") { dependsOn(interFont, interLicense) }

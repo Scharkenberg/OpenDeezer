@@ -27,8 +27,8 @@ func TestIsLoopbackAddr(t *testing.T) {
 }
 
 func TestLoadControlEnv(t *testing.T) {
-	t.Setenv("OPENDEEZER_CONTROL", ":7654")
-	t.Setenv("OPENDEEZER_CONTROL_TOKEN", "")
+	t.Setenv("PURPLEDISC_CONTROL", ":7654")
+	t.Setenv("PURPLEDISC_CONTROL_TOKEN", "")
 	c := LoadControl()
 	if !c.Enabled || c.Addr != ":7654" {
 		t.Fatalf("LoadControl = %+v", c)
@@ -38,7 +38,7 @@ func TestLoadControlEnv(t *testing.T) {
 	}
 
 	for _, v := range []string{"1", "yes"} {
-		t.Setenv("OPENDEEZER_CONTROL", v)
+		t.Setenv("PURPLEDISC_CONTROL", v)
 		c = LoadControl()
 		if !c.Enabled || c.Addr != "127.0.0.1:7654" || c.SameAccount {
 			t.Fatalf("%s: localhost LoadControl = %+v", v, c)
@@ -47,11 +47,11 @@ func TestLoadControlEnv(t *testing.T) {
 }
 
 func TestLoadControlDisableValues(t *testing.T) {
-	t.Setenv("OPENDEEZER_CONTROL_TOKEN", "")
+	t.Setenv("PURPLEDISC_CONTROL_TOKEN", "")
 	for _, v := range []string{"0", "off", "false", "no", "FALSE", "No"} {
-		t.Setenv("OPENDEEZER_CONTROL", v)
+		t.Setenv("PURPLEDISC_CONTROL", v)
 		if c := LoadControl(); c.Enabled {
-			t.Fatalf("OPENDEEZER_CONTROL=%q should disable, got %+v", v, c)
+			t.Fatalf("PURPLEDISC_CONTROL=%q should disable, got %+v", v, c)
 		}
 	}
 }
@@ -122,9 +122,9 @@ func TestMediaConfigRoundTrip(t *testing.T) {
 	}
 }
 
-// The default cache folder is <user cache dir>/opendeezer (on Windows
-// %LOCALAPPDATA%\opendeezer), the cache lives in its subfolder
-// opendeezer-cache, and a host can point it elsewhere.
+// The default cache folder is <user cache dir>/purpledisc (on Windows
+// %LOCALAPPDATA%\purpledisc), the cache lives in its subfolder
+// purpledisc-cache, and a host can point it elsewhere.
 func TestCacheFolders(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("LOCALAPPDATA", filepath.Join(tmp, "Local"))
@@ -134,18 +134,18 @@ func TestCacheFolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(user, "opendeezer")
+	want := filepath.Join(user, "purpledisc")
 	if got, _ := CacheBaseDir(); got != want {
 		t.Fatalf("CacheBaseDir = %s, want %s", got, want)
 	}
 	if got, _ := (Media{}).CacheDir(); got != want {
 		t.Fatalf("default CacheDir = %s, want %s", got, want)
 	}
-	if got, _ := (Media{}).CacheStoreDir(); got != filepath.Join(want, "opendeezer-cache") {
+	if got, _ := (Media{}).CacheStoreDir(); got != filepath.Join(want, "purpledisc-cache") {
 		t.Fatalf("default CacheStoreDir = %s", got)
 	}
 	picked := filepath.Join(tmp, "Music")
-	if got, _ := (Media{MediaCacheDir: picked}).CacheStoreDir(); got != filepath.Join(picked, "opendeezer-cache") {
+	if got, _ := (Media{MediaCacheDir: picked}).CacheStoreDir(); got != filepath.Join(picked, "purpledisc-cache") {
 		t.Fatalf("CacheStoreDir of a picked folder = %s", got)
 	}
 	other := filepath.Join(tmp, "app-cache")
@@ -157,7 +157,7 @@ func TestCacheFolders(t *testing.T) {
 }
 
 func TestLoadDiscordAppIDEnv(t *testing.T) {
-	t.Setenv("OPENDEEZER_DISCORD_APP_ID", "12345")
+	t.Setenv("PURPLEDISC_DISCORD_APP_ID", "12345")
 	if LoadDiscordAppID() != "12345" {
 		t.Fatal("env app id not read")
 	}

@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/websocket"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // Deezer's players announce each track they start on the account's live socket and
@@ -90,7 +90,7 @@ func (c *Client) watchStreamsOnce(ctx context.Context, onStart func(StreamStart)
 	cfg.Header.Set("User-Agent", UserAgent)
 	ws, err := cfg.DialContext(ctx)
 	if err != nil {
-		odlog.Warn("live: connect: %v", err)
+		pdlog.Warn("live: connect: %v", err)
 		return
 	}
 	stop := context.AfterFunc(ctx, func() { ws.Close() })
@@ -105,7 +105,7 @@ func (c *Client) watchStreamsOnce(ctx context.Context, onStart func(StreamStart)
 	c.liveMu.Lock()
 	c.liveWS = ws
 	c.liveMu.Unlock()
-	odlog.Info("live: watching the account's plays")
+	pdlog.Info("live: watching the account's plays")
 	defer func() {
 		c.liveMu.Lock()
 		c.liveWS = nil
@@ -114,7 +114,7 @@ func (c *Client) watchStreamsOnce(ctx context.Context, onStart func(StreamStart)
 	for {
 		var msg string
 		if err := websocket.Message.Receive(ws, &msg); err != nil {
-			odlog.Info("live: connection ended: %v", err)
+			pdlog.Info("live: connection ended: %v", err)
 			return
 		}
 		// A message is ["msg", channel, payload].

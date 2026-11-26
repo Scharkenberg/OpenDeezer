@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"slices"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // Repeat is the loop mode.
@@ -340,6 +340,21 @@ func (q *Queue) AlignIndex(i int) {
 		return
 	}
 	q.index = i
+	q.syncPos()
+}
+
+// Mark is the cursor and history at one moment, for Restore.
+type Mark struct {
+	index   int
+	history []int
+}
+
+// Mark records the cursor and history.
+func (q *Queue) Mark() Mark { return Mark{q.index, slices.Clone(q.history)} }
+
+// Restore puts the cursor and history back as m recorded them.
+func (q *Queue) Restore(m Mark) {
+	q.index, q.history = m.index, m.history
 	q.syncPos()
 }
 

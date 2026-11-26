@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // NowPlayingVersion moves exactly when NowPlayingJSON's payload changes: a

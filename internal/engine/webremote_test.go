@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 // The remote-control settings go to the config folder in use, both files written.

@@ -1,5 +1,5 @@
-// remote-server starts an OpenDeezer control server that a phone web remote or
-// another OpenDeezer client can drive. It does not play audio locally; it is a
+// remote-server starts an Purple Disc control server that a phone web remote or
+// another Purple Disc client can drive. It does not play audio locally; it is a
 // minimal demonstration of the server API.
 //
 // Usage: DEEZER_ARL=<your_arl> go run ./examples/remote-server
@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/sdk/control"
-	dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/sdk/control"
+	dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 func main() {
@@ -53,7 +53,7 @@ func main() {
 	srv := control.NewServer(
 		control.Config{
 			Addr:  "127.0.0.1:7654",
-			Token: "demo-token", // send X-OpenDeezer-Token: demo-token
+			Token: "demo-token", // send X-PurpleDisc-Token: demo-token
 		},
 		func() control.State {
 			mu.Lock()
@@ -110,12 +110,12 @@ func main() {
 	defer srv.Close()
 
 	fmt.Printf("\nControl server listening at http://%s\n", srv.Addr())
-	fmt.Println("Token: demo-token  (set X-OpenDeezer-Token header)")
+	fmt.Println("Token: demo-token  (set X-PurpleDisc-Token header)")
 	fmt.Println()
 	fmt.Println("Try:")
 	fmt.Printf("  curl http://%s/whoami\n", srv.Addr())
-	fmt.Printf("  curl -H 'X-OpenDeezer-Token: demo-token' http://%s/status\n", srv.Addr())
-	fmt.Printf("  curl -X POST -H 'X-OpenDeezer-Token: demo-token' http://%s/playpause\n", srv.Addr())
+	fmt.Printf("  curl -H 'X-PurpleDisc-Token: demo-token' http://%s/status\n", srv.Addr())
+	fmt.Printf("  curl -X POST -H 'X-PurpleDisc-Token: demo-token' http://%s/playpause\n", srv.Addr())
 	fmt.Println()
 
 	// Poll and print state changes every 2 seconds via the control client.

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -219,7 +219,7 @@ func TestStatsScreenBuildsSectionedListAndPlaysByID(t *testing.T) {
 	firstPlayable := -1
 	for i, it := range items {
 		r := it.(row)
-		if r.kind == rowSection {
+		if r.kind == rowSection && r.title != "" {
 			sections++
 		}
 		if r.kind == rowHistory {

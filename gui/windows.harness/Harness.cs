@@ -25,7 +25,7 @@ using Windows.Graphics;
 using Windows.Graphics.Imaging;
 using WPoint = Windows.Foundation.Point;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 public static class Program
 {
@@ -58,8 +58,11 @@ public static class Program
     }
 }
 
-internal static class Harness
+internal static partial class Harness
 {
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    private static partial IntPtr SendMessageW(IntPtr hWnd, uint msg, nint wParam, IntPtr lParam);
+
     private static readonly string s_out = Environment.GetEnvironmentVariable("HARNESS_OUT") ?? "result.txt";
     private static readonly string s_dir = Path.GetDirectoryName(Path.GetFullPath(s_out))!;
     private static Window s_window = null!;
@@ -85,7 +88,7 @@ internal static class Harness
             if (s_canvas.XamlRoot is { } root) Ui.FollowScale(root);
             string only = Environment.GetEnvironmentVariable("HARNESS_ONLY") ?? "";
             foreach (var (name, test) in new (string, Func<Task>)[]
-                { ("bar", TestBar), ("states", TestStates), ("tiles", TestTiles), ("rows", TestRows), ("fills", TestFills), ("stale", TestStale), ("transport", TestTransport), ("chrome", TestChrome), ("layout", TestLayout), ("cards", TestCards), ("pane", TestPane), ("rail", TestRail),("pages", TestPages), ("offline", TestOffline), ("cost", TestCost), ("memory", TestMemory), ("fixes", TestFixes), ("avatar", TestAvatar) })
+                { ("bar", TestBar), ("states", TestStates), ("tiles", TestTiles), ("rows", TestRows), ("fills", TestFills), ("stale", TestStale), ("transport", TestTransport), ("chrome", TestChrome), ("frame", TestFrame), ("resize", TestResize), ("backdrop", TestBackdrop),("layout", TestLayout), ("cards", TestCards), ("pane", TestPane), ("rail", TestRail),("pages", TestPages), ("offline", TestOffline), ("cost", TestCost), ("memory", TestMemory), ("fixes", TestFixes), ("avatar", TestAvatar) })
             {
                 if (only.Length > 0 && !only.Split(',').Contains(name)) continue;
                 Log("=== " + name);
@@ -394,17 +397,26 @@ internal static class Harness
             if (w is 900 or 720 or 560 or 480) await Shot(s_box, "bar-" + w);
         }
 
-        // Widening the bar never narrows the seek slider, and nothing is cut off on the way.
+        // Widening the bar never narrows the seek slider, nothing is cut off on the way, and the
+        // times and the sound-mode chip show whole at every width (a one-hour length, the widest).
+        App.Player.Current = new Track { Id = "t", Name = "A title", ArtistLine = "An artist", DurationMs = 3_723_000 };
+        App.Player.DurationMs = 3_723_000L;
+        App.Player.Format = "FLAC · 24-bit 96 kHz";
+        bar.RenderTrack();
+        bar._dur.Text = Fmt.Time(3_723_000);
+        bar._pos.Text = Fmt.Time(3_722_000);
+        bool Whole(FrameworkElement e) => e.Visibility == Visibility.Visible && e.ActualWidth > 0 && e.ActualWidth >= e.DesiredSize.Width - 0.5
+            && LayoutInformation.GetLayoutSlot(e).Width >= e.DesiredSize.Width - 0.5;
         double lastSlider = 0, lastW = 0, worst = 0, minSlider = double.MaxValue;
-        string where = "";
+        string where = "", lost = "";
         int cut = 0;
-        // Every 32 px, and the widths logged below.
-        foreach (double w in Enumerable.Range(0, (1400 - 480) / 32 + 1).Select(k => 480.0 + 32 * k).Concat([720, 1200]).Order())
+        foreach (double w in Enumerable.Range(0, (1400 - 480) / 8 + 1).Select(k => 480.0 + 8 * k).Concat([719, 899]).Order())
         {
             s_box.Width = w;
-            await Settle(120);
+            await Settle(60);
             double slider = bar._seek.ActualWidth;
-            if (w is 480 or 576 or 720 or 896 or 1200) Log($"  sweep w={w}: slider {slider:F0}, times shown {bar._seek.Parent is StackPanel sp && ((Grid)sp.Children[0]).Children[0].Visibility == Visibility.Visible}");
+            if (!Whole(bar._pos) || !Whole(bar._dur) || !Whole(bar._format)) lost += $" {w}";
+            if (w is 480 or 576 or 720 or 896 or 1200) Log($"  sweep w={w}: slider {slider:F0}, times {bar._pos.ActualWidth:F0}/{bar._dur.ActualWidth:F0}, chip {bar._format.ActualWidth:F0}");
             double sum = cd[0].ActualWidth + cd[1].ActualWidth + cd[2].ActualWidth + 2 * g.ColumnSpacing + g.Padding.Left + g.Padding.Right;
             if (sum > w + 0.5) cut++;
             if (lastSlider - slider > worst)
@@ -416,7 +428,8 @@ internal static class Harness
             lastSlider = slider;
             lastW = w;
         }
-        Log($"sweep 480..1400 px: slider at least {minSlider:F0} px, largest narrowing {worst:F0} px {where}, widths cut off {cut} -> {(worst <= 1 && cut == 0 ? "ok" : "WRONG")}");
+        Log($"sweep 480..1400 px: slider at least {minSlider:F0} px, largest narrowing {worst:F0} px {where}, widths cut off {cut}, times or chip not whole at{(lost.Length > 0 ? lost : " none")} -> {(worst <= 1 && cut == 0 && lost.Length == 0 ? "ok" : "WRONG")}");
+        App.Player.Format = "";
 
         // The seek slider while a play loads (the engine still plays the old stream) and once it plays.
         var player = App.Player;
@@ -544,8 +557,15 @@ internal static class Harness
         await Settle(800);
         Log($"row-limited grid (2 rows, 40 albums, 1000 px): filled {fills.Count}x: {string.Join("; ", fills)} -> {(fills.Count == 1 ? "ok" : "MADE AGAIN")}");
 
+        // A CDN picture is asked for at the smallest size that covers the decode size; a URL without a size is left alone.
+        string sizedUrl = Ui.SizedArt("https://e-cdns-images.dzcdn.net/images/cover/ab12/250x250-000000-80-0-0.jpg", 300);
+        string unsized = Ui.SizedArt("https://e-cdns-images.dzcdn.net/images/cover/ab12/cover.jpg", 300);
+        Log($"CDN size: {sizedUrl[^28..]}, without a size unchanged {unsized.EndsWith("/ab12/cover.jpg")} -> " +
+            (sizedUrl == "https://e-cdns-images.dzcdn.net/images/cover/ab12/500x500-000000-80-0-0.jpg" && unsized.EndsWith("/ab12/cover.jpg") ? "ok" : "WRONG"));
+
         // How wide a stretched tile gets, and what its picture decodes at.
-        string art = new Uri(Path.Combine(AppContext.BaseDirectory, "opendeezer.png")).AbsoluteUri;
+        // The working directory is gui\windows.harness\out.
+        string art = new Uri(Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "..", "..", "assets", "icon.png"))).AbsoluteUri;
         var pictured = Enumerable.Range(0, 6).Select(i => new Album { Id = "w" + i, Name = "Album " + i, ArtworkUrl = art }).ToList();
         foreach (double w in new[] { 300.0, 440, 1000 })
         {
@@ -559,6 +579,100 @@ internal static class Harness
             double needed = tile.ActualWidth * Ui.Scale;
             Log($"tiles at {w} px: tile {tile.ActualWidth:0} px wide ({needed:0} physical), picture decoded at {decoded} px -> {(decoded >= needed - Pad.Tile.Left * 2 * Ui.Scale ? "sharp" : "BLURRED")}");
         }
+    }
+
+    // The track and artist pages' backdrop through Backdrop.Set: a picture blurred once, which fills
+    // the page at any size (the whole cover, rescaled), and the grain on a square that never sizes it.
+    private static async Task TestBackdrop()
+    {
+        string art = new Uri(Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "..", "..", "assets", "icon.png"))).AbsoluteUri;
+        var backdrop = new Backdrop(new Grid());
+        await Host(backdrop.Root, 900, 600);
+        backdrop.Set(art);
+        await Settle(800);
+        var shown = (Grid)backdrop.Root.Children[0];
+        var picture = (Border)shown.Children[0];
+        var brush = (ImageBrush)picture.Background;
+        var first = brush.ImageSource;
+        bool Fills() => Math.Abs(picture.ActualWidth - s_box.Width) < 0.5 && Math.Abs(picture.ActualHeight - s_box.Height) < 0.5;
+        bool small = Fills();
+        s_box.Width = 1300;
+        s_box.Height = 760;
+        await Settle(200);
+        bool large = Fills();
+        int tiles = ((Canvas)shown.Children[2]).Children.Count;
+        bool fits = backdrop.Root.DesiredSize.Height <= s_box.Height + 0.5;
+        bool ok = first is WriteableBitmap { PixelWidth: Size.BackdropPicture } && ReferenceEquals(first, brush.ImageSource) && small && large && fits && tiles > 0;
+        await Shot(s_box, "backdrop");
+        Log($"backdrop: {(first as WriteableBitmap)?.PixelWidth ?? 0} px blurred picture filling the page at 900 x 600 {small} and 1300 x 760 {large}, the same picture, {tiles} grain tiles, the page asks {backdrop.Root.DesiredSize.Height:0} px -> {(ok ? "ok" : "WRONG")}");
+    }
+
+    // A window being resized, as a row-limited grid sees it: its width in 8-px steps a frame apart,
+    // wider then narrower. Wrong when the grid's items are made again, or a tile in view changes
+    // picture or goes blank on the way; the sharper pictures come once the steps rest.
+    private static async Task TestResize()
+    {
+        // A picture of its own for each album (copies in the working directory), as covers are.
+        // The working directory is gui\windows.harness\out.
+        string source = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "..", "..", "assets", "icon.png"));
+        var albums = Enumerable.Range(0, 40).Select(i =>
+        {
+            string copy = Path.Combine(Environment.CurrentDirectory, $"resize-art-{i}.png");
+            if (!File.Exists(copy)) File.Copy(source, copy);
+            return new Album { Id = "r" + i, Name = "Album " + i, ArtworkUrl = new Uri(copy).AbsoluteUri };
+        }).ToList();
+        var grid = new TileGrid<Album>(Tiles.Album, _ => { });
+        var section = Section.Tiles("Section_Albums", grid, 2);
+        int fills = 0;
+        grid.Root.RegisterPropertyChangedCallback(ItemsRepeater.ItemsSourceProperty, (_, _) => fills++);
+        await Host(Ui.Page(section.Root), 700);
+        grid.SetItems(albums);
+        await Settle(1000);
+        var seen = new HashSet<ImageSource>();
+        // By album, in the frame before: the repeater recycles a tile element for another album, and
+        // an album that left the view comes back as a new tile.
+        var shown = new Dictionary<object, ImageSource>();
+        int blankFrames = 0, pictures = 0, blank = 0;
+        void Look()
+        {
+            // Only the tiles placed in the grid: the repeater parks recycled ones far outside it.
+            var placed = Descendants<MediaTile>(grid.Root).Where(t =>
+            {
+                var p = t.TransformToVisual(grid.Root).TransformPoint(new WPoint(0, 0));
+                return p.X >= 0 && p.X < grid.Root.ActualWidth && p.Y >= 0 && p.Y < grid.Root.ActualHeight;
+            });
+            var now = new Dictionary<object, ImageSource>();
+            foreach (var tile in placed)
+            {
+                if (Descendants<Border>(tile).Select(b => b.Background).OfType<ImageBrush>().FirstOrDefault(b => b.ImageSource != null)?.ImageSource is not BitmapImage image) continue;
+                if (seen.Add(image)) pictures++;
+                if (tile.Item is not { } album) continue;
+                now[album] = image;
+                // A tile in view that changes picture shows its placeholder until the new one decodes.
+                if (!shown.TryGetValue(album, out var before)) continue;
+                if (!ReferenceEquals(before, image)) blankFrames++;
+                if (image.PixelWidth == 0) blank++;
+            }
+            shown.Clear();
+            foreach (var (album, image) in now) shown[album] = image;
+        }
+        await Settle(800);
+        Look();
+        fills = 0; pictures = 0; blankFrames = 0; blank = 0;
+        var widths = Enumerable.Range(0, 101).Select(i => 700.0 + i * 8).Concat(Enumerable.Range(0, 101).Select(i => 1500.0 - i * 8));
+        foreach (double w in widths)
+        {
+            s_box.Width = w;
+            s_canvas.UpdateLayout();
+            Look();
+            await Task.Delay(16);
+        }
+        bool ok = fills == 0 && blankFrames == 0 && blank == 0;
+        string sweep = $"items made again {fills}x, pictures of tiles coming into view {pictures}, picture changes in view {blankFrames}, blanked {blank}";
+        blankFrames = 0;
+        await Settle(800);
+        Look();
+        Log($"resize sweep 700 -> 1500 -> 700 px: {sweep}; sharper pictures after the rest {blankFrames} -> {(ok ? "ok" : "WRONG")}");
     }
 
     // Queue rows: how far the title moves when hover swaps the duration for the two buttons.
@@ -698,6 +812,17 @@ internal static class Harness
         bool failed = texts.Any(s => s.Contains("boom")) && Descendants<Button>(lyrics.Root).Any(b => Shown(b) == "visible" && b.Content as string == Loc.S("Action_Retry"));
         Log($"lyrics that failed to load: the reason and Retry shown {failed} -> {(failed ? "ok" : "WRONG")}");
         lyrics.Leave();
+
+        // A free account gets the lyrics Deezer sends.
+        App.Session.SetAccount(new Account { UserId = "me", Name = "Me", LoggedIn = true, Premium = false });
+        App.Library.Store(Library.Key("lyrics", "lf"), new Lyrics { IsSynced = true, Synced = [new() { TimeMs = 0, Text = "One" }, new() { TimeMs = 2000, Text = "Two" }] }, DateTime.UtcNow);
+        player.Current = new Track { Id = "lf", Name = "Song", ArtistLine = "Artist", DurationMs = 200000 };
+        lyrics.Enter(null, false, null);
+        await Settle();
+        bool freeLines = App.Session.IsFree && lyrics._scroller.Visibility == Visibility.Visible && lyrics._lines.Children.Count == 2;
+        Log($"lyrics on a free account: {lyrics._lines.Children.Count} line(s) shown -> {(freeLines ? "ok" : "WRONG")}");
+        lyrics.Leave();
+        App.Session.SetAccount(new Account());
         player.Current = null;
 
         // Each queued track keeps the list it was played from, for Deezer's listen log; a track
@@ -753,6 +878,10 @@ internal static class Harness
         player.ApplySlow(EngineStill(player.Shuffle, RepeatMode.Off));
         held.SetResult();
         Log($"repeat set to All; a poll while the chain is busy still reads the engine's old value: repeat is {player.Repeat} -> {(player.Repeat == RepeatMode.All ? "kept" : "REVERTED")}");
+
+        player.Current = new Track { Id = "newer", DurationMs = 200000 };
+        player.PlayTakenOver(new Track { Id = "there" }, new TakeOver { Tracks = [new Track { Id = "there" }] }, player._playDispatchGen - 1);
+        Log($"Play here answered after a newer play: the newer play stays: now {player.Current?.Id} -> {(player.Current?.Id == "newer" ? "ok" : "WRONG")}");
 
         // The poll's rules, fed snapshots as the engine reports them.
         EngineSnap Snap(PlayState st, string nowId, long pos, long dur) => new((int)st, pos, dur, 0, nowId, null, -1, -1, "", false, "", false,
@@ -955,6 +1084,16 @@ internal static class Harness
         player.Current = null;
         player.State = PlayState.Stopped;
 
+        var repeatBefore = player.Repeat;
+        player.SetRepeat(RepeatMode.Off);
+        player.Play([new Track { Id = "w0", DurationMs = 200000 }, new Track { Id = "w1", Unavailable = true }, new Track { Id = "w2", Unavailable = true }], 0, ListenContext.None);
+        player.Next();
+        Log($"Next with only unavailable rows ahead: cursor on row {player.QueueIndex} -> {(player.QueueIndex == 0 ? "ok" : "WRONG")}");
+        player.SetRepeat(repeatBefore);
+        player.ClearQueue();
+        player.Current = null;
+        player.State = PlayState.Stopped;
+
         // An account switch: the old account's stop still on the chain, a Playing snapshot of its
         // track read after the stop was dispatched keeps the new account's restored resume point.
         var queueOwner = typeof(Player).GetField("_queueOwner", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -1047,6 +1186,47 @@ internal static class Harness
         public Elsewhere Elsewhere() { ElsewhereReads++; return new() { Track = new() { Id = "web" }, UntilMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 207000 }; }
     }
 
+    // A window of its own, its title bar set up as MainWindow does and not maximized: where the client
+    // area starts against the visible frame, and the search box against the band the bar shows.
+    private static async Task TestFrame()
+    {
+        var w = new Window();
+        var search = new SearchBox(DispatcherQueue.GetForCurrentThread(), App.Navigator);
+        var bar = new AppTitleBar(w, () => { }, () => { }, Ui.IconButton(Icons.Settings, "Nav_Settings", null)) { Search = search.Root };
+        var below = new Border { Background = new SolidColorBrush(Colors.Gray) };
+        var rows = Ui.Rows("auto *", bar.Root, below);
+        w.Content = rows;
+        w.ExtendsContentIntoTitleBar = true;
+        w.AppWindow.TitleBar.PreferredHeightOption = Microsoft.UI.Windowing.TitleBarHeightOption.Standard;
+        w.SetTitleBar(bar.Root);
+        w.AppWindow.IsShownInSwitchers = false;
+        w.AppWindow.MoveAndResize(new RectInt32(-28000, -28000, 1200, 800));
+        w.AppWindow.Show(false);
+        await Task.Delay(1500);
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(w);
+        double s = rows.XamlRoot.RasterizationScale;
+        var origin = new NativeMethods.POINT();
+        NativeMethods.DwmGetWindowAttribute(hwnd, NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS, out var frame,
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.RECT>());
+        NativeMethods.ClientToScreen(hwnd, ref origin);
+        double border = (origin.Y - frame.Top) / s;
+        var r = search.Root.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, search.Root.ActualWidth, search.Root.ActualHeight));
+        double bandBottom = below.TransformToVisual(null).TransformPoint(new WPoint(0, 0)).Y;
+        double caption = w.AppWindow.TitleBar.Height / s;
+        Log($"scale {s}, frame top {frame.Top}, client top {origin.Y}: border {border:0.##} DIP; bar margin {bar.Root.Margin.Top:0.##}, row {rows.RowDefinitions[0].ActualHeight:0.##}, caption buttons {caption:0.##}");
+        Log($"search {r.Top:0.##}..{r.Bottom:0.##} in the client, the band shown 0..{bandBottom:0.##}: gap above {r.Top:0.##}, below {bandBottom - r.Bottom:0.##}");
+        Log($"from the frame's top: search center {r.Top + r.Height / 2 + border:0.##}, caption center {caption / 2:0.##}, band {border:0.##}..{bandBottom + border:0.##}");
+        // The bar is lifted by the border the shown window has, not the one it had before its
+        // content extended into the title bar.
+        Log($"bar lift {-bar.Root.Margin.Top:0.##} for a border of {border:0.##}, title bar row {rows.RowDefinitions[0].ActualHeight:0.##} -> {(Math.Abs(bar.Root.Margin.Top + border) < 0.5 && rows.RowDefinitions[0].ActualHeight >= Size.TitleBar - border - 0.5 ? "ok" : "WRONG")}");
+        // The window's minimum size as Windows asks for it before a border drag.
+        WindowBounds.LimitSize(hwnd);
+        var info = new NativeMethods.MINMAXINFO();
+        unsafe { SendMessageW(hwnd, NativeMethods.WM_GETMINMAXINFO, 0, (IntPtr)(&info)); }
+        Log($"minimum size {info.ptMinTrackSize.X / s:0} x {info.ptMinTrackSize.Y / s:0} -> {(Math.Abs(info.ptMinTrackSize.X / s - Size.WindowMinWidth) <= 1 && Math.Abs(info.ptMinTrackSize.Y / s - Size.WindowMinHeight) <= 1 ? "ok" : "WRONG")}");
+        w.Close();
+    }
+
     // The title bar at three widths (height, search width, the gap between the last button and
     // the caption-button inset), and the corners of the kit's text button.
     private static async Task TestChrome()
@@ -1089,7 +1269,7 @@ internal static class Harness
         ((Flyout)account.Flyout).Content = null;
         holder.HorizontalAlignment = HorizontalAlignment.Left;
         await Host(holder, 600, 400);
-        Log($"account flyout content {holder.ActualWidth:0} x {holder.ActualHeight:0}: " +
+        Log($"account flyout content {holder.ActualWidth:0} x {holder.ActualHeight:0} (needs {holder.DesiredSize.Height:0} tall): " +
             string.Join(", ", flyout.Children.OfType<FrameworkElement>().Select(c => $"{c.GetType().Name} {c.DesiredSize.Width:0}")));
         await Shot(holder, "account-flyout");
         // The flyout keeps its width whatever it shows. Its lists are as wide as their widest item from
@@ -1112,6 +1292,12 @@ internal static class Harness
         var button = Ui.Button("Switch account", () => { });
         await Host(button, 300, 100);
         Log($"text button corner radius {button.CornerRadius.TopLeft} -> {(button.CornerRadius.TopLeft > 0 ? "rounded" : "SQUARE")}");
+        var logo = Ui.Logo(Size.AppIcon);
+        logo.HorizontalAlignment = HorizontalAlignment.Left;
+        await Host(logo, 300, 100);
+        bool drawn = Descendants<Border>(logo).Any(b => Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementChildVisual(b) != null);
+        Log($"logo {logo.ActualWidth:0} x {logo.ActualHeight:0} (asked {Size.AppIcon:0}), child visual {drawn} -> " +
+            (logo.ActualWidth == Size.AppIcon && logo.ActualHeight == Size.AppIcon && drawn ? "ok" : "WRONG"));
     }
 
     // Every page with data: where its title sits and the gap under it (the gaps must all be equal),
@@ -1468,7 +1654,7 @@ internal static class Harness
             view.Enter(null, false, null);
             await Settle(600);
             // Folder boxes with real-length paths: a path decides its box's width.
-            foreach (var box in Descendants<TextBox>(view.Root)) box.Text = @"C:\Users\Someone\AppData\Local\opendeezer";
+            foreach (var box in Descendants<TextBox>(view.Root)) box.Text = @"C:\Users\Someone\AppData\Local\purpledisc";
             await Settle(300);
             var cards = Descendants<CommunityToolkit.WinUI.Controls.SettingsCard>(view.Root).Where(c => Shown(c) == "visible" && c.ActualHeight > 0).ToList();
             var heights = cards.Select(c => c.ActualHeight).ToList();
@@ -1825,8 +2011,8 @@ internal static class Harness
         view.Leave();
         await App.Offline.SetModeAsync(false);
         var (colHeartShown, colHeartEnabled) = (colHeart.Visibility, colHeart.IsEnabled); // the view is entered again below
-        // A mode change while a track plays reaches the bar, the queue pane and Flow's moods with
-        // no render call: the bar's heart and artist link, the queue's Save as playlist, a mood.
+        // A mode change while a track plays reaches the bar, the queue pane and Home's Flow moods
+        // with no render call: the bar's heart and artist link, the queue's Save as playlist, a mood.
         var modePane = new QueuePane(new Grid(), new Grid());
         var playing = new Track { Id = "mq", Name = "Queued", ArtistId = "ar", ArtistLine = "A", DurationMs = 1000 };
         player.Play([playing], 0, ListenContext.None);
@@ -1834,8 +2020,10 @@ internal static class Harness
         await Host(view.Root, 1000); // shown, as a page is
         view.Enter(Collection.Of(new Album { Id = "oa5", Name = "Album" }), false, null);
         await Settle(100);
+        var moodsHome = new HomeView();
+        moodsHome.Enter(null, false, null);
         var mood = new Button();
-        ((StackPanel)typeof(CollectionView).GetField("_moods", Hidden)!.GetValue(view)!).Children.Add(mood);
+        ((StackPanel)typeof(HomeView).GetField("_moods", Hidden)!.GetValue(moodsHome)!).Children.Add(mood);
         var barLike = (Button)typeof(PlayerBar).GetField("_like", Hidden)!.GetValue(bar)!;
         var barLink = (Control)typeof(PlayerBar).GetField("_artist", Hidden)!.GetValue(bar)!;
         var paneSave = (Button)typeof(QueuePane).GetField("_save", Hidden)!.GetValue(modePane)!;
@@ -1843,6 +2031,7 @@ internal static class Harness
         bool[] modeOn = [barLike.IsEnabled, barLink.IsEnabled, paneSave.IsEnabled, mood.IsEnabled];
         await App.Offline.SetModeAsync(false);
         bool[] modeOff = [barLike.IsEnabled, barLink.IsEnabled, paneSave.IsEnabled, mood.IsEnabled];
+        moodsHome.Leave();
         view.Leave();
         player.ClearQueue();
         player.Current = null;
@@ -1875,16 +2064,53 @@ internal static class Harness
         int reads = 0;
         var realFetch = App.Library.FetchReply;
         var gates = new List<TaskCompletionSource>();
-        App.Library.FetchReply = _ => { var g = new TaskCompletionSource(); lock (gates) gates.Add(g); Interlocked.Increment(ref reads); g.Task.Wait(); return new TracksReply { Error = "held" }; };
         string heldKey = Library.Key("album", "lf1");
+        // Only this key's fetches are held: another key's (an earlier step's refresh) reads as usual.
+        App.Library.FetchReply = key =>
+        {
+            if (key != heldKey) return realFetch(key);
+            var g = new TaskCompletionSource();
+            lock (gates) gates.Add(g);
+            Interlocked.Increment(ref reads);
+            g.Task.Wait();
+            return new TracksReply { Error = "held" };
+        };
+        // The fetches start on the thread pool: wait for them (at most 5 s), not for a fixed time.
+        async Task<bool> Started(int n)
+        {
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (true)
+            {
+                lock (gates) if (gates.Count >= n) return true;
+                if (DateTime.UtcNow > until)
+                {
+                    lock (gates) Log($"a held fetch for a dropped key: {gates.Count} of {n} started after 5 s -> WRONG");
+                    return false;
+                }
+                await Task.Delay(5);
+            }
+        }
+        void ReleaseAll()
+        {
+            lock (gates) foreach (var g in gates) g.TrySetResult();
+            App.Library.FetchReply = realFetch;
+        }
         var first = App.Library.GetAsync<TracksReply>(heldKey);
         App.Library.Drop("album");
         var second = App.Library.GetAsync<TracksReply>(heldKey);
-        await Settle(50);
+        if (!await Started(1))
+        {
+            ReleaseAll();
+            return;
+        }
         lock (gates) gates[0].SetResult();
         await first;
         var third = App.Library.GetAsync<TracksReply>(heldKey);
-        await Settle(50);
+        if (!await Started(2))
+        {
+            ReleaseAll();
+            return;
+        }
         lock (gates) foreach (var g in gates) g.TrySetResult();
         await Task.WhenAll(second, third);
         App.Library.FetchReply = realFetch;

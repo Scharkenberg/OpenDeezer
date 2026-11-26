@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 // pin pins key with pins, keeping every other entry's pins.
@@ -251,7 +251,7 @@ func TestSetDirCopiesPinnedEntries(t *testing.T) {
 		t.Fatal("the copied entry does not read")
 	}
 	_ = f.Close()
-	if left := dataNames(t, filepath.Join(base, "opendeezer-cache")); len(left) != 0 {
+	if left := dataNames(t, filepath.Join(base, "purpledisc-cache")); len(left) != 0 {
 		t.Fatalf("old folder still holds %v", left)
 	}
 }
@@ -366,7 +366,7 @@ func TestHostOpenLostIndexPinnedOverMaxAge(t *testing.T) {
 	if err := config.SaveMedia(config.Media{MediaCacheMB: 1, MediaCacheMaxAgeDays: 7}); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(base, "opendeezer-cache")
+	dir := filepath.Join(base, "purpledisc-cache")
 	c, _ := New(dir, 1<<20)
 	putBody(t, c, "1.MP3_128", 100)
 	c.mu.Lock()

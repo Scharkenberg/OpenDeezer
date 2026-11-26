@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
 )
 
 // The Web Remote screen shows the server's live code; Enter after the code was used mints a
@@ -46,7 +46,7 @@ func TestWebRemoteFreshCodeKeepsSession(t *testing.T) {
 		t.Fatalf("after Enter: code %q (was %q), active %v", fresh, code, m.webRemoteActive)
 	}
 	req, _ := http.NewRequest(http.MethodGet, base+"/status", nil)
-	req.Header.Set("X-OpenDeezer-Session", pair["token"])
+	req.Header.Set("X-PurpleDisc-Session", pair["token"])
 	st, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

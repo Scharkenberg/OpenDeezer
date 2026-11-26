@@ -11,7 +11,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class LyricsView : View
 {
@@ -76,11 +76,6 @@ internal sealed class LyricsView : View
         if (t == null || id.Length == 0 || (t.IsEpisode && !Player.IsCasting))
         {
             _state.ShowEmpty(Icons.Lyrics, Loc.S(id.Length == 0 ? "Lyrics_PlayPrompt" : "Lyrics_None"));
-            return;
-        }
-        if (!App.Session.CanShowLyrics)
-        {
-            _state.ShowEmpty(Icons.Lyrics, Loc.S("Lyrics_PaidOnly"));
             return;
         }
         // Null when the view was left meanwhile: the next visit loads again.

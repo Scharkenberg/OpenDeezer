@@ -9,7 +9,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Networking.Connectivity;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal enum SignInResult { Ok, Expired, Offline, Failed, EngineMissing, NoAudio }
 
@@ -55,8 +55,6 @@ internal sealed class Session
     // Unknown plan counts as neither Free nor gated: the engine refuses Free downloads itself.
     public bool IsFree => AccountKnown && !Account.Premium;
     public bool CanDownload => !IsFree;
-    // Deezer serves lyrics to paid plans only (Premium, Duo, Family, Student: all report Premium).
-    public bool CanShowLyrics => !IsFree;
     public UpdateInfo? Update { get; private set; }
     public static Task WebProfileReady { get; private set; } = Task.CompletedTask;
 
@@ -394,7 +392,7 @@ internal sealed class Session
     {
         string local = Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } l
             ? l : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(local, "opendeezer");
+        return Path.Combine(local, "purpledisc");
     }
 
     // An offline session has no account loaded: its cache is the last signed-in account's.

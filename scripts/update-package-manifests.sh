@@ -33,7 +33,7 @@ if [[ ! "$RELEASE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
 fi
 
 # Validate cross-provider release invariants before modifying any file.
-FDROID="$ROOT/packaging/fdroid/fdroiddata/fr.cyclooo.opendeezer.yml"
+FDROID="$ROOT/packaging/fdroid/fdroiddata/dev.scharkenberg.purpledisc.yml"
 VERSION_CODE=""
 if [[ -f "$FDROID" ]]; then
   FDROID_COMMIT="$(git -C "$ROOT" rev-parse HEAD^{commit})"
@@ -73,7 +73,7 @@ if [[ -f "$FDROID" ]]; then
     echo "F-Droid VercodeOperation does not match the ABI version-code scheme" >&2
     exit 1
   fi
-  EXPECTED_BINARIES='Binaries: https://github.com/Cycl0o0/OpenDeezer/releases/download/v%v/OpenDeezer-android-fdroid-%v-%c.apk'
+  EXPECTED_BINARIES='Binaries: https://github.com/Scharkenberg/PurpleDisc/releases/download/v%v/PurpleDisc-android-fdroid-%v-%c.apk'
   if [[ "$(grep -Fxc "$EXPECTED_BINARIES" "$FDROID" || true)" != 1 ]]; then
     echo "F-Droid Binaries URL does not include the ABI version code" >&2
     exit 1
@@ -127,32 +127,32 @@ checksum() {
   printf '%s' "$value"
 }
 
-DARWIN_ARM64="$(checksum opendeezer-tui-darwin-arm64)"
-DARWIN_AMD64="$(checksum opendeezer-tui-darwin-amd64)"
-LINUX_ARM64="$(checksum opendeezer-tui-linux-arm64)"
-LINUX_AMD64="$(checksum opendeezer-tui-linux-amd64)"
-WINDOWS_AMD64="$(checksum opendeezer-tui-windows-amd64.exe)"
+DARWIN_ARM64="$(checksum purpledisc-tui-darwin-arm64)"
+DARWIN_AMD64="$(checksum purpledisc-tui-darwin-amd64)"
+LINUX_ARM64="$(checksum purpledisc-tui-linux-arm64)"
+LINUX_AMD64="$(checksum purpledisc-tui-linux-amd64)"
+WINDOWS_AMD64="$(checksum purpledisc-tui-windows-amd64.exe)"
 
-FORMULA="$ROOT/packaging/homebrew/opendeezer.rb"
+FORMULA="$ROOT/packaging/homebrew/purpledisc.rb"
 sed -i.bak "s/^  version \"[^\"]*\"/  version \"$VERSION\"/" "$FORMULA"
-sed -i.bak "/opendeezer-tui-darwin-arm64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$DARWIN_ARM64\"/;}" "$FORMULA"
-sed -i.bak "/opendeezer-tui-darwin-amd64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$DARWIN_AMD64\"/;}" "$FORMULA"
-sed -i.bak "/opendeezer-tui-linux-arm64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$LINUX_ARM64\"/;}" "$FORMULA"
-sed -i.bak "/opendeezer-tui-linux-amd64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$LINUX_AMD64\"/;}" "$FORMULA"
+sed -i.bak "/purpledisc-tui-darwin-arm64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$DARWIN_ARM64\"/;}" "$FORMULA"
+sed -i.bak "/purpledisc-tui-darwin-amd64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$DARWIN_AMD64\"/;}" "$FORMULA"
+sed -i.bak "/purpledisc-tui-linux-arm64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$LINUX_ARM64\"/;}" "$FORMULA"
+sed -i.bak "/purpledisc-tui-linux-amd64\"/{n;s/sha256 \"[^\"]*\"/sha256 \"$LINUX_AMD64\"/;}" "$FORMULA"
 rm -f "$FORMULA.bak"
 
-for manifest in "$ROOT"/packaging/winget/Cycl0o0.OpenDeezer*.yaml; do
+for manifest in "$ROOT"/packaging/winget/Scharkenberg.PurpleDisc*.yaml; do
   sed -i.bak "s/^PackageVersion: .*/PackageVersion: $VERSION/" "$manifest"
   rm -f "$manifest.bak"
 done
-INSTALLER="$ROOT/packaging/winget/Cycl0o0.OpenDeezer.installer.yaml"
-LOCALE="$ROOT/packaging/winget/Cycl0o0.OpenDeezer.locale.en-US.yaml"
-sed -i.bak "s#^    InstallerUrl: .*#    InstallerUrl: https://github.com/Cycl0o0/OpenDeezer/releases/download/v$VERSION/opendeezer-tui-windows-amd64.exe#" "$INSTALLER"
+INSTALLER="$ROOT/packaging/winget/Scharkenberg.PurpleDisc.installer.yaml"
+LOCALE="$ROOT/packaging/winget/Scharkenberg.PurpleDisc.locale.en-US.yaml"
+sed -i.bak "s#^    InstallerUrl: .*#    InstallerUrl: https://github.com/Scharkenberg/PurpleDisc/releases/download/v$VERSION/purpledisc-tui-windows-amd64.exe#" "$INSTALLER"
 sed -i.bak "s/^    InstallerSha256: .*/    InstallerSha256: $WINDOWS_AMD64/" "$INSTALLER"
 sed -i.bak "s/^ReleaseDate: .*/ReleaseDate: \"$RELEASE_DATE\"/" "$INSTALLER"
 rm -f "$INSTALLER.bak"
-sed -i.bak "s#^LicenseUrl: .*#LicenseUrl: https://github.com/Cycl0o0/OpenDeezer/blob/v$VERSION/LICENSE#" "$LOCALE"
-sed -i.bak "s#^ReleaseNotesUrl: .*#ReleaseNotesUrl: https://github.com/Cycl0o0/OpenDeezer/releases/tag/v$VERSION#" "$LOCALE"
+sed -i.bak "s#^LicenseUrl: .*#LicenseUrl: https://github.com/Scharkenberg/PurpleDisc/blob/v$VERSION/LICENSE#" "$LOCALE"
+sed -i.bak "s#^ReleaseNotesUrl: .*#ReleaseNotesUrl: https://github.com/Scharkenberg/PurpleDisc/releases/tag/v$VERSION#" "$LOCALE"
 rm -f "$LOCALE.bak"
 
 PKGBUILD="$ROOT/packaging/aur/PKGBUILD"
@@ -161,7 +161,7 @@ sed -i.bak "s/^pkgver=.*/pkgver=$VERSION/" "$PKGBUILD"
 sed -i.bak "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA')/" "$PKGBUILD"
 rm -f "$PKGBUILD.bak"
 sed -i.bak "s/^\([[:space:]]*pkgver = \).*/\1$VERSION/" "$SRCINFO"
-sed -i.bak "s#^\([[:space:]]*source = \).*#\1opendeezer-$VERSION.tar.gz::https://github.com/Cycl0o0/OpenDeezer/archive/refs/tags/v$VERSION.tar.gz#" "$SRCINFO"
+sed -i.bak "s#^\([[:space:]]*source = \).*#\1purpledisc-$VERSION.tar.gz::https://github.com/Scharkenberg/PurpleDisc/archive/refs/tags/v$VERSION.tar.gz#" "$SRCINFO"
 sed -i.bak "s/^\([[:space:]]*sha256sums = \).*/\1$SOURCE_SHA/" "$SRCINFO"
 rm -f "$SRCINFO.bak"
 
@@ -170,28 +170,28 @@ grep -Fq "version \"$VERSION\"" "$FORMULA"
 for sha in "$DARWIN_ARM64" "$DARWIN_AMD64" "$LINUX_ARM64" "$LINUX_AMD64"; do
   grep -Fq "sha256 \"$sha\"" "$FORMULA"
 done
-for manifest in "$ROOT"/packaging/winget/Cycl0o0.OpenDeezer*.yaml; do
+for manifest in "$ROOT"/packaging/winget/Scharkenberg.PurpleDisc*.yaml; do
   grep -Fq "PackageVersion: $VERSION" "$manifest"
 done
-grep -Fq "releases/download/v$VERSION/opendeezer-tui-windows-amd64.exe" "$INSTALLER"
+grep -Fq "releases/download/v$VERSION/purpledisc-tui-windows-amd64.exe" "$INSTALLER"
 grep -Fq "InstallerSha256: $WINDOWS_AMD64" "$INSTALLER"
 grep -Fq "ReleaseDate: \"$RELEASE_DATE\"" "$INSTALLER"
-grep -Fq "LicenseUrl: https://github.com/Cycl0o0/OpenDeezer/blob/v$VERSION/LICENSE" "$LOCALE"
-grep -Fq "ReleaseNotesUrl: https://github.com/Cycl0o0/OpenDeezer/releases/tag/v$VERSION" "$LOCALE"
+grep -Fq "LicenseUrl: https://github.com/Scharkenberg/PurpleDisc/blob/v$VERSION/LICENSE" "$LOCALE"
+grep -Fq "ReleaseNotesUrl: https://github.com/Scharkenberg/PurpleDisc/releases/tag/v$VERSION" "$LOCALE"
 grep -Fq "pkgver=$VERSION" "$PKGBUILD"
 grep -Fq "sha256sums=('$SOURCE_SHA')" "$PKGBUILD"
 grep -Fq "pkgver = $VERSION" "$SRCINFO"
-grep -Fq "source = opendeezer-$VERSION.tar.gz::https://github.com/Cycl0o0/OpenDeezer/archive/refs/tags/v$VERSION.tar.gz" "$SRCINFO"
+grep -Fq "source = purpledisc-$VERSION.tar.gz::https://github.com/Scharkenberg/PurpleDisc/archive/refs/tags/v$VERSION.tar.gz" "$SRCINFO"
 grep -Fq "sha256sums = $SOURCE_SHA" "$SRCINFO"
 
-SCOOP="$ROOT/packaging/scoop/opendeezer.json"
+SCOOP="$ROOT/packaging/scoop/purpledisc.json"
 if [[ -f "$SCOOP" ]]; then
   sed -i.bak "s/^    \"version\": \"[^\"]*\"/    \"version\": \"$VERSION\"/" "$SCOOP"
-  sed -i.bak "s#releases/download/v[0-9][0-9.]*/opendeezer-tui-windows-amd64\.exe#releases/download/v$VERSION/opendeezer-tui-windows-amd64.exe#" "$SCOOP"
+  sed -i.bak "s#releases/download/v[0-9][0-9.]*/purpledisc-tui-windows-amd64\.exe#releases/download/v$VERSION/purpledisc-tui-windows-amd64.exe#" "$SCOOP"
   sed -i.bak "s/^            \"hash\": \"[0-9a-f]*\"/            \"hash\": \"$WINDOWS_AMD64\"/" "$SCOOP"
   rm -f "$SCOOP.bak"
   grep -Fq "\"version\": \"$VERSION\"" "$SCOOP"
-  grep -Fq "releases/download/v$VERSION/opendeezer-tui-windows-amd64.exe" "$SCOOP"
+  grep -Fq "releases/download/v$VERSION/purpledisc-tui-windows-amd64.exe" "$SCOOP"
   grep -Fq "\"hash\": \"$WINDOWS_AMD64\"" "$SCOOP"
 fi
 
@@ -203,7 +203,7 @@ if [[ -f "$SNAP" ]]; then
 fi
 
 if [[ -f "$FDROID" ]]; then
-  FDROID_TMP="$(mktemp "${TMPDIR:-/tmp}/opendeezer-fdroid.XXXXXX")"
+  FDROID_TMP="$(mktemp "${TMPDIR:-/tmp}/purpledisc-fdroid.XXXXXX")"
   # Preserve the metadata file mode when the validated replacement is installed.
   cp -p "$FDROID" "$FDROID_TMP"
   awk -v version="$VERSION" -v base="$VERSION_CODE" -v commit="$FDROID_COMMIT" '

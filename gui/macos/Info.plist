@@ -13,14 +13,14 @@
         <string>ar</string>
         <string>ru</string>
     </array>
-    <key>CFBundleName</key><string>OpenDeezer</string>
-    <key>CFBundleDisplayName</key><string>OpenDeezer</string>
-    <key>CFBundleIdentifier</key><string>fr.cycl0o0.opendeezer</string>
-    <key>CFBundleExecutable</key><string>OpenDeezer</string>
-    <key>CFBundleIconFile</key><string>OpenDeezer</string>
+    <key>CFBundleName</key><string>PurpleDisc</string>
+    <key>CFBundleDisplayName</key><string>Purple Disc</string>
+    <key>CFBundleIdentifier</key><string>dev.scharkenberg.PurpleDisc</string>
+    <key>CFBundleExecutable</key><string>PurpleDisc</string>
+    <key>CFBundleIconFile</key><string>PurpleDisc</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>3.1.4</string>
-    <key>CFBundleVersion</key><string>26</string>
+    <key>CFBundleShortVersionString</key><string>4.0.0</string>
+    <key>CFBundleVersion</key><string>27</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>

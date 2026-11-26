@@ -1,22 +1,22 @@
-// Package sdk is the OpenDeezer public SDK, a curated Go API for third-party
-// developers who want to build on the OpenDeezer engine without forking the
+// Package sdk is the Purple Disc public SDK, a curated Go API for third-party
+// developers who want to build on the Purple Disc engine without forking the
 // application itself.
 //
 // # Sub-packages
 //
 //   - [sdk/deezer]: Deezer API client (login, browse, stream resolution, decrypt)
-//   - [sdk/connect]: OpenDeezer Connect (LAN device discovery, remote playback)
+//   - [sdk/connect]: Purple Disc Connect (LAN device discovery, remote playback)
 //   - [sdk/control]: control server + client (HTTP/JSON remote-control API)
 //   - [sdk/player]: in-process audio playback (cgo required: miniaudio or oto)
 //
 // # Install
 //
-//	go get github.com/Cycl0o0/OpenDeezer/v3
+//	go get github.com/Scharkenberg/PurpleDisc/v4
 //
 // # Quick start
 //
 //	import (
-//	    dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+//	    dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 //	)
 //
 //	client := dz.New(os.Getenv("DEEZER_ARL"))

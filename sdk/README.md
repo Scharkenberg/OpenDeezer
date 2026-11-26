@@ -1,24 +1,24 @@
-# OpenDeezer SDK
+# Purple Disc SDK
 
-The OpenDeezer SDK is a public Go library that lets third-party developers
-build on the OpenDeezer engine: the Deezer API client, track decode/decrypt
-and streaming, LAN device discovery (OpenDeezer Connect), and the remote
+The Purple Disc SDK is a public Go library that lets third-party developers
+build on the Purple Disc engine: the Deezer API client, track decode/decrypt
+and streaming, LAN device discovery (Purple Disc Connect), and the remote
 control API.
 
 ```
-go get github.com/Cycl0o0/OpenDeezer/v3
+go get github.com/Scharkenberg/PurpleDisc/v4
 ```
 
 Import paths:
 
 | Package | Purpose |
 |---|---|
-| `github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer` | Deezer API client + decode |
-| `github.com/Cycl0o0/OpenDeezer/v3/sdk/connect` | OpenDeezer Connect (LAN discovery + remote) |
-| `github.com/Cycl0o0/OpenDeezer/v3/sdk/control` | Control server + client (HTTP/JSON API) |
-| `github.com/Cycl0o0/OpenDeezer/v3/sdk/player` | In-process audio playback (cgo) |
+| `github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer` | Deezer API client + decode |
+| `github.com/Scharkenberg/PurpleDisc/v4/sdk/connect` | Purple Disc Connect (LAN discovery + remote) |
+| `github.com/Scharkenberg/PurpleDisc/v4/sdk/control` | Control server + client (HTTP/JSON API) |
+| `github.com/Scharkenberg/PurpleDisc/v4/sdk/player` | In-process audio playback (cgo) |
 
-Go docs: https://pkg.go.dev/github.com/Cycl0o0/OpenDeezer/v3/sdk
+Go docs: https://pkg.go.dev/github.com/Scharkenberg/PurpleDisc/v4/sdk
 
 ### Control works both ways (in + out)
 
@@ -28,7 +28,7 @@ drive another device (out) and be driven by one (in):
 | Capability | Out (control another) | In (be controlled) |
 |---|---|---|
 | Remote control API | `control.Client` | `control.Server` |
-| OpenDeezer Connect | `connect.Discover` + `connect.RemoteClient` | `connect.Host` (+ `connect.Advertise`) |
+| Purple Disc Connect | `connect.Discover` + `connect.RemoteClient` | `connect.Host` (+ `connect.Advertise`) |
 
 Both sides cover the full control-API command set. `control.Client` and
 `connect.RemoteClient` expose identical methods; the "in" column is the
@@ -65,7 +65,7 @@ The ARL never leaves your machine beyond the HTTPS requests made to deezer.com
 and media.deezer.com.
 
 ```go
-import dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+import dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 
 client := dz.New(os.Getenv("DEEZER_ARL"))
 if err := client.Login(); err != nil {
@@ -118,7 +118,7 @@ fetches, decrypts (BF_CBC_STRIPE), and writes the audio bytes to any
 ```go
 import (
     "os"
-    dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+    dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 client.SetQuality(dz.QualityHigh) // prefer MP3 320; falls back if not entitled
@@ -155,9 +155,9 @@ plain, err := dz.DecryptBytes(trackID, encryptedBytes)
 
 ---
 
-## OpenDeezer Connect (LAN discovery + remote)
+## Purple Disc Connect (LAN discovery + remote)
 
-OpenDeezer Connect is **symmetric** — the SDK exposes both directions:
+Purple Disc Connect is **symmetric** — the SDK exposes both directions:
 
 | Direction | What | API |
 |---|---|---|
@@ -167,7 +167,7 @@ OpenDeezer Connect is **symmetric** — the SDK exposes both directions:
 ### Out — discover and drive a device
 
 ```go
-import "github.com/Cycl0o0/OpenDeezer/v3/sdk/connect"
+import "github.com/Scharkenberg/PurpleDisc/v4/sdk/connect"
 
 // Find devices (2-second probe window).
 devices, _ := connect.Discover(2*time.Second, 0)
@@ -227,7 +227,7 @@ Check `Whoami.Auth` on the target device to know which credential to supply:
 |---|---|
 | `"token"` | `token="<bearer-token>"` |
 | `"account"` | `accountID="<your Deezer user id>"` |
-| `"session"` | Not controllable from `RemoteClient`/`control.Client`; driveable only from the device's embedded browser remote, which sends a paired session token in the `X-OpenDeezer-Session` header (stored in localStorage, not a cookie) |
+| `"session"` | Not controllable from `RemoteClient`/`control.Client`; driveable only from the device's embedded browser remote, which sends a paired session token in the `X-PurpleDisc-Session` header (stored in localStorage, not a cookie) |
 | `"none"` | Empty strings |
 
 ---
@@ -239,11 +239,11 @@ endpoint (in), `control.Client` drives one (out).
 
 ### Control server (in)
 
-Host a controllable endpoint that phones, AI agents, or other OpenDeezer
+Host a controllable endpoint that phones, AI agents, or other Purple Disc
 clients can drive.
 
 ```go
-import "github.com/Cycl0o0/OpenDeezer/v3/sdk/control"
+import "github.com/Scharkenberg/PurpleDisc/v4/sdk/control"
 
 srv := control.NewServer(
     control.Config{
@@ -357,8 +357,8 @@ API access, search, or download/decrypt.
 
 ```go
 import (
-    "github.com/Cycl0o0/OpenDeezer/v3/sdk/player"
-    dz "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+    "github.com/Scharkenberg/PurpleDisc/v4/sdk/player"
+    dz "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 p, _ := player.NewPlayer()

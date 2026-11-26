@@ -9,26 +9,27 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discord"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/version"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discord"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/listens"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/preload"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/queue"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/version"
 )
 
 var (
@@ -349,16 +350,16 @@ func startServices(c *deezer.Client) {
 		appID := config.LoadDiscordAppID()
 		dp = discord.New(appID)
 		if appID == "" {
-			odlog.Info("discord: rich presence disabled (no app id; set discord-app-id.txt)")
+			pdlog.Info("discord: rich presence disabled (no app id; set discord-app-id.txt)")
 		} else {
-			odlog.Info("discord: rich presence enabled (app %s)", appID)
+			pdlog.Info("discord: rich presence enabled (app %s)", appID)
 			go serviceTicker()
 		}
 
 		if cfg := config.LoadControl(); cfg.Enabled {
 			if cfg.SameAccount && cfg.Token == "" {
-				odlog.Warn("control api: LAN-exposed with same-account auth only; the Deezer " +
-					"user id is not a strong secret. Set OPENDEEZER_CONTROL_TOKEN for a real " +
+				pdlog.Warn("control api: LAN-exposed with same-account auth only; the Deezer " +
+					"user id is not a strong secret. Set PURPLEDISC_CONTROL_TOKEN for a real " +
 					"credential on untrusted networks.")
 			}
 			ctrlMu.Lock()
@@ -368,7 +369,7 @@ func startServices(c *deezer.Client) {
 			// A server configured onto the LAN is a Connect host.
 			connectHost = !config.IsLoopbackAddr(cfg.Addr)
 			if srv := rebuildControlServer(control.Config{Addr: cfg.Addr, Token: cfg.Token, SameAccountOnly: cfg.SameAccount}, c, cfg.Addr); srv != nil {
-				odlog.Info("control api on %s", srv.Addr())
+				pdlog.Info("control api on %s", srv.Addr())
 			}
 			ctrlMu.Unlock()
 		}
@@ -413,7 +414,7 @@ func refreshAdvertiser() {
 	if ctrlSrv == srv {
 		advertiser = resp
 		mu.Unlock()
-		odlog.Info("discovery advertising control port %d", p)
+		pdlog.Info("discovery advertising control port %d", p)
 	} else {
 		mu.Unlock()
 		resp.Close()
@@ -446,7 +447,7 @@ func rebuildControlServer(cfg control.Config, c *deezer.Client, addrs ...string)
 		s.SetEQ(engineEQ())
 		s.SetStatusSince(engineStateSince)
 		if err := s.Start(); err != nil {
-			odlog.Warn("control api on %s: %v", a, err)
+			pdlog.Warn("control api on %s: %v", a, err)
 			continue
 		}
 		srv = s
@@ -561,6 +562,9 @@ func engineStateSince(sent uint64) control.State {
 	st.Repeat = engineQ.Repeat().String()
 	st.Shuffle = shuffleOn
 	st.QueueVersion = engineQ.Version()
+	if i := engineQ.Index(); i >= 0 {
+		st.QueueIndex = &i
+	}
 	if ts := engineQ.Tracks(); len(ts) > 0 && (sent == 0 || st.QueueVersion != sent) {
 		qt := make([]control.Track, len(ts))
 		for i, t := range ts {
@@ -638,7 +642,8 @@ func queueTracksFromJSON(js string) ([]deezer.Track, error) {
 func trackFromWire(w bridge.Track) deezer.Track {
 	t := deezer.Track{
 		ID: w.ID, Name: w.Name, DurationMS: w.DurationMS,
-		AlbumName: w.AlbumName, ArtworkURL: w.ArtworkURL, Explicit: w.Explicit,
+		AlbumName: w.AlbumName, AlbumID: w.AlbumID, ArtworkURL: w.ArtworkURL, Explicit: w.Explicit,
+		Unavailable: w.Unavailable,
 	}
 	for _, a := range w.Artists {
 		t.Artists = append(t.Artists, deezer.Artist{ID: a.ID, Name: a.Name})
@@ -837,7 +842,7 @@ func engineSetShuffle(on bool) {
 // override them (SetClientInfo); otherwise they default to the platform.
 var (
 	clientID    = runtime.GOOS
-	deviceLabel = "OpenDeezer (" + platformName(runtime.GOOS) + ")"
+	deviceLabel = "Purple Disc (" + platformName(runtime.GOOS) + ")"
 )
 
 func platformName(goos string) string {
@@ -898,7 +903,7 @@ func engineAccount() control.Account {
 // forwarded too.
 func engineCommands() control.Commands {
 	return control.Commands{
-		PlayPause: func() { withPlayerNotify(func(p *audio.Player) { p.TogglePause() }) },
+		PlayPause: enginePlayPause,
 		Next:      engineNext,
 		Prev:      enginePrev,
 		// Record the in-progress listen before halting: the next Play sees the
@@ -1068,10 +1073,31 @@ func engineQueueAdvance(finishedID string) (deezer.Track, bool) {
 	if !ok || cur.ID == "" || cur.ID != finishedID {
 		return deezer.Track{}, false
 	}
-	if !engineQ.AdvanceAuto() {
+	if !stepPlayable(engineQ.AdvanceAuto) {
 		return deezer.Track{}, false
 	}
 	return engineQ.Current()
+}
+
+// stepPlayable moves the cursor with move, and on past tracks that cannot play without
+// asking for them or counting them as failures. False, with the cursor where it was, when
+// nothing in the queue plays or move stops first. Called with queueMu held.
+func stepPlayable(move func() bool) bool {
+	if !slices.ContainsFunc(engineQ.Tracks(), func(t deezer.Track) bool { return !t.Unavailable }) {
+		return false
+	}
+	at := engineQ.Mark()
+	// A shuffled cycle holds every row, so two cycles reach a playable one.
+	for range 2 * engineQ.Len() {
+		if !move() {
+			break
+		}
+		if t, ok := engineQ.Current(); ok && !t.Unavailable {
+			return true
+		}
+	}
+	engineQ.Restore(at)
+	return false
 }
 
 // engineAdvanceOnFinish runs from onFinish on manage()'s goroutine and starts the next
@@ -1129,12 +1155,12 @@ func engineAutoAdvance(next deezer.Track, seq uint64) {
 		if plays.superseded(seq) {
 			return
 		}
-		odlog.Warn("auto-advance: %s: %v", next.ID, err)
+		pdlog.Warn("auto-advance: %s: %v", next.ID, err)
 		queueMu.Lock()
 		cur, ok := engineQ.Current()
 		ok = ok && cur.ID == next.ID // else the queue moved on meanwhile
 		// A lost network is not an unplayable track: the cursor stays on the one that could not start.
-		ended := ok && (failures == maxAdvanceFailures || deezer.IsNoNetwork(err) || !engineQ.Next())
+		ended := ok && (failures == maxAdvanceFailures || deezer.IsNoNetwork(err) || !stepPlayable(engineQ.Next))
 		if ok && !ended {
 			next, ok = engineQ.Current()
 		}
@@ -1195,6 +1221,23 @@ func engineSyncOnGaplessPromote() bool {
 // they move the engine queue and play the new current track locally.
 func engineNext() { engineStep(engineQ.Next, (*control.Client).Next) }
 
+// enginePlayPause flips playing and paused; a stopped or errored player starts the queue's
+// current row instead (a host's restored queue, a stop), as the hosts' own Play does.
+func enginePlayPause() {
+	if p := Player(); p != nil && routedRemote() == nil && (p.State() == audio.Stopped || p.State() == audio.Errored) {
+		queueMu.Lock()
+		t, ok := engineQ.Current()
+		queueMu.Unlock()
+		if ok && !t.Unavailable {
+			seq, done := plays.beginUser()
+			defer done()
+			_ = enginePlayResolved(p, t, seq)
+			return
+		}
+	}
+	withPlayerNotify(func(p *audio.Player) { p.TogglePause() })
+}
+
 // prevRestartMS is the position from which Previous restarts the track, as Deezer's apps do.
 const prevRestartMS = 5000
 
@@ -1220,7 +1263,7 @@ func engineStep(move func() bool, remote func(*control.Client) (control.State, e
 	seq, done := plays.beginUser()
 	defer done()
 	queueMu.Lock()
-	moved := move()
+	moved := stepPlayable(move)
 	t, ok := engineQ.Current()
 	queueMu.Unlock()
 	if p := Player(); moved && ok && p != nil {
@@ -1553,11 +1596,13 @@ func setHistoryStore(s *history.Store) {
 // exports (history.TrackStat/ArtistStat carry no JSON tags, so we don't marshal
 // them directly).
 type jTrackStat struct {
-	TrackID  string `json:"trackId"`
-	Title    string `json:"title"`
-	Artist   string `json:"artist"`
-	Plays    int    `json:"plays"`
-	TotalSec int64  `json:"totalSec"`
+	TrackID    string `json:"trackId"`
+	Title      string `json:"title"`
+	Artist     string `json:"artist"`
+	Plays      int    `json:"plays"`
+	TotalSec   int64  `json:"totalSec"`
+	ArtworkURL string `json:"artworkUrl,omitempty"`
+	DurationMS int64  `json:"durationMs,omitempty"`
 }
 
 type jArtistStat struct {
@@ -1579,9 +1624,16 @@ func HistoryStats(sinceDays int) map[string]any {
 			since = time.Now().AddDate(0, 0, -sinceDays)
 		}
 		if tt, err := st.TopTracks(since, 50); err == nil {
+			// Their artwork and length, as the recent plays get them.
+			meta := make([]history.Entry, len(tt))
+			for i, t := range tt {
+				meta[i] = history.Entry{TrackID: t.TrackID}
+			}
+			fillHistoryMeta(netClient(), meta)
 			topTracks = make([]jTrackStat, len(tt))
 			for i, t := range tt {
-				topTracks[i] = jTrackStat{TrackID: t.TrackID, Title: t.Title, Artist: t.Artist, Plays: t.Plays, TotalSec: t.TotalSec}
+				topTracks[i] = jTrackStat{TrackID: t.TrackID, Title: t.Title, Artist: t.Artist, Plays: t.Plays, TotalSec: t.TotalSec,
+					ArtworkURL: meta[i].ArtworkURL, DurationMS: meta[i].DurationMS}
 			}
 		}
 		if ta, err := st.TopArtists(since, 50); err == nil {
@@ -1628,7 +1680,7 @@ func recordListen(prev deezer.Track, kind string, playedMS int64) {
 	go func() {
 		if st := historyStore(); st != nil {
 			if err := st.Record(e); err != nil {
-				odlog.Debug("history: %v", err)
+				pdlog.Debug("history: %v", err)
 			}
 		}
 	}()

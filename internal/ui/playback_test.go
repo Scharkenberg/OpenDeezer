@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -71,22 +71,40 @@ type roundTrip func(*http.Request) (*http.Response, error)
 
 func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// The TUI's playback keys save into playback.json.
-func TestPlaybackKeysSaveSharedFile(t *testing.T) {
+// The TUI's playback settings save into playback.json.
+func TestPlaybackSettingsSaveSharedFile(t *testing.T) {
 	useTempConfig(t)
 	if err := config.SavePlayback(config.Playback{Gapless: true}); err != nil {
 		t.Fatal(err)
 	}
 	m := interactionModel(screenList)
 	m.client = deezer.New("arl")
-	for _, k := range []rune{'x', 'h', 'R'} {
-		m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}})
+	for _, label := range []string{"Crossfade", "Audio quality", "ReplayGain", "Gapless"} {
+		changeSetting(t, m, label)
 	}
-	m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlG})
 	pb, ok := config.LoadPlayback()
 	if !ok || pb.CrossfadeMS != 3000 || pb.Quality != 1 || !pb.ReplayGain || pb.Gapless != m.player.Gapless() {
-		t.Fatalf("playback.json %+v %v after the keys", pb, ok)
+		t.Fatalf("playback.json %+v %v after the settings", pb, ok)
 	}
+}
+
+// changeSetting opens Settings with ',' and presses enter on the row labeled label; the
+// cursor stays on that row.
+func changeSetting(t *testing.T, m *Model, label string) {
+	t.Helper()
+	m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}})
+	for i, s := range m.settings() {
+		if s.label != label {
+			continue
+		}
+		m.list.Select(i)
+		m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+		if m.list.Index() != i || m.list.SelectedItem().(row).right != m.settings()[i].value() {
+			t.Fatalf("%s: cursor %d, row %+v after enter", label, m.list.Index(), m.list.SelectedItem())
+		}
+		return
+	}
+	t.Fatalf("no setting %q", label)
 }
 
 // After a login the TUI learns the web player's build and keeps it for the

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // Values match DZState.
 internal enum PlayState { Stopped, Loading, Playing, Paused, Error }
@@ -68,7 +68,7 @@ internal sealed partial class Player
     public string CastAddress { get; private set; } = "";
     public string CastName { get; private set; } = "";
     public bool IsCasting => CastAddress.Length > 0;
-    public string Format { get; private set; } = "";
+    public string Format { get; internal set; } = "";
     public bool IsPreview { get; private set; }
     public IReadOnlyList<Track> Queue => _queue;
     public int QueueIndex => _queueIndex;

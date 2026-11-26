@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Deezer brand purple -->
-    <color name="deezer_purple">#A238FF</color>
-    <color name="black">#000000</color>
-    <color name="ic_launcher_background">#121216</color>
+    <!-- The app's background (Theme.kt), the color of its first frame. -->
+    <color name="window_background">#FFF7FE</color>
+    <!-- The circle of the app's mark (MarkPurple in Tokens.kt). -->
+    <color name="mark">#9A45FF</color>
 </resources>

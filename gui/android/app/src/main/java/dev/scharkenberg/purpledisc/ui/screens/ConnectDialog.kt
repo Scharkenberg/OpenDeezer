@@ -1,0 +1,173 @@
+package dev.scharkenberg.purpledisc.ui.screens
+
+import dev.scharkenberg.purpledisc.MainActivity
+import androidx.compose.ui.platform.LocalContext
+import android.Manifest
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import dev.scharkenberg.purpledisc.R
+import dev.scharkenberg.purpledisc.ui.theme.Space
+import dev.scharkenberg.purpledisc.engine.ConnectDevice
+import dev.scharkenberg.purpledisc.engine.Engine
+import dev.scharkenberg.purpledisc.player.PlayerController
+import dev.scharkenberg.purpledisc.ui.components.deviceTypeLabel
+import kotlinx.coroutines.launch
+
+@Composable
+fun ConnectDialog(player: PlayerController, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    // Discovery needs the local network (Android 17+).
+    val activity = LocalContext.current as? MainActivity
+    LaunchedEffect(Unit) { activity?.ask(Manifest.permission.ACCESS_LOCAL_NETWORK) }
+    var devices by remember { mutableStateOf<List<ConnectDevice>?>(null) }
+    var connected by remember { mutableStateOf(Engine.connectedDevice()) }
+
+    fun refresh() {
+        devices = null
+        scope.launch {
+            devices = Engine.discoverDevices(700L)
+            connected = Engine.connectedDevice()
+        }
+    }
+
+    // Discover on first show.
+    LaunchedEffect(Unit) {
+        devices = Engine.discoverDevices(700L)
+        connected = Engine.connectedDevice()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
+        dismissButton = { TextButton(onClick = { refresh() }) { Text(stringResource(R.string.action_refresh)) } },
+        title = { Text(stringResource(R.string.settings_connect)) },
+        text = {
+            Column {
+                // "This device" — selecting it returns playback to local.
+                DeviceRow(
+                    title = stringResource(R.string.connect_this_device),
+                    subtitle = stringResource(R.string.device_self_phone),
+                    leading = Icons.Filled.Smartphone,
+                    selected = connected.isBlank(),
+                    onClick = {
+                        scope.launch {
+                            Engine.disconnectDevice()
+                            connected = ""
+                            onDismiss()
+                        }
+                    },
+                )
+                Spacer(Modifier.size(Space.xs))
+                when (val list = devices) {
+                    null -> Box(Modifier.fillMaxWidth().padding(Space.l), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                    else -> if (list.isEmpty()) {
+                        Text(
+                            stringResource(R.string.connect_no_devices),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(Space.s),
+                        )
+                    } else {
+                        LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                            items(list, key = { it.addr }) { d ->
+                                DeviceRow(
+                                    title = d.name.ifBlank { d.addr },
+                                    subtitle = listOfNotNull(
+                                        deviceTypeLabel(d),
+                                        d.version.ifBlank { null }?.let { "v$it" },
+                                    ).joinToString(" · "),
+                                    leading = Icons.Filled.Cast,
+                                    selected = connected == d.addr,
+                                    onClick = {
+                                        scope.launch {
+                                            if (player.connectDevice(d.addr)) {
+                                                connected = Engine.connectedDevice()
+                                                onDismiss()
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeviceRow(
+    title: String,
+    subtitle: String,
+    leading: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start,
+    ) {
+        Icon(
+            leading,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (selected) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = stringResource(R.string.cd_connected),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}

@@ -11,7 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal readonly record struct RowOptions(bool ShowAlbum, int QueueIndex = -1);
 
@@ -163,6 +163,8 @@ internal sealed class TrackRow
         Ui.SetText(_album, t.IsEpisode && Episodes.Info(t) is { } ep ? Fmt.Date(ep.ReleaseDate) : t.AlbumName);
         Ui.SetText(_duration, t.DurationMs > 0 ? Fmt.Time(t.DurationMs) : "");
         AutomationProperties.SetName(Container, t.ArtistLine.Length == 0 ? t.Name : t.Name + ", " + t.ArtistLine);
+        // A track Deezer streams nowhere says why on hover.
+        ToolTipService.SetToolTip(Container, t.Unavailable ? Loc.S("Track_Unavailable") : null);
         Render();
     }
 
@@ -183,7 +185,7 @@ internal sealed class TrackRow
     private void Render()
     {
         if (Track is not { } t) return;
-        bool playable = t.Id.Length > 0;
+        bool playable = t.Id.Length > 0 && !t.Unavailable;
         bool playing = _queue ? Index == _queueIndex : playable && t.Id == App.Player.Current?.Id;
         var mark = t.IsEpisode ? Episodes.Mark(t.Id) : null;
         bool played = _queue ? Index < _queueIndex : mark is { Heard: true };
@@ -198,7 +200,8 @@ internal sealed class TrackRow
         }
         bool reveal = _hover || _focused;
         bool pinned = menus && App.Offline.IsPinned(t.Id);
-        _title.Style = playing ? Ui.Styles.RowTitlePlaying : played ? Ui.Styles.RowTitlePlayed : Ui.Styles.RowTitle;
+        // A track Deezer streams nowhere reads like a played one.
+        _title.Style = playing ? Ui.Styles.RowTitlePlaying : played || t.Unavailable ? Ui.Styles.RowTitlePlayed : Ui.Styles.RowTitle;
         _artist.Style = Ui.TextStyle(played ? TextKind.TertiaryCaption : TextKind.SecondaryCaption);
         _playing.Visibility = Ui.Show(playing && !_hover);
         if (_queue)

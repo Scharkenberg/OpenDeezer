@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // The engine calls Offline makes.
 internal interface IOfflineEngine

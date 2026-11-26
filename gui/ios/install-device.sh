@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build OpenDeezer and install it on a USB-connected iPhone, signed with YOUR
+# Build Purple Disc and install it on a USB-connected iPhone, signed with YOUR
 # Apple ID. (CI only produces an UNSIGNED .ipa — iOS refuses to install that;
 # an app must be signed by you before a device will run it.)
 #
@@ -11,7 +11,7 @@
 #                 parentheses), or at developer.apple.com ▸ Membership. A FREE
 #                 Apple ID has one too.
 #
-#   --no-multicast  Strip the OpenDeezer Connect multicast entitlement before
+#   --no-multicast  Strip the Purple Disc Connect multicast entitlement before
 #                 signing. REQUIRED for a free Apple ID or any team Apple has not
 #                 approved for Multicast Networking. Cost: Connect can't
 #                 auto-discover devices on the LAN (you can still add them by IP);
@@ -36,24 +36,24 @@ fi
 NO_MULTICAST=0
 [[ "${2:-}" == "--no-multicast" ]] && NO_MULTICAST=1
 
-echo "==> binding Go engine -> Odmobile.xcframework"
+echo "==> binding Go engine -> Pdmobile.xcframework"
 cd "$ROOT"
-TOOLS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/opendeezer-mobile-tools.XXXXXX")"
+TOOLS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/purpledisc-mobile-tools.XXXXXX")"
 trap 'rm -rf "$TOOLS_DIR"' EXIT
 "$ROOT/scripts/build-mobile-tools.sh" "$TOOLS_DIR"
 export PATH="$TOOLS_DIR:$PATH"
-rm -rf "$IOS_DIR/Odmobile.xcframework"
-gomobile bind -trimpath -target=ios -o "$IOS_DIR/Odmobile.xcframework" ./mobile
+rm -rf "$IOS_DIR/Pdmobile.xcframework"
+gomobile bind -trimpath -ldflags="-s -w" -target=ios -o "$IOS_DIR/Pdmobile.xcframework" ./mobile
 
 echo "==> xcodegen generate"
 cd "$IOS_DIR"
 xcodegen generate
 
 # For a free Apple ID, sign against an entitlements file without the paid-only
-# multicast key. The real Resources/OpenDeezer.entitlements is left untouched.
+# multicast key. The real Resources/PurpleDisc.entitlements is left untouched.
 ENTITLEMENTS_OVERRIDE=()
 if [[ "$NO_MULTICAST" -eq 1 ]]; then
-  TMP_ENT="$IOS_DIR/build/OpenDeezer-free.entitlements"
+  TMP_ENT="$IOS_DIR/build/PurpleDisc-free.entitlements"
   mkdir -p "$IOS_DIR/build"
   cat >"$TMP_ENT" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -65,13 +65,13 @@ PLIST
 fi
 
 echo "==> building + signing for device (Team $TEAM)"
-xcodebuild -project OpenDeezer.xcodeproj -scheme OpenDeezer \
+xcodebuild -project PurpleDisc.xcodeproj -scheme PurpleDisc \
   -destination 'generic/platform=iOS' -configuration Release -derivedDataPath build \
   -allowProvisioningUpdates \
   DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
   "${ENTITLEMENTS_OVERRIDE[@]}" build
 
-APP="$IOS_DIR/build/Build/Products/Release-iphoneos/OpenDeezer.app"
+APP="$IOS_DIR/build/Build/Products/Release-iphoneos/PurpleDisc.app"
 [[ -d "$APP" ]] || { echo "error: build produced no app at $APP" >&2; exit 1; }
 
 # Install to the first connected device. devicectl ships with Xcode 15+.
@@ -80,7 +80,7 @@ command -v jq >/dev/null || {
   echo "error: jq is required to read devicectl's supported JSON output." >&2
   exit 1
 }
-DEVICE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/opendeezer-devices.XXXXXX")"
+DEVICE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/purpledisc-devices.XXXXXX")"
 trap 'rm -rf "$DEVICE_TMP_DIR" "$TOOLS_DIR"' EXIT
 DEVICE_JSON="$DEVICE_TMP_DIR/devices.json"
 xcrun devicectl list devices --quiet --json-output "$DEVICE_JSON"
@@ -98,7 +98,7 @@ UDID="$(jq -r '
 ' "$DEVICE_JSON")"
 if [[ -z "$UDID" ]]; then
   echo "No connected iPhone found via devicectl. Plug in + trust the phone, or" >&2
-  echo "open OpenDeezer.xcodeproj in Xcode, pick your iPhone, and press Run." >&2
+  echo "open PurpleDisc.xcodeproj in Xcode, pick your iPhone, and press Run." >&2
   echo "The signed app is ready at: $APP" >&2
   exit 1
 fi

@@ -1,10 +1,10 @@
-# OpenDeezer (Android)
+# Purple Disc (Android)
 
-Native **Kotlin / Jetpack Compose / Material 3** front-end for OpenDeezer — *an
-open source reimplementation of Deezer*. The whole engine (login, browse,
-Blowfish decrypt, decode, playback, OpenDeezer Connect) is the Go core bound to
-an Android library (`app/libs/odmobile.aar`) via **gomobile** and called
-in-process through the `odmobile.Odmobile` static API; this layer is UI only.
+Native **Kotlin / Jetpack Compose / Material 3** front-end for Purple Disc — *an unofficial
+open-source client for Deezer*. The whole engine (login, browse,
+Blowfish decrypt, decode, playback, Purple Disc Connect) is the Go core bound to
+an Android library (`app/libs/pdmobile.aar`) via **gomobile** and called
+in-process through the `pdmobile.Pdmobile` static API; this layer is UI only.
 
 ## Look
 
@@ -18,7 +18,7 @@ in-process through the `odmobile.Odmobile` static API; this layer is UI only.
 ## Features
 
 - **Login** via an in-app `WebView` (`deezer.com/login`) that reads the `arl`
-  cookie with `CookieManager` and calls `Odmobile.init(arl)`, plus a manual
+  cookie with `CookieManager` and calls `Pdmobile.init(arl)`, plus a manual
   "paste ARL" fallback. The ARL is persisted (app-private `SharedPreferences`)
   for auto-login.
 - **Free-account gate:** non-premium accounts get a "Premium required" screen.
@@ -31,11 +31,11 @@ in-process through the `odmobile.Odmobile` static API; this layer is UI only.
 - **Synced lyrics** (current line highlighted by position), **Queue** view,
   **Search**, **Settings** (quality Normal/High/HiFi, ReplayGain, gapless,
   crossfade, plus the remote toggles below and an update check).
-- **OpenDeezer Connect:** a cast button opens a device picker from
+- **Purple Disc Connect:** a cast button opens a device picker from
   `discoverDevices(700)` (name · type · version, plus a "This device" entry);
-  `connectDevice` / `disconnectDevice` route playback to another OpenDeezer.
+  `connectDevice` / `disconnectDevice` route playback to another Purple Disc.
 - **Remote settings** (in Settings): *Make this device reachable* advertises the
-  phone as an OpenDeezer Connect host (`connectHostSetEnabled`), and *Phone
+  phone as an Purple Disc Connect host (`connectHostSetEnabled`), and *Phone
   Remote* serves the browser remote page (QR + code). Both persist in
   `SharedPreferences` and are re-applied after login (`AppViewModel.applyRemoteHosts`).
 
@@ -53,47 +53,72 @@ launcher:
   `clickable`/`onFocusChanged` for D-pad focus (no `androidx.tv`).
 - The `mobile` flavor keeps the touch app unchanged. Each flavor supplies its own
   launcher manifest (`src/mobile/`, `src/tv/`); shared code lives in `src/main/`.
-- App id `fr.cyclooo.opendeezer.tv`, so it installs alongside the phone app.
+- App id `dev.scharkenberg.purpledisc.tv`, so it installs alongside the phone app.
 
 ## Build & run
 
-```sh
-gui/android/build.sh
-# -> app/build/outputs/apk/mobile/debug/app-mobile-debug.apk  (phone/tablet)
-# -> app/build/outputs/apk/tv/debug/app-tv-debug.apk          (Android TV)
+Windows (PowerShell 7, from the repository root):
+
+```powershell
+gui\android\build.ps1 [-Tv]
+# -> gui\android\app\build\outputs\apk\mobile\debug\app-mobile-debug.apk  (phone/tablet)
+# -> gui\android\app\build\outputs\apk\tv\debug\app-tv-debug.apk          (Android TV, with -Tv)
+gui\android\release.ps1 [-Abi arm64-v8a[,x86_64]] [-Tv] [-Keystore <file>]
+# -> gui\android\dist\PurpleDisc-<version>-<abi>.apk per CPU type, signed and verified; the build folders deleted
 ```
 
-`build.sh` (1) builds the gomobile/gobind versions pinned by `go.mod`, (2) binds the Go engine
-(`gomobile bind -target=android -androidapi 24 -o gui/android/app/libs/odmobile.aar ./mobile`),
-and (3) runs `./gradlew --no-daemon assembleMobileDebug assembleTvDebug`. CI
-(`.github/workflows/android.yml`) does the same. Build a single flavor with
-`assembleMobileDebug` or `assembleTvDebug`.
+Linux and macOS:
 
+```sh
+gui/android/build.sh
+```
+
+The scripts (1) build the gomobile/gobind versions pinned by `go.mod`, (2) bind the Go engine
+for 64-bit ARM and x86_64 with 16 KB aligned segments and packed relocations
+(`CGO_LDFLAGS=-Wl,-z,max-page-size=16384 -Wl,--pack-dyn-relocs=android`) and the engine's CPU
+profile (`GOFLAGS=-pgo=<repo>/corelib/default.pgo`), then
+`gomobile bind -trimpath -ldflags="-s -w" -target=android/arm64,android/amd64 -androidapi 24`;
+the Windows ones skip the bind while `app\libs\pdmobile.aar` is newer than the engine's sources
+and `env.ps1`.
+`build.ps1` and `build.sh` then run `gradlew --no-daemon assembleMobileDebug` (and
+`assembleTvDebug`). CI (`.github/workflows/android.yml`) binds all four CPU types.
+
+`release.ps1` runs `assembleMobileRelease -Pabi=<abi>` once per CPU type (R8 code and resource
+optimization, the engine for that CPU type only) and signs each APK, v2 and v3 only (Android 7
+reads v2), with `-Keystore` (password in `ANDROID_KEYSTORE_PASSWORD`), else
+`ANDROID_KEYSTORE_FILE`, else the SDK's debug keystore.
+Android refuses it over a copy signed with another key until that copy is uninstalled.
 ### Prerequisites
 
-- **Go 1.24+**, **JDK 17**, the **Android SDK** (compileSdk 34) and an **NDK**
-  (gomobile needs it; CI uses `ndk;26.3.11579264`).
-- Point Gradle at your SDK via `gui/android/local.properties`
-  (`sdk.dir=/path/to/Android/sdk`) or the `ANDROID_SDK_ROOT` env var.
-- First Gradle run downloads Gradle 8.7 through the committed wrapper.
+- **Go 1.27**, **JDK 21**, the **Android SDK** with platform **37.2** and build-tools
+  **37.0.0**, and the **NDK r30** (`ndk;30.0.16248370`).
+- `ANDROID_HOME`, `ANDROID_NDK_HOME` and `JAVA_HOME` point at them. `env.ps1` uses
+  `C:\Program Files (x86)\Android\android-sdk`, its `ndk\30.0.16248370` and
+  `C:\Program Files (x86)\Android\openjdk\jdk-21.0.8` when they are not set.
+- First Gradle run downloads Gradle 9.9.2 through the committed wrapper.
 
 ## Toolchain
 
-- Gradle **8.7** · Android Gradle Plugin **8.5.2** · Kotlin **2.0.20**
-  (`org.jetbrains.kotlin.plugin.compose`) · Compose BOM **2024.09.03**.
-- `compileSdk`/`targetSdk` **34**, `minSdk` **24**, JDK **17**.
-- Coil (`io.coil-kt:coil-compose`) loads `artworkUrl`s directly;
-  Navigation Compose drives routing.
+- Gradle **9.9.2** · Android Gradle Plugin **9.5.2** with its built-in Kotlin at
+  **2.4.21** (`kotlin-gradle-plugin` on the buildscript classpath,
+  `org.jetbrains.kotlin.plugin.compose`) · Compose BOM **2026.11.01**.
+- `compileSdk` **37.2**, `targetSdk` **37**, `minSdk` **24**, JDK **21**.
+- Release builds: R8 with resource shrinking (`optimization { enable = true }`); the
+  engine AAR brings its own keep rules.
+- Coil 3 (`io.coil-kt.coil3:coil-compose`, `coil-network-core`) loads `artworkUrl`s
+  through one image loader built in `PurpleDiscApplication`, which downloads through the
+  engine's `Fetch` (no OkHttp in the app); Navigation Compose
+  drives routing.
 
 ## Architecture
 
 ```
-app/src/main/java/fr/cyclooo/opendeezer/
+app/src/main/java/dev/scharkenberg/purpledisc/
   MainActivity.kt        Compose host
-  OpenDeezerApp.kt       auth gate + NavHost + bottom player bar + connect dialog
+  PurpleDiscApp.kt       auth gate + NavHost + bottom player bar + connect dialog
   AppViewModel.kt        login/account state, owns the PlayerController
   Routes.kt              navigation routes
-  engine/Engine.kt       suspend facade over the gomobile Odmobile static API
+  engine/Engine.kt       suspend facade over the gomobile Pdmobile static API
   engine/Models.kt       data models + org.json parsers (match the wire shapes)
   player/PlayerController.kt  in-app queue, 500 ms poll, finishedCount auto-advance
   data/Prefs.kt          ARL + remote-host toggle persistence
@@ -103,4 +128,4 @@ app/src/mobile/          phone launcher manifest (.MainActivity)
 app/src/tv/              Android TV: TvActivity + D-pad Compose UI, leanback manifest, banner
 ```
 
-Package id `fr.cyclooo.opendeezer` (`.tv` suffix for the TV flavor). Author: Cycl0o0.
+Package id `dev.scharkenberg.purpledisc` (`.tv` suffix for the TV flavor). Author: Scharkenberg, based on OpenDeezer by Cycl0o0.

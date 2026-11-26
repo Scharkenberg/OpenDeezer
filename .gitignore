@@ -1,12 +1,31 @@
 .DS_Store
-/opendeezer
-/opendeezer.exe
+/purpledisc
+/*.exe
+/corelib/*.exe
+/purpledisc-mcp
+/dist/
+/docs/research/
 *.test
 *.test.exe
 hs_err_pid*.log
 /gui/windows.tests/bin/
 /gui/windows.tests/obj/
 TestResults/
-/gui/windows/libdeezercore.dll
 /.vs
-/gui/windows/libdeezercore.prebuilt.dll
+
+# A copy of corelib/default.pgo, made by the build scripts.
+/cmd/purpledisc/default.pgo
+
+# Inter, copied from assets/fonts by the Android and macOS builds.
+/gui/android/app/src/main/res/font/inter.ttf
+/gui/android/app/src/main/res/font/inter_regular.ttf
+/gui/android/app/src/main/res/font/inter_semibold.ttf
+/gui/android/app/src/main/assets/fonts/Inter-OFL.txt
+/gui/macos/Sources/PurpleDisc/Resources/Fonts/
+
+# Build output of the scripts that write outside a folder of their own.
+/gui/linux/dist/
+/gui/kde/purpledisc-login
+/gui/android/dist/
+/packaging/flatpak/flathub/build/
+/packaging/flatpak/flathub/.flatpak-builder/

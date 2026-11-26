@@ -15,8 +15,12 @@ type Track struct {
 	DurationMS int64
 	Artists    []Artist
 	AlbumName  string
+	AlbumID    string // "" when the source names no album id
 	ArtworkURL string
 	Explicit   bool // explicit lyrics/content (show an "E" badge)
+	// Unavailable is a listed track Deezer streams nowhere and offers no other version
+	// of (gw RIGHTS empty, no FALLBACK): clients show it greyed out and skip it.
+	Unavailable bool
 
 	// TrackNumber is the 1-based position in the album (track_position), 0 when unknown;
 	// the tagger then skips TRCK / TRACKNUMBER.

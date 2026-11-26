@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // ErrPremiumRequired is returned by SaveTrack when the account is not entitled to full
@@ -574,7 +574,7 @@ func (c *Client) saveTrack(ctx context.Context, t Track, dir string, plan *Strea
 	// download.
 	au := upgradeArtworkURL(t.ArtworkURL)
 	if tagErr := tagFile(ctx, tmp, ext, t, au, t.TrackNumber, t.Year, fetch); tagErr != nil {
-		odlog.Warn("download: tagging %s failed (non-fatal, file left as raw audio): %v", path, tagErr)
+		pdlog.Warn("download: tagging %s failed (non-fatal, file left as raw audio): %v", path, tagErr)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)

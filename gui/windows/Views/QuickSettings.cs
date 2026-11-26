@@ -5,7 +5,7 @@ using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class QuickSettings
 {

@@ -197,7 +197,7 @@
     <value>No se encontraron otros dispositivos en tu red.</value>
   </data>
   <data name="Connect_VersionFormat" xml:space="preserve">
-    <value>{0} · OpenDeezer {1}</value>
+    <value>{0} · Purple Disc {1}</value>
   </data>
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>Reproduciendo en {0}</value>
@@ -215,7 +215,7 @@
     <value>No hay letra disponible.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Inicia sesión en OpenDeezer</value>
+    <value>Inicia sesión en Purple Disc</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>Pega tu ARL de Deezer</value>
@@ -266,7 +266,7 @@
     <value>Reintentar</value>
   </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>Mostrar OpenDeezer</value>
+    <value>Mostrar Purple Disc</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>Salir</value>
@@ -344,7 +344,7 @@
     <value>Al cerrar la ventana sigue reproduciéndose en la bandeja</value>
   </data>
   <data name="Settings_TrayOff" xml:space="preserve">
-    <value>Al cerrar la ventana se cierra OpenDeezer</value>
+    <value>Al cerrar la ventana se cierra Purple Disc</value>
   </data>
   <data name="Settings_RemoteControl" xml:space="preserve">
     <value>Control remoto</value>
@@ -383,7 +383,7 @@
     <value>Predeterminado del sistema</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>Reinicia OpenDeezer para aplicar el nuevo idioma</value>
+    <value>Reinicia Purple Disc para aplicar el nuevo idioma</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>Preajuste</value>
@@ -401,13 +401,13 @@
     <value>Escanea con tu teléfono (misma Wi-Fi) e introduce el código.</value>
   </data>
   <data name="About_Title" xml:space="preserve">
-    <value>Acerca de OpenDeezer</value>
+    <value>Acerca de Purple Disc</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
     <value>Cliente de código abierto no oficial para Deezer.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Por Cycl0o0; aplicación para Windows de Scharkenberg. Con licencia AGPL-3.0.</value>
+    <value>Por Scharkenberg, basado en OpenDeezer de Cycl0o0. Con licencia AGPL-3.0.</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} canción</value>
@@ -470,7 +470,7 @@
     <value>No informar de mis reproducciones</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Deja de informar a Deezer de tus reproducciones. Los artistas no reciben crédito por ellas y se incumplen las condiciones de uso de Deezer. OpenDeezer no reproduce anuncios en ningún caso.</value>
+    <value>Deja de informar a Deezer de tus reproducciones. Los artistas no reciben crédito por ellas y se incumplen las condiciones de uso de Deezer. Purple Disc no reproduce anuncios en ningún caso.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>Recientes</value>
@@ -557,7 +557,7 @@
     <value>El inicio de sesión web necesita Microsoft Edge WebView2 Runtime. Instálalo o usa un token ARL.</value>
   </data>
   <data name="Error_EngineMissing" xml:space="preserve">
-    <value>No se pudo cargar libdeezercore.dll. Reinstala OpenDeezer.</value>
+    <value>No se pudo cargar libdeezercore.dll. Reinstala Purple Disc.</value>
   </data>
   <data name="Error_NoAudio" xml:space="preserve">
     <value>No se encontró ninguna salida de audio. Conecta altavoces o auriculares e inténtalo de nuevo.</value>
@@ -626,10 +626,10 @@
     <value>Sin token, cualquier dispositivo con tu cuenta de Deezer puede controlar la reproducción.</value>
   </data>
   <data name="Tray_HintTitle" xml:space="preserve">
-    <value>OpenDeezer sigue en ejecución</value>
+    <value>Purple Disc sigue en ejecución</value>
   </data>
   <data name="Tray_HintBody" xml:space="preserve">
-    <value>La música sigue sonando. Abre o cierra OpenDeezer desde el icono de la bandeja.</value>
+    <value>La música sigue sonando. Abre o cierra Purple Disc desde el icono de la bandeja.</value>
   </data>
   <data name="Sleep_RemainingFormat" xml:space="preserve">
     <value>Se pausará en {0}</value>
@@ -765,9 +765,6 @@
   </data>
   <data name="Empty_Artist" xml:space="preserve">
     <value>No se encontró nada de este artista</value>
-  </data>
-  <data name="Lyrics_PaidOnly" xml:space="preserve">
-    <value>La letra está disponible con Deezer Premium, Duo, Family y Student.</value>
   </data>
   <data name="Queue_LeftFormat" xml:space="preserve">
     <value>quedan {0}</value>
@@ -1252,5 +1249,23 @@
   </data>
   <data name="Pin_Full" xml:space="preserve">
     <value>Inicio está lleno. Quita algo primero</value>
+  </data>
+  <data name="Track_Unavailable" xml:space="preserve">
+    <value>No disponible en Deezer</value>
+  </data>
+  <data name="Menu_GoToAlbum" xml:space="preserve">
+    <value>Ir al álbum</value>
+  </data>
+  <data name="Charts_AllGenres" xml:space="preserve">
+    <value>Todos los géneros</value>
+  </data>
+  <data name="Charts_Genre" xml:space="preserve">
+    <value>Género</value>
+  </data>
+  <data name="Menu_On" xml:space="preserve">
+    <value>Activado</value>
+  </data>
+  <data name="Menu_Off" xml:space="preserve">
+    <value>Desactivado</value>
   </data>
 </root>

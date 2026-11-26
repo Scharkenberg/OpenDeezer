@@ -159,7 +159,7 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
                                const QString &currentDeviceId, bool premium,
                                QWidget *parent)
     : QDialog(parent), m_iniPath(iniPath), m_initialDevice(currentDeviceId) {
-    setWindowTitle(tr("OpenDeezer Settings"));
+    setWindowTitle(tr("Purple Disc Settings"));
     setModal(true);
 
     auto *root = new QVBoxLayout(this);
@@ -314,7 +314,7 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
         m_disableAds->setChecked(DZAdsDisabled() != 0);
         adsLay->addWidget(m_disableAds);
         auto *adsHint = new QLabel(tr(
-            "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's "
+            "Purple Disc plays no ads. It reports your plays to Deezer as Deezer's "
             "own player does, which credits the artists. Turning this on stops "
             "that: artists get no credit for those plays, and it breaks Deezer's "
             "terms of use. Use at your own risk."));
@@ -467,7 +467,7 @@ SettingsDialog::SettingsDialog(const QString &iniPath,
     remoteForm->addRow(QString(), m_phoneRemote);
 
     auto *remoteHint = new QLabel(tr(
-        "Lets another OpenDeezer app or your phone control playback over the "
+        "Lets another Purple Disc app or your phone control playback over the "
         "network."));
     remoteHint->setWordWrap(true);
     QFont ref = remoteHint->font();
@@ -694,7 +694,7 @@ void SettingsDialog::checkForUpdates() {
             if (o.value("hasUpdate").toBool()) {
                 m_updateUrl = o.value("url").toString();
                 m_updateResult->setText(
-                    tr("OpenDeezer %1 is available.").arg(latest));
+                    tr("Purple Disc %1 is available.").arg(latest));
                 m_updateResult->setToolTip(o.value("notes").toString());
                 m_updateDownloadBtn->show();
             } else if (!latest.isEmpty()) {

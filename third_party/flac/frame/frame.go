@@ -89,7 +89,7 @@ func Parse(r io.Reader) (frame *Frame, err error) {
 }
 
 // ParseReuse is Parse decoding into the sample buffers of prev, a frame that
-// the caller no longer reads; prev may be nil. OpenDeezer patch: not upstream.
+// the caller no longer reads; prev may be nil. Purple Disc patch: not upstream.
 func ParseReuse(r io.Reader, prev *Frame) (frame *Frame, err error) {
 	// Parse frame header.
 	frame, err = New(r)
@@ -112,7 +112,7 @@ func (frame *Frame) Parse() error {
 }
 
 // parse is Parse reusing the sample buffers of prev's subframes when prev is
-// not nil. OpenDeezer patch: upstream allocates them for every frame.
+// not nil. Purple Disc patch: upstream allocates them for every frame.
 func (frame *Frame) parse(prev *Frame) error {
 	// Parse subframes.
 	frame.Subframes = make([]*Subframe, frame.Channels.Count())

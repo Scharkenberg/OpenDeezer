@@ -1,8 +1,9 @@
 // Spacing, sizes, breakpoints and timings. Every number the UI uses is named here.
 
+using System.Numerics;
 using Microsoft.UI.Xaml;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Space
 {
@@ -18,7 +19,7 @@ internal static class Pad
     public static readonly Thickness Page = new(Space.L, Space.M, Space.L, Space.L);
     // Narrow windows save height only: the side margins stay, so text never hugs the edge.
     public static readonly Thickness PageNarrow = new(Space.L, Space.S, Space.L, Space.M);
-    public static readonly Thickness Bar = new(Space.M, Space.XS, Space.M, Space.XS);
+    public static readonly Thickness Bar = new(Space.S, Space.XS, Space.S, Space.XS);
     public static readonly Thickness Tile = new(Space.XS);
     public static readonly Thickness TileButton = new(Space.S);
     public static readonly Thickness Row = new(Space.S, 0, Space.S, 0);
@@ -72,11 +73,16 @@ internal static class Size
     public const double MessageMax = 360;
     // A field that would otherwise grow with its content: a settings list, the title-bar search box.
     public const double FieldMax = 360;
-    // The CDN image sizes artwork is requested at, ascending (Ui.Bitmap picks the smallest that
+    // The CDN image sizes artwork is requested at, ascending (Ui.SizedArt picks the smallest that
     // covers the decode size, else the largest).
     public static readonly int[] CdnArt = [56, 250, 500, 1000];
-    // A page backdrop's picture is blurred: decoded small.
-    public const double BackdropDecode = 120;
+    // A page backdrop: its picture decoded to this many pixels a side and box-blurred with this
+    // radius (Count.BackdropBlurPasses passes come close to a Gaussian blur); its grain one tile of
+    // noise this many physical pixels a side, at this alpha of 255.
+    public const int BackdropPicture = 48;
+    public const int BackdropBlurRadius = 2;
+    public const int GrainTile = 1024;
+    public const byte GrainAlpha = 7;
     // The track overview's artwork.
     public const double TrackArt = 280;
     // The title bar is as tall as the standard caption buttons; the search box keeps one
@@ -105,6 +111,14 @@ internal static class Size
     public const double CardBorder = 1;
     // The now-playing text never gets narrower than this; the bar drops other things first.
     public const double BarText = 140;
+    // On a narrow bar (down to the window's 480 px) the times beside the transport row keep their
+    // room, and the text gives way to here.
+    public const double BarTextNarrow = 88;
+    // The column of Like over the codec chip ("FLAC", the widest).
+    public const double BarSide = 40;
+    // A step above the body and caption styles (15 and 13).
+    public const double BarTitleFont = 16;
+    public const double BarArtistFont = 14;
     public const double BarCenterMin = 220;
     // On a narrow bar the center takes this much before the sides even out (the seek slider's room).
     public const double BarCenterNarrow = 160;
@@ -119,7 +133,8 @@ internal static class Size
     public const double LyricsLineAt = 0.4;
     public const double QrCode = 220;
     public const double EqBand = 160;
-    public const double TimeText = 40;
+    // A time beside the transport row ("1:02:03" measures 31).
+    public const double TimeText = 36;
     public const double DurationColumn = 56;
     // The bar under an episode's title that shows how far the account got.
     public const double EpisodeProgress = 2;
@@ -127,7 +142,7 @@ internal static class Size
     public const double SpeedButton = 48;
     public const double FieldMin = 220;
     public const double WindowMinWidth = 480;
-    public const double WindowMinHeight = 520;
+    public const double WindowMinHeight = 400;
     public const double WindowWidth = 1180;
     public const double WindowHeight = 760;
     // A saved window size past this is not a real one (a corrupt settings.json).
@@ -136,6 +151,7 @@ internal static class Size
 
 internal static class Count
 {
+    public const int BackdropBlurPasses = 3;
     public const int TopTracks = 10;
     public const int ArtistTopTracks = 5;
     public const int SearchTopTracks = 5;
@@ -228,6 +244,8 @@ internal static class Timing
     public const int DiscoverMs = 700;
     public const int CrossFadeMs = 150;
     public const int BackdropFadeMs = 400;
+    // Art that grows takes its sharper picture once no art has changed size for this long.
+    public const int ArtRestMs = 300;
     public const int ToastInMs = 200;
     public const int ToastOutMs = 150;
     public const int RevealMs = 80;
@@ -250,4 +268,65 @@ internal static class Timing
     public const int MarqueeHoldMs = 1100;
     public const int MarqueeMaxReturnMs = 800;
     public const int MarqueeFadeMs = 150;
+    // Motion (Ui/Motion.cs). The mark draws in: outer arc, inner arc after a delay, disc and
+    // triangle with an overshoot, dot last; its dot turns once on a track change in the title bar.
+    public const int MarkOuterMs = 450;
+    public const int MarkInnerMs = 400;
+    public const int MarkInnerDelayMs = 100;
+    public const int MarkDiscMs = 400;
+    public const int MarkDotMs = 300;
+    public const int MarkDotDelayMs = 300;
+    public const int MarkSpinMs = 1100;
+    // A play/pause glyph swap, a like, a mode button's turn, next and previous moving and back.
+    public const int GlyphSwapMs = 150;
+    public const int LikeMs = 400;
+    public const int TurnMs = 350;
+    public const int NudgeMs = 240;
+}
+
+// Motion amounts: a pressed button's scale and its spring, the like pop and ring, the turns.
+internal static class Moves
+{
+    public const float PressScale = 0.86f;
+    public const float PressDamping = 0.5f;
+    public const float SwapFrom = 0.6f;
+    public const float LikeFrom = 0.6f;
+    public const float LikePeak = 1.25f;
+    public const float RingFrom = 0.5f;
+    public const float RingTo = 1.5f;
+    public const float RingWidth = 2;
+    public const float Nudge = 4;
+    // Shuffle, repeat and the settings gear turn once around, so they rest upright.
+    public const float FullTurn = 360;
+    // The mark's arcs draw in fast out, slow in (a cubic Bezier's two points), as on Android.
+    public static readonly Vector2 FastOutSlowInIn = new(0.4f, 0f);
+    public static readonly Vector2 FastOutSlowInOut = new(0.2f, 1f);
+    // The mark's disc and triangle grow past their size and settle (a cubic Bezier's two points).
+    public static readonly Vector2 OvershootIn = new(0.34f, 1.56f);
+    public static readonly Vector2 OvershootOut = new(0.64f, 1f);
+}
+
+// The mark of assets/icon.svg in its 120-unit box: the circle, the outer arc and the faint inner
+// arc (start angle and clockwise sweep in degrees), the faint dot, the disc and the play triangle.
+// Its colors are App.xaml's MarkColor, MarkLineColor and MarkFaintColor.
+internal static class Mark
+{
+    public const float Box = 120;
+    public const float Circle = 54;
+    public const float OuterRadius = 42;
+    public const float OuterWidth = 9;
+    public const float OuterStart = -15;
+    public const float OuterSweep = 310;
+    public const float InnerRadius = 29.5f;
+    public const float InnerWidth = 5;
+    public const float InnerStart = 80;
+    public const float InnerSweep = 135;
+    public const float DotX = 92.17f;
+    public const float DotY = 33;
+    public const float DotRadius = 5;
+    public const float Disc = 21;
+    // A Composition ellipse's outline starts at 12 o'clock, the SVG's angles at 3 o'clock.
+    public const float EllipseStart = -90;
+    // The triangle: three corners, each rounded by a quadratic curve through the corner point.
+    public static readonly float[] Triangle = [57.43f, 50.06f, 70.57f, 57.94f, 74, 60, 70.57f, 62.06f, 57.43f, 69.94f, 54, 72, 54, 68, 54, 52, 54, 48, 57.43f, 50.06f];
 }

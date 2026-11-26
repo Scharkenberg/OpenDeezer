@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed partial class Player
 {
@@ -75,10 +75,13 @@ internal sealed partial class Player
     public void Next()
     {
         if (_queue.Count == 0) return;
+        int from = _queueIndex;
         if (_queueIndex + 1 < _queue.Count) MoveCursor(_queueIndex + 1);
         else if (Repeat == RepeatMode.All) MoveCursor(0);
         else return;
         PlayCurrent();
+        // Nothing playable ahead: playback stopped and the cursor goes back.
+        if (_queue[_queueIndex].Unavailable) MoveCursor(from);
         SyncEngineIndex();
     }
 
@@ -90,7 +93,10 @@ internal sealed partial class Player
             Seek(0);
             return;
         }
-        if (_queueIndex > 0) MoveCursor(_queueIndex - 1);
+        // Back over tracks Deezer streams nowhere; with none playable before it, the current one restarts.
+        int i = _queueIndex - 1;
+        while (i >= 0 && _queue[i].Unavailable) i--;
+        if (i >= 0) MoveCursor(i);
         PlayCurrent();
         SyncEngineIndex();
     }
@@ -118,6 +124,11 @@ internal sealed partial class Player
     {
         if (!HasCurrent) return;
         var t = _queue[_queueIndex];
+        if (t.Unavailable)
+        {
+            SkipUnavailable();
+            return;
+        }
         // The restored track's first play starts where it was left.
         long resumeMs = t == _resumeTrack ? _resumeMs : 0;
         _resumeTrack = null;
@@ -274,6 +285,57 @@ internal sealed partial class Player
         Next();
     }
 
+    // Plays what another player of the account plays: its whole queue from where it stands when
+    // it is an Purple Disc on this network, else the track alone.
+    public async void PlayHere(Track t)
+    {
+        int gen = _playDispatchGen;
+        var q = await Task.Run(() => DeezerCore.TakeOver(t.Id));
+        PlayTakenOver(t, q, gen);
+    }
+
+    // The other player's queue, unless a play started here since it was asked for (gen).
+    internal void PlayTakenOver(Track t, TakeOver q, int gen)
+    {
+        if (gen != _playDispatchGen) return;
+        if (q.Tracks.Count == 0)
+        {
+            Play((Track[])[t], 0, ListenContext.None);
+            return;
+        }
+        int i = Math.Clamp(q.Index, 0, q.Tracks.Count - 1);
+        SetRepeat(q.Repeat switch { "all" => RepeatMode.All, "one" => RepeatMode.One, _ => RepeatMode.Off });
+        if (Shuffle)
+        {
+            // Play replaces the queue below: only the flag goes.
+            SendTransport(() => DeezerCore.DZSetShuffle(0));
+            Shuffle = false;
+            _natural = null;
+        }
+        _resumeTrack = q.PositionMs > 0 ? q.Tracks[i] : null;
+        _resumeMs = q.PositionMs;
+        Play(q.Tracks, i, ListenContext.None);
+    }
+
+    // A track Deezer streams nowhere is stepped over without a try, as Deezer's players grey it
+    // out; with nothing playable ahead, playback stops and says why.
+    private void SkipUnavailable()
+    {
+        int n = _queue.Count;
+        for (int k = 1; k < n; k++)
+        {
+            int i = (_queueIndex + k) % n;
+            if (i < _queueIndex && Repeat != RepeatMode.All) break;
+            if (_queue[i].Unavailable) continue;
+            MoveCursor(i);
+            PlayCurrent();
+            SyncEngineIndex();
+            return;
+        }
+        StopPlayback();
+        Failed?.Invoke(new(Loc.S("Playback_FailTitle"), Loc.S("Track_Unavailable")));
+    }
+
     private void Preload(int n)
     {
         var t = _queue[n];
@@ -296,7 +358,7 @@ internal sealed partial class Player
         if (_queueIndex + 1 < _queue.Count) n = _queueIndex + 1;
         else if (Repeat == RepeatMode.All) n = 0;
         else return false;
-        if (_queue[n].IsEpisode) return false;
+        if (_queue[n].IsEpisode || _queue[n].Unavailable) return false;
         next = n;
         return true;
     }

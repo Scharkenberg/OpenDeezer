@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class SavedQueue
 {

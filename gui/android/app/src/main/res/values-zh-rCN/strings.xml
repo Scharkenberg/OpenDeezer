@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenDeezer</string>
+    <string name="app_name">Purple Disc</string>
 
     <string name="action_back">返回</string>
     <string name="action_close">关闭</string>
@@ -11,7 +11,6 @@
     <string name="action_ok">确定</string>
     <string name="action_sign_out">退出登录</string>
     <string name="action_play">播放</string>
-    <string name="action_pause">暂停</string>
     <string name="action_next">下一首</string>
     <string name="action_previous">上一首</string>
     <string name="action_play_all">全部播放</string>
@@ -19,6 +18,8 @@
     <string name="common_enable">启用</string>
     <string name="common_off">关闭</string>
     <string name="unknown_title">未知</string>
+    <string name="playing_elsewhere">正在其他播放器中播放</string>
+    <string name="action_play_here">在此播放</string>
 
     <string name="cd_connect">连接</string>
     <string name="cd_like">喜欢</string>
@@ -33,13 +34,12 @@
     <string name="cd_qr_code">二维码</string>
     <string name="cd_remote_qr">遥控二维码</string>
 
-    <string name="notif_channel_playback">播放</string>
 
     <string name="login_error_empty_arl">ARL 为空</string>
     <string name="login_error_failed">登录失败 — 请检查你的 ARL 和网络连接。</string>
     <string name="login_error_account">无法加载账户。</string>
     <string name="login_error_secure_storage">无法安全保存登录信息。请检查设备安全设置后重试。</string>
-    <string name="login_error_secure_clear">无法删除已保存的登录信息。为防止重启后自动登录，请在 Android 设置中清除 OpenDeezer 的存储数据。</string>
+    <string name="login_error_secure_clear">无法删除已保存的登录信息。为防止重启后自动登录，请在 Android 设置中清除 Purple Disc 的存储数据。</string>
 
     <!-- No internet (retry reuses action_retry) -->
     <string name="no_internet_title">无网络连接</string>
@@ -53,7 +53,6 @@
     <string name="lyrics_title">歌词</string>
     <string name="charts_title">排行榜</string>
     <string name="search_title">搜索</string>
-    <string name="now_playing_title">正在播放</string>
     <string name="playlists_title">我的歌单</string>
     <string name="podcasts_title">播客</string>
     <string name="equalizer_title">均衡器</string>
@@ -61,12 +60,10 @@
     <string name="greeting_morning">早上好</string>
     <string name="greeting_afternoon">下午好</string>
     <string name="greeting_evening">晚上好</string>
-    <string name="greeting_named">%1$s，%2$s</string>
     <string name="home_liked">喜欢的歌曲</string>
     <string name="section_top_tracks">热门歌曲</string>
     <string name="section_your_playlists">你的歌单</string>
 
-    <string name="settings_audio_quality">音质</string>
     <string name="quality_normal">普通</string>
     <string name="quality_high">高</string>
     <string name="quality_desc_flac">FLAC · 无损</string>
@@ -83,22 +80,22 @@
     <string name="sleep_desc_off">不会自动暂停播放</string>
     <string name="sleep_desc_end">当前曲目播放完后暂停</string>
     <string name="connect_reachable_title">让此设备可被发现</string>
-    <string name="connect_reachable_sub">让你的其他 OpenDeezer 应用发现并控制此设备</string>
+    <string name="connect_reachable_sub">让你的其他 Purple Disc 应用发现并控制此设备</string>
     <string name="reachable_at">可通过 %1$s 访问</string>
     <string name="settings_phone_remote">手机遥控</string>
     <string name="phone_remote_sub">在本地 Wi-Fi 上提供遥控网页</string>
     <string name="phone_remote_scan">用手机扫描（同一 Wi-Fi），然后输入验证码。</string>
     <string name="settings_about">关于</string>
+    <string name="about_credits">作者 Scharkenberg，基于 Cycl0o0 的 OpenDeezer。基于 AGPL-3.0 许可。</string>
     <string name="update_check_title">检查更新</string>
     <string name="update_checking">正在检查…</string>
     <string name="update_check_sub">到 GitHub 检查是否有新版本</string>
     <string name="settings_account">账户</string>
     <string name="plan_label">套餐：%1$s</string>
-    <string name="plan_free">免费</string>
     <string name="update_uptodate_title">已是最新版本</string>
     <string name="update_latest_generic">这已是最新版本。</string>
-    <string name="update_latest_named">OpenDeezer v%1$s 已是最新版本。</string>
-    <string name="update_available_title">OpenDeezer %1$s 可用</string>
+    <string name="update_latest_named">Purple Disc v%1$s 已是最新版本。</string>
+    <string name="update_available_title">Purple Disc %1$s 可用</string>
     <string name="update_available_generic">GitHub 上有新版本可用。</string>
     <string name="update_failed_title">无法检查更新</string>
     <string name="update_failed_body">请检查网络连接后重试。</string>
@@ -130,13 +127,8 @@
 
     <string name="playlists_empty">你还没有歌单。</string>
 
-    <string name="podcasts_search_hint">搜索节目</string>
-    <string name="podcasts_empty_prompt">搜索 Deezer 的播客。</string>
     <string name="podcasts_no_results">未找到节目。</string>
 
-    <string name="premium_required">需要 Premium</string>
-    <string name="premium_body_named">按需畅听需要付费的 Deezer 套餐。你的账户（%1$s）目前为“%2$s”。</string>
-    <string name="premium_body_anon">按需畅听需要付费的 Deezer 套餐。你的账户目前为“%1$s”。</string>
 
     <string name="search_hint">歌曲、专辑、艺人、歌单</string>
     <string name="search_empty_prompt">搜索 Deezer 的曲库。</string>
@@ -149,7 +141,7 @@
 
     <string name="tracklist_empty">这里还没有内容。</string>
 
-    <string name="section_related_artists">Related Artists</string>
+    <string name="section_related_artists">相似艺人</string>
     <string name="artist_load_error">Couldn\'t load this artist — check your connection.</string>
 
     <string name="update_release_notes">更新说明</string>
@@ -157,8 +149,6 @@
     <string name="connect_this_device">此设备</string>
     <string name="connect_no_devices">你的网络中未找到设备。</string>
 
-    <string name="tv_premium_body">OpenDeezer 播放需要 Deezer Premium 账户。</string>
-    <string name="tv_use_another_account">使用其他账户</string>
     <string name="nav_home">首页</string>
     <string name="nav_library">音乐库</string>
 
@@ -185,7 +175,7 @@
     <string name="tv_high_hifi_needs_plan">High/HiFi 需要 Deezer HQ 或 HiFi 套餐。</string>
     <string name="eq_custom_edited">自定义 — 已手动调整各频段</string>
     <string name="eq_adjust_hint">在下方某个频段上按左/右可将其调整 1 dB</string>
-    <string name="tv_connect_reachable_sub">让你的其他 OpenDeezer 应用控制此电视</string>
+    <string name="tv_connect_reachable_sub">让你的其他 Purple Disc 应用控制此电视</string>
     <string name="tv_phone_remote">手机遥控</string>
     <string name="tv_phone_remote_sub">在你的 Wi-Fi 上提供浏览器遥控（扫描二维码）</string>
     <string name="tv_remote_scan">用手机扫描（同一 Wi-Fi），然后输入验证码：</string>
@@ -216,10 +206,8 @@
         <item quantity="other">%1$d 分钟后暂停</item>
     </plurals>
     <!-- Downloads / preview / free account / ads -->
-    <string name="settings_downloads">下载</string>
     <string name="download_folder_title">下载文件夹</string>
     <string name="download_folder_default">默认文件夹</string>
-    <string name="download_requires_premium">需要付费的 Deezer 套餐</string>
     <string name="download_started">正在下载 %1$s…</string>
     <string name="download_saved">已保存到 %1$s</string>
     <string name="download_saved_generic">已下载 %1$s</string>
@@ -228,9 +216,8 @@
     <string name="favorite_update_failed">无法更新喜欢，请检查网络连接。</string>
     <string name="preview_chip">试听</string>
     <string name="account_free_hint">免费账户 · 标准音质（128 kbps）</string>
-    <string name="settings_ads">播放上报</string>
     <string name="setting_disable_ads_title">不上报我的播放</string>
-    <string name="setting_disable_ads_disclaimer">OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。</string>
+    <string name="setting_disable_ads_disclaimer">Purple Disc 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -244,13 +231,12 @@
     <string name="history_title">Recently played</string>
     <string name="history_empty">No listening history yet.</string>
     <string name="history_stats_section">Last 30 days</string>
-    <string name="history_top_artists">Top Artists</string>
+    <string name="history_top_artists">最常听的艺人</string>
     <string name="history_total">%1$s listened</string>
     <string name="dur_hm">%1$dh %2$dm</string>
     <string name="dur_m">%1$dm</string>
     <string name="settings_stream_cache">Stream cache</string>
     <string name="stream_cache_mb">%1$d MB</string>
-    <string name="stream_cache_hint">Applies at next launch. 0 = off.</string>
     <plurals name="n_plays">
         <item quantity="one">%1$d play</item>
         <item quantity="other">%1$d plays</item>
@@ -259,15 +245,83 @@
     <string name="action_play_next">下一首播放</string>
     <string name="action_add_to_queue">添加到队列</string>
     <string name="action_clear_queue">清空队列</string>
-    <string name="action_download_offline">下载以离线播放</string>
     <string name="action_remove">移除</string>
     <string name="cd_downloaded">已下载</string>
     <string name="cd_reorder">重新排序</string>
-    <string name="offline_ready">%1$s 可离线播放</string>
-    <string name="device_self_phone">OpenDeezer (Android)</string>
-    <string name="device_self_tv">OpenDeezer (Android TV)</string>
-    <string name="settings_connect">OpenDeezer Connect</string>
-    <string name="update_notes_title">OpenDeezer %1$s</string>
     <string name="settings_material_you">Material You</string>
     <string name="settings_material_you_hint">匹配系统颜色</string>
+    <string name="load_failed">无法加载此页面。</string>
+    <string name="lyrics_translation">翻译</string>
+    <string name="playback_failed">无法播放这首曲目。</string>
+    <string name="playback_skipping">正在跳到下一首</string>
+    <string name="playback_stopped">连续多首歌曲无法播放。播放已停止</string>
+    <string name="radio_failed">Deezer 没有对应的电台。换一首歌曲或一位艺人试试</string>
+    <string name="connect_failed">无法连接</string>
+    <string name="session_expired">你的会话已过期。重新登录以继续。</string>
+    <string name="queue_next_up">接下来</string>
+    <string name="menu_like">喜欢</string>
+    <string name="menu_unlike">取消喜欢</string>
+    <string name="menu_add_to_playlist">添加到歌单</string>
+    <string name="menu_new_playlist">新建歌单</string>
+    <string name="menu_remove_from_playlist">从此歌单中移除</string>
+    <string name="menu_go_to_artist">转到艺人</string>
+    <string name="ban_track">不再推荐此曲目</string>
+    <string name="ban_artist">不再推荐此艺人</string>
+    <string name="ban_done">好的。我们不会再推荐此曲目</string>
+    <string name="offline_keep">可离线播放</string>
+    <string name="offline_remove">从离线中移除</string>
+    <string name="queue_remove">从队列中移除</string>
+    <string name="queue_move_up">上移</string>
+    <string name="queue_move_down">下移</string>
+    <string name="queue_left">剩余 %1$s</string>
+    <string name="menu_add_favorite">添加到收藏</string>
+    <string name="menu_remove_favorite">从收藏中移除</string>
+    <string name="btn_shuffle">随机播放</string>
+    <string name="dialog_new_playlist">新建歌单</string>
+    <string name="playlist_title_label">标题</string>
+    <string name="dialog_delete_playlist">删除歌单</string>
+    <string name="dialog_delete_playlist_body">确定删除“%1$s”吗？此操作无法撤销。</string>
+    <string name="action_delete">删除</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">保存</string>
+    <string name="episode_mark_played">标记为已播放</string>
+    <string name="episode_mark_unplayed">标记为未播放</string>
+    <string name="section_recently_played">最近播放</string>
+    <string name="action_show_all">显示全部</string>
+    <string name="menu_share">分享</string>
+    <string name="action_rename">重命名</string>
+    <string name="library_downloaded">已下载</string>
+    <string name="action_create">创建</string>
+    <string name="filter_all">全部</string>
+    <string name="search_top_result">最佳结果</string>
+    <string name="search_clear_recent">清除最近搜索</string>
+    <string name="settings_explicit">露骨内容</string>
+    <string name="explicit_display">显示露骨内容</string>
+    <string name="explicit_no_recommendation">不推荐露骨内容</string>
+    <string name="explicit_hide">隐藏露骨内容</string>
+    <string name="settings_clear_cache">清除缓存</string>
+    <string name="cache_used">已用 %1$s</string>
+    <string name="cache_used_offline">已用 %1$s，离线 %2$s</string>
+    <string name="settings_single_device">一次一个播放器</string>
+    <string name="single_device_on">账号的其他播放器开始播放时暂停；在此播放会暂停其他播放器</string>
+    <string name="single_device_off">与账号的其他播放器同时播放</string>
+    <string name="offline_mode">离线模式</string>
+    <string name="offline_mode_hint">仅播放保存在本设备上的内容，无需网络。</string>
+    <string name="offline_empty">设为可离线播放的专辑、歌单和曲目会显示在这里。</string>
+    <string name="offline_progress">%1$s/%2$s</string>
+    <string name="cd_speed">播放速度</string>
+    <string name="sleep_turn_off">关闭</string>
+    <string name="settings_group_playback">播放</string>
+    <string name="settings_group_app">应用</string>
+    <string name="settings_group_storage">存储</string>
+    <string name="quality_hifi">HiFi（FLAC）</string>
+    <string name="track_unavailable">在 Deezer 上不可用</string>
+    <string name="filter_by_you">你创建的</string>
+    <string name="filter_by_others">他人创建的</string>
+    <string name="sort_added">最近添加</string>
+    <string name="sort_title_az">标题 A–Z</string>
+    <string name="list_search">在此列表中搜索</string>
+    <string name="list_no_match">没有符合搜索的内容。</string>
+    <string name="menu_go_to_album">转到专辑</string>
+    <string name="charts_all_genres">所有流派</string>
 </resources>

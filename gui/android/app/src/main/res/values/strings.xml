@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenDeezer</string>
+    <string name="app_name">Purple Disc</string>
 
     <!-- Brand / product tokens: same in every language -->
-    <string name="settings_connect" translatable="false">OpenDeezer Connect</string>
-    <string name="device_self_phone" translatable="false">OpenDeezer (Android)</string>
-    <string name="device_self_tv" translatable="false">OpenDeezer (Android TV)</string>
-    <string name="update_notes_title" translatable="false">OpenDeezer %1$s</string>
+    <string name="settings_connect" translatable="false">Purple Disc Connect</string>
+    <string name="device_self_phone" translatable="false">Purple Disc (Android)</string>
+    <string name="device_self_tv" translatable="false">Purple Disc (Android TV)</string>
+    <string name="update_notes_title" translatable="false">Purple Disc %1$s</string>
 
     <!-- Common actions / labels -->
     <string name="action_back">Back</string>
@@ -18,7 +18,6 @@
     <string name="action_ok">OK</string>
     <string name="action_sign_out">Sign out</string>
     <string name="action_play">Play</string>
-    <string name="action_pause">Pause</string>
     <string name="action_next">Next</string>
     <string name="action_previous">Previous</string>
     <string name="action_play_all">Play all</string>
@@ -26,6 +25,8 @@
     <string name="common_enable">Enable</string>
     <string name="common_off">Off</string>
     <string name="unknown_title">Unknown</string>
+    <string name="playing_elsewhere">Playing in another player</string>
+    <string name="action_play_here">Play here</string>
 
     <!-- Content descriptions (accessibility) -->
     <string name="cd_connect">Connect</string>
@@ -42,17 +43,16 @@
     <string name="cd_remote_qr">Remote QR</string>
 
     <!-- Notification -->
-    <string name="notif_channel_playback">Playback</string>
 
     <!-- Login errors -->
     <string name="login_error_empty_arl">Empty ARL</string>
     <string name="login_error_failed">Login failed — check your ARL and connection.</string>
     <string name="login_error_account">Could not load account.</string>
     <string name="login_error_secure_storage">Could not securely save your login. Check the device security settings and try again.</string>
-    <string name="login_error_secure_clear">Could not remove the saved login. To prevent automatic sign-in after restart, clear OpenDeezer\'s storage in Android Settings.</string>
+    <string name="login_error_secure_clear">Could not remove the saved login. To prevent automatic sign-in after restart, clear PurpleDisc\'s storage in Android Settings.</string>
 
     <!-- No internet (retry reuses action_retry) -->
-    <string name="no_internet_title">No Internet Connection</string>
+    <string name="no_internet_title">No internet connection</string>
     <string name="no_internet_body">Check your connection and try again.</string>
 
     <!-- Connect device type labels -->
@@ -65,8 +65,7 @@
     <string name="lyrics_title">Lyrics</string>
     <string name="charts_title">Charts</string>
     <string name="search_title">Search</string>
-    <string name="now_playing_title">Now Playing</string>
-    <string name="playlists_title">My Playlists</string>
+    <string name="playlists_title">My playlists</string>
     <string name="podcasts_title">Podcasts</string>
     <string name="equalizer_title">Equalizer</string>
 
@@ -74,13 +73,11 @@
     <string name="greeting_morning">Good morning</string>
     <string name="greeting_afternoon">Good afternoon</string>
     <string name="greeting_evening">Good evening</string>
-    <string name="greeting_named">%1$s, %2$s</string>
-    <string name="home_liked">Liked Songs</string>
-    <string name="section_top_tracks">Top Tracks</string>
-    <string name="section_your_playlists">Your Playlists</string>
+    <string name="home_liked">Liked songs</string>
+    <string name="section_top_tracks">Top tracks</string>
+    <string name="section_your_playlists">Your playlists</string>
 
     <!-- Settings -->
-    <string name="settings_audio_quality">Audio quality</string>
     <string name="quality_normal">Normal</string>
     <string name="quality_high">High</string>
     <string name="quality_desc_flac">FLAC · lossless</string>
@@ -97,22 +94,23 @@
     <string name="sleep_desc_off">Playback won\'t pause automatically</string>
     <string name="sleep_desc_end">Pauses when the current track ends</string>
     <string name="connect_reachable_title">Make this device reachable</string>
-    <string name="connect_reachable_sub">Let your other OpenDeezer apps find and control this device</string>
+    <string name="connect_reachable_sub">Let your other Purple Disc apps find and control this device</string>
     <string name="reachable_at">Reachable at %1$s</string>
-    <string name="settings_phone_remote">Phone Remote</string>
+    <string name="settings_phone_remote">Phone remote</string>
     <string name="phone_remote_sub">Serve a remote control page on your local Wi-Fi</string>
     <string name="phone_remote_scan">Scan with your phone (same Wi-Fi), then enter the code.</string>
     <string name="settings_about">About</string>
+    <string name="about_credits">By Scharkenberg, based on OpenDeezer by Cycl0o0. Licensed under AGPL-3.0.</string>
+    <string name="app_full_name" translatable="false">Purple Disc for Deezer</string>
     <string name="update_check_title">Check for updates</string>
     <string name="update_checking">Checking…</string>
     <string name="update_check_sub">Checks GitHub for a newer release</string>
     <string name="settings_account">Account</string>
     <string name="plan_label">Plan: %1$s</string>
-    <string name="plan_free">Free</string>
     <string name="update_uptodate_title">You\'re up to date</string>
     <string name="update_latest_generic">This is the latest version.</string>
-    <string name="update_latest_named">OpenDeezer v%1$s is the latest version.</string>
-    <string name="update_available_title">OpenDeezer %1$s available</string>
+    <string name="update_latest_named">Purple Disc v%1$s is the latest version.</string>
+    <string name="update_available_title">Purple Disc %1$s available</string>
     <string name="update_available_generic">A new version is available on GitHub.</string>
     <string name="update_failed_title">Couldn\'t check for updates</string>
     <string name="update_failed_body">Check your connection and try again.</string>
@@ -153,14 +151,9 @@
     <string name="playlists_empty">You have no playlists yet.</string>
 
     <!-- Podcasts -->
-    <string name="podcasts_search_hint">Search shows</string>
-    <string name="podcasts_empty_prompt">Search Deezer\'s podcasts.</string>
     <string name="podcasts_no_results">No shows found.</string>
 
     <!-- Premium gate -->
-    <string name="premium_required">Premium required</string>
-    <string name="premium_body_named">On-demand streaming needs a paid Deezer plan. Your account (%1$s) is on “%2$s”.</string>
-    <string name="premium_body_anon">On-demand streaming needs a paid Deezer plan. Your account is on “%1$s”.</string>
 
     <!-- Search -->
     <string name="search_hint">Tracks, albums, artists, playlists</string>
@@ -177,14 +170,12 @@
     <string name="tracklist_empty">Nothing here yet.</string>
 
     <!-- Artist profile -->
-    <string name="section_related_artists">Related Artists</string>
+    <string name="section_related_artists">Related artists</string>
     <string name="artist_load_error">Couldn\'t load this artist — check your connection.</string>
 
     <!-- Downloads (premium-only) -->
-    <string name="settings_downloads">Downloads</string>
     <string name="download_folder_title">Download folder</string>
     <string name="download_folder_default">Default folder</string>
-    <string name="download_requires_premium">Requires a paid Deezer plan</string>
     <string name="download_started">Downloading %1$s…</string>
     <string name="download_saved">Saved to %1$s</string>
     <string name="download_saved_generic">Downloaded %1$s</string>
@@ -195,9 +186,8 @@
     <string name="account_free_hint">Free account · standard quality (128 kbps)</string>
 
     <!-- Ads (Deezer Free only) -->
-    <string name="settings_ads">Play reporting</string>
     <string name="setting_disable_ads_title">Don\'t report my plays</string>
-    <string name="setting_disable_ads_disclaimer">OpenDeezer plays no ads. It reports your plays to Deezer as Deezer\'s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer\'s terms of use. Use at your own risk.</string>
+    <string name="setting_disable_ads_disclaimer">Purple Disc plays no ads. It reports your plays to Deezer as Deezer\'s own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer\'s terms of use. Use at your own risk.</string>
 
     <!-- Update banner -->
     <string name="update_release_notes">Release notes</string>
@@ -207,8 +197,6 @@
     <string name="connect_no_devices">No devices found on your network.</string>
 
     <!-- TV: premium / navigation -->
-    <string name="tv_premium_body">OpenDeezer streams need a Deezer Premium account.</string>
-    <string name="tv_use_another_account">Use another account</string>
     <string name="nav_home">Home</string>
     <string name="nav_library">Library</string>
 
@@ -238,7 +226,7 @@
     <string name="tv_high_hifi_needs_plan">High/HiFi need a Deezer HQ or HiFi plan.</string>
     <string name="eq_custom_edited">Custom — bands were edited manually</string>
     <string name="eq_adjust_hint">Left/right on a band below adjusts it by 1 dB</string>
-    <string name="tv_connect_reachable_sub">Let your other OpenDeezer apps control this TV</string>
+    <string name="tv_connect_reachable_sub">Let your other Purple Disc apps control this TV</string>
     <string name="tv_phone_remote">Phone remote</string>
     <string name="tv_phone_remote_sub">Serve a browser remote on your Wi-Fi (scan the QR)</string>
     <string name="tv_remote_scan">Scan on your phone (same Wi-Fi), then enter the code:</string>
@@ -268,13 +256,12 @@
     <string name="history_title">Recently played</string>
     <string name="history_empty">No listening history yet.</string>
     <string name="history_stats_section">Last 30 days</string>
-    <string name="history_top_artists">Top Artists</string>
+    <string name="history_top_artists">Top artists</string>
     <string name="history_total">%1$s listened</string>
     <string name="dur_hm">%1$dh %2$dm</string>
     <string name="dur_m">%1$dm</string>
     <string name="settings_stream_cache">Stream cache</string>
     <string name="stream_cache_mb">%1$d MB</string>
-    <string name="stream_cache_hint">Applies at next launch. 0 = off.</string>
 
     <!-- Plurals -->
     <plurals name="n_plays">
@@ -301,11 +288,83 @@
     <string name="action_play_next">Play next</string>
     <string name="action_add_to_queue">Add to queue</string>
     <string name="action_clear_queue">Clear queue</string>
-    <string name="action_download_offline">Download for offline</string>
     <string name="action_remove">Remove</string>
     <string name="cd_downloaded">Downloaded</string>
     <string name="cd_reorder">Reorder</string>
-    <string name="offline_ready">%1$s available offline</string>
     <string name="settings_material_you">Material You</string>
     <string name="settings_material_you_hint">Match your system colors</string>
+    <string name="load_failed">Couldn\'t load this page.</string>
+    <string name="lyrics_translation">Translation</string>
+    <string name="playback_failed">This track couldn\'t be played.</string>
+    <string name="playback_skipping">Skipping to the next track</string>
+    <string name="playback_stopped">Several tracks in a row couldn\'t play. Playback stopped</string>
+    <string name="radio_failed">Deezer has no radio for this. Try another track or artist</string>
+    <string name="connect_failed">Couldn\'t connect</string>
+    <string name="session_expired">Your session expired. Sign in again.</string>
+    <string name="queue_next_up">Next up</string>
+    <string name="menu_like">Like</string>
+    <string name="menu_unlike">Unlike</string>
+    <string name="menu_add_to_playlist">Add to playlist</string>
+    <string name="menu_new_playlist">New playlist</string>
+    <string name="menu_remove_from_playlist">Remove from this playlist</string>
+    <string name="menu_go_to_artist">Go to artist</string>
+    <string name="ban_track">Don\'t recommend this track</string>
+    <string name="ban_artist">Don\'t recommend this artist</string>
+    <string name="ban_done">Got it. We won\'t recommend this track again</string>
+    <string name="offline_keep">Available offline</string>
+    <string name="offline_remove">Remove from offline</string>
+    <string name="queue_remove">Remove from queue</string>
+    <string name="queue_move_up">Move up</string>
+    <string name="queue_move_down">Move down</string>
+    <string name="queue_left">%1$s left</string>
+    <string name="menu_add_favorite">Add to favorites</string>
+    <string name="menu_remove_favorite">Remove from favorites</string>
+    <string name="btn_shuffle">Shuffle</string>
+    <string name="dialog_new_playlist">New playlist</string>
+    <string name="playlist_title_label">Title</string>
+    <string name="dialog_delete_playlist">Delete playlist</string>
+    <string name="dialog_delete_playlist_body">Delete “%1$s”? This can’t be undone.</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="episode_mark_played">Mark as played</string>
+    <string name="episode_mark_unplayed">Mark as unplayed</string>
+    <string name="section_recently_played">Recently played</string>
+    <string name="action_show_all">Show all</string>
+    <string name="menu_share">Share</string>
+    <string name="action_rename">Rename</string>
+    <string name="library_downloaded">Downloaded</string>
+    <string name="action_create">Create</string>
+    <string name="filter_all">All</string>
+    <string name="search_top_result">Top result</string>
+    <string name="search_clear_recent">Clear recent searches</string>
+    <string name="settings_explicit">Explicit content</string>
+    <string name="explicit_display">Show explicit content</string>
+    <string name="explicit_no_recommendation">Don\'t recommend explicit content</string>
+    <string name="explicit_hide">Hide explicit content</string>
+    <string name="settings_clear_cache">Clear cache</string>
+    <string name="cache_used">%1$s used</string>
+    <string name="cache_used_offline">%1$s used, %2$s offline</string>
+    <string name="settings_single_device">One player at a time</string>
+    <string name="single_device_on">Pauses when another player on your account starts; playing here pauses the others</string>
+    <string name="single_device_off">Plays alongside your account\'s other players</string>
+    <string name="offline_mode">Offline mode</string>
+    <string name="offline_mode_hint">Play only what is kept on this device, without the network.</string>
+    <string name="offline_empty">Albums, playlists and tracks you make available offline appear here.</string>
+    <string name="offline_progress">%1$s of %2$s</string>
+    <string name="cd_speed">Playback speed</string>
+    <string name="sleep_turn_off">Turn off</string>
+    <string name="settings_group_playback">Playback</string>
+    <string name="settings_group_app">App</string>
+    <string name="settings_group_storage">Storage</string>
+    <string name="quality_hifi">HiFi (FLAC)</string>
+    <string name="track_unavailable">Not available on Deezer</string>
+    <string name="filter_by_you">By you</string>
+    <string name="filter_by_others">By others</string>
+    <string name="sort_added">Recently added</string>
+    <string name="sort_title_az">Title A–Z</string>
+    <string name="list_search">Search in this list</string>
+    <string name="list_no_match">Nothing matches your search.</string>
+    <string name="menu_go_to_album">Go to album</string>
+    <string name="charts_all_genres">All genres</string>
 </resources>

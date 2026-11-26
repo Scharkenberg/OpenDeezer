@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OpenDeezer"
+rootProject.name = "PurpleDisc"
 include(":app")

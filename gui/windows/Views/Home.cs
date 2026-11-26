@@ -1,4 +1,4 @@
-// Home: a greeting, what the account pinned to Home, what was played recently on this PC, the
+// Home: a greeting, Flow's moods, what the account pinned to Home, what was played recently on this PC, the
 // user's playlists, the top tracks and the top albums.
 
 using System;
@@ -8,11 +8,15 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class HomeView : View
 {
     private readonly TextBlock _greeting = Ui.Text("", TextKind.PageTitle);
+    // One tap each plays that mood's Flow; read once.
+    private readonly StackPanel _moods = Ui.Row(Space.S);
+    private readonly ScrollViewer _moodsRow;
+    private bool _moodsLoading;
     private readonly TileGrid<Track> _recent;
     private List<Track> _recentTracks = new();
     internal readonly TileGrid<Playlist> _playlists = TileGrids.Playlists(Tiles.OwnPlaylist);
@@ -41,13 +45,52 @@ internal sealed class HomeView : View
         _pinnedSection = Section.Tiles("Section_Pinned", _pinned, Count.TileRows);
         _pinnedSection.Visible = false;
         _state = new StateView(Section.Stack(_pinnedSection.Root, recentSection.Root, playlistsSection.Root, _topSection.Root, _albumsSection.Root), SkeletonShape.Page, inset: false);
-        _scroller = Ui.Page(Ui.PageTitle(_greeting), _state.Root);
+        _moodsRow = new ScrollViewer
+        {
+            Content = _moods,
+            HorizontalScrollMode = ScrollMode.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollMode = ScrollMode.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = Pad.Header,
+            Visibility = Visibility.Collapsed,
+        };
+        _scroller = Ui.Page(Ui.PageTitle(_greeting), _moodsRow, _state.Root);
+    }
+
+    public override void Hide() => App.Offline.Changed -= RenderMoods;
+
+    // Disabled in offline mode; read when first shown out of it.
+    private void RenderMoods()
+    {
+        foreach (var b in _moods.Children.OfType<Control>()) b.IsEnabled = !App.Offline.Mode;
+        LoadMoods();
+    }
+
+    private async void LoadMoods()
+    {
+        if (_moodsLoading || _moods.Children.Count > 0 || App.Offline.Mode) return;
+        _moodsLoading = true;
+        FlowMood[] moods;
+        try { (moods, _) = await Task.Run(DeezerCore.FlowMoods); }
+        finally { _moodsLoading = false; }
+        if (_moods.Children.Count > 0) return;
+        foreach (var m in moods)
+        {
+            var b = Ui.Button(m.Title, () => Menus.PlayFlow(m.Id));
+            b.IsEnabled = !App.Offline.Mode;
+            _moods.Children.Add(b);
+        }
+        _moodsRow.Visibility = Ui.Show(moods.Length > 0);
     }
 
     public override async void Show(object? arg, bool isBack)
     {
         int hour = DateTime.Now.Hour;
         _greeting.Text = Loc.S(hour < Timing.MorningEndsHour ? "Greeting_Morning" : hour < Timing.AfternoonEndsHour ? "Greeting_Afternoon" : "Greeting_Evening");
+        App.Offline.Changed -= RenderMoods;
+        App.Offline.Changed += RenderMoods;
+        RenderMoods();
         var ct = Ct;
         if (Library.Home is { } cached) Fill(cached);
         else _state.ShowLoading();

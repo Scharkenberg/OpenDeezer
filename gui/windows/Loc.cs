@@ -6,7 +6,7 @@ using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.ApplicationModel.Resources;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Loc
 {

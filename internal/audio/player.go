@@ -16,9 +16,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 // output is the platform audio sink (output_malgo.go or output_oto.go by build tag).
@@ -834,6 +834,43 @@ func (p *Player) Preload(plan *deezer.StreamPlan, durationMS int64) {
 	}
 }
 
+const (
+	fastTick = 40 * time.Millisecond
+	slowTick = 250 * time.Millisecond
+	// slowTickLead is how far from the end of a track, or from a sleep timer's fade, the
+	// manager goes back to fastTick: well before the gapless swap and the near-end hook.
+	slowTickLead = 2 * time.Second
+)
+
+// tickFor is the manager's next period: slowTick through the middle of a playing track,
+// where it only watches for the end; fastTick while loading, near the end, near or in a
+// sleep timer's fade, and whenever the length is not known.
+func (p *Player) tickFor() time.Duration {
+	if p.State() != Playing {
+		return fastTick
+	}
+	if p.sleepArmed.Load() && !p.sleepEOT.Load() &&
+		p.sleepAtNS.Load()-int64(time.Since(monoBase)) <= sleepFadeNS+int64(slowTickLead) {
+		return fastTick
+	}
+	cur := p.cur.Load()
+	if cur == nil || cur.eof.Load() {
+		return fastTick
+	}
+	dur := cur.decDurMS.Load()
+	if dur <= 0 {
+		dur = cur.durMS
+	}
+	left := time.Duration(dur-p.played.Load()*1000/bytesPerSec) * time.Millisecond
+	if h := p.nearEnd.Load(); h != nil {
+		left -= h.lead()
+	}
+	if dur <= 0 || left <= slowTickLead {
+		return fastTick
+	}
+	return slowTick
+}
+
 // ClearPreload discards any preloaded next source. Call it when the upcoming track
 // changes (e.g. shuffle or repeat toggled) so a stale preload is not swapped in.
 func (p *Player) ClearPreload() {
@@ -843,10 +880,11 @@ func (p *Player) ClearPreload() {
 }
 
 // manage advances to the preloaded next source when the current one is drained. It
-// ticks every 40 ms while a track loads or plays, and otherwise waits for a state change
-// or, with a timed sleep timer armed, for its deadline.
+// ticks every 40 ms while a track loads, nears its end or fades for the sleep timer, every
+// 250 ms through the rest of a playing track (tickFor), and otherwise waits for a state
+// change or, with a timed sleep timer armed, for its deadline.
 func (p *Player) manage() {
-	const tick = 40 * time.Millisecond
+	tick := fastTick
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	for {
@@ -870,6 +908,7 @@ func (p *Player) manage() {
 			if sleepTimer != nil {
 				sleepTimer.Stop()
 			}
+			tick = fastTick
 			ticker.Reset(tick)
 			continue
 		}
@@ -877,6 +916,10 @@ func (p *Player) manage() {
 		case <-p.stopMgr:
 			return
 		case <-ticker.C:
+			if d := p.tickFor(); d != tick {
+				tick = d
+				ticker.Reset(d)
+			}
 			ticks := p.ticks.Add(1)
 			// Sleep timer (duration mode): fade out over the last few seconds, then
 			// pause exactly at the deadline. End-of-track mode is handled in the
@@ -907,7 +950,7 @@ func (p *Player) manage() {
 					if cur := p.cur.Load(); cur != nil {
 						rb = cur.ring.buffered()
 					}
-					odlog.Debug("audio: callbacks=%d underruns=%d ringBuf=%dKB state=%v",
+					pdlog.Debug("audio: callbacks=%d underruns=%d ringBuf=%dKB state=%v",
 						c, p.cbUnderrun.Load(), rb/1024, p.State())
 				}
 			}
@@ -1355,7 +1398,7 @@ func (s *source) download() {
 		if total := s.sb.Total(); cacheFile && total > 0 {
 			meta := mediacache.StreamMeta{Format: pl.Format, AskedFormat: pl.AskedFormat, KeyID: pl.KeyID, Encrypted: true, GainDB: pl.GainDB}
 			if err := s.cache.Adopt(cacheKey, s.sb.f.Name(), total, meta); err != nil {
-				odlog.Debug("stream %s: not cached: %v", pl.TrackID, err)
+				pdlog.Debug("stream %s: not cached: %v", pl.TrackID, err)
 			}
 		}
 		s.sb.finish(nil)
@@ -1473,13 +1516,13 @@ func (s *source) decode() {
 	var dec pcmStream
 	var err error
 	if strings.Contains(strings.ToUpper(format), "FLAC") {
-		// flac.NewSeek reads only the metadata, so FLAC decodes progressively. Without a
+		// The decoder reads only the metadata up front, so FLAC decodes progressively. Without a
 		// SEEKTABLE the first seek reads to EOF, which blocks until the download completes.
 		var fs *flacStream
 		fs, err = newFLACStream(s.sb.reader())
 		if err == nil {
-			if info := fs.s.Info; info.NSamples > 0 && info.SampleRate > 0 {
-				s.decDurMS.Store(int64(info.NSamples * 1000 / uint64(info.SampleRate)))
+			if n, rate := fs.info(); n > 0 && rate > 0 {
+				s.decDurMS.Store(int64(n * 1000 / uint64(rate)))
 			}
 			dec = fs
 		}
@@ -1487,11 +1530,11 @@ func (s *source) decode() {
 		var ms *mp3Stream
 		ms, err = newMP3Stream(s.sb)
 		if err == nil {
-			// go-mp3 emits 2ch s16 at the file's own rate while the output runs at 44100, so other
+			// The MP3 decoder emits 2ch s16 at the file's own rate while the output runs at 44100, so other
 			// rates (podcast MP3s) go through a linear resampler. Plain streams (episodes) always
 			// use it, for SetSpeed.
 			if r := ms.SampleRate(); r != sampleRate || !s.plan().Encrypted {
-				odlog.Debug("mp3 decode: resampling %dHz -> %dHz format=%s", r, sampleRate, format)
+				pdlog.Debug("mp3 decode: resampling %dHz -> %dHz format=%s", r, sampleRate, format)
 				dec = newResampleStream(ms, r, &s.speed)
 			} else {
 				dec = ms

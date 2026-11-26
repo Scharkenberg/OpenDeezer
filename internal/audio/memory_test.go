@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 	"golang.org/x/crypto/blowfish"
 )
 
@@ -48,7 +48,7 @@ func TestHeapAfterThreeFullPlays(t *testing.T) {
 	// HeapSys never shrinks, so the plays run in a fresh process that serves
 	// the stream from a file: its heap holds neither the fixture nor what the
 	// package's other tests leave behind.
-	path := os.Getenv("OD_HEAP_STREAM")
+	path := os.Getenv("PD_HEAP_STREAM")
 	if path == "" {
 		path = filepath.Join(t.TempDir(), "stream.flac.enc")
 		b := makeFLAC(frames, 4096)
@@ -57,7 +57,7 @@ func TestHeapAfterThreeFullPlays(t *testing.T) {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(os.Args[0], "-test.run=^TestHeapAfterThreeFullPlays$", "-test.v")
-		cmd.Env = append(os.Environ(), "OD_HEAP_STREAM="+path)
+		cmd.Env = append(os.Environ(), "PD_HEAP_STREAM="+path)
 		out, err := cmd.CombinedOutput()
 		t.Logf("%s", out)
 		if err != nil {

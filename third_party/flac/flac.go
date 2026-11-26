@@ -64,7 +64,7 @@ type Stream struct {
 	r io.Reader
 
 	// prev is the last frame ParseNext parsed whole; the next ParseNext decodes
-	// into its sample buffers. OpenDeezer patch: not upstream.
+	// into its sample buffers. Purple Disc patch: not upstream.
 	prev *frame.Frame
 }
 
@@ -312,7 +312,7 @@ func (stream *Stream) Next() (f *frame.Frame, err error) {
 // ParseNext parses the entire next frame including audio samples. It returns
 // io.EOF to signal a graceful end of FLAC stream.
 //
-// OpenDeezer patch: the frame's samples are decoded into the buffers of the
+// Purple Disc patch: the frame's samples are decoded into the buffers of the
 // frame the previous call returned, so they are valid only until the next
 // call. Upstream allocates new buffers for every frame.
 func (stream *Stream) ParseNext() (f *frame.Frame, err error) {

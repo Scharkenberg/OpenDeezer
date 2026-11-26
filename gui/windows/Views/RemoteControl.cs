@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Streams;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class RemoteControl
 {
@@ -20,7 +20,7 @@ internal sealed class RemoteControl
     private readonly PasswordBox _token = new() { PlaceholderText = Loc.S("Settings_AccessToken"), PasswordRevealMode = PasswordRevealMode.Peek, MinWidth = Size.FieldMin };
     private readonly Button _generate;
     private readonly Image _qr = new() { Width = Size.QrCode, Height = Size.QrCode };
-    private readonly TextBlock _code = new() { Style = Ui.Styles.Get("PairingCodeText"), HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly TextBlock _code = new() { Style = Ui.Styles.Get("PairingCodeText") };
     private readonly TextBlock _url = Ui.Text("", TextKind.SecondaryCaption, wrap: true);
     private readonly SettingsCard _pairing;
     private (bool On, string Addr, string Token) _applied;
@@ -45,10 +45,17 @@ internal sealed class RemoteControl
             _token.PasswordRevealMode = PasswordRevealMode.Visible; // so it can be typed on the phone
             Apply();
         });
-        _url.TextAlignment = TextAlignment.Center;
-        var pairing = Ui.Stack(Space.S, _qr, _code, _url);
-        pairing.HorizontalAlignment = HorizontalAlignment.Center;
-        _pairing = Ui.Compact(new SettingsCard { Content = pairing, ContentAlignment = ContentAlignment.Vertical, Visibility = Visibility.Collapsed });
+        // The QR code, and beside it the code to type and the address to open.
+        var text = Ui.Stack(Space.S, _code, _url);
+        text.VerticalAlignment = VerticalAlignment.Center;
+        var pairing = Ui.Grid("auto *", Space.L, _qr, text);
+        _pairing = Ui.Compact(new SettingsCard
+        {
+            Content = pairing,
+            ContentAlignment = ContentAlignment.Left,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Visibility = Visibility.Collapsed,
+        });
         Root = Ui.Compact(new SettingsExpander
         {
             Header = Loc.S("Settings_RemoteControl"),

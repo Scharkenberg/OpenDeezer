@@ -265,3 +265,16 @@ func TestFavoritePodcastsOneQuery(t *testing.T) {
 		t.Fatalf("ops %v, want one FavoritePodcasts", f.ops)
 	}
 }
+
+// A field of one known type (the best result's artist, album, ...) selects only its own
+// fields: a fragment of another type there is invalid GraphQL, and Pipe refused the whole
+// BestResult query for it (30 errors, one per impossible spread).
+func TestBestResultFieldsHaveNoForeignFragments(t *testing.T) {
+	for name, fields := range map[string]string{
+		"track": trackFields, "album": albumFields, "artist": artistFields, "playlist": playlistFields, "podcast": podcastFields,
+	} {
+		if n := strings.Count(fields, "... on "); n != strings.Count(fields, "... on Artist { name }") {
+			t.Errorf("%s fields spread %d fragment(s) of another type: %s", name, n, fields)
+		}
+	}
+}

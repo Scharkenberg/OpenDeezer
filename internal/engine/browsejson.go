@@ -6,9 +6,9 @@ package engine
 import (
 	"encoding/json"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // ReplyJSON is v as JSON, or {"error":"..."} when err is set or v does not marshal.
@@ -61,13 +61,27 @@ func HomeJSON() []byte {
 }
 
 // ChartsJSON is the global top {tracks, albums, artists, playlists}.
-func ChartsJSON() []byte {
+func ChartsJSON() []byte { return GenreChartsJSON("0") }
+
+// GenreChartsJSON is a genre's top {tracks, albums, artists, playlists}; "0" is all genres.
+func GenreChartsJSON(genreID string) []byte {
 	return OnlineJSON(func(c *deezer.Client) (any, error) {
-		ch, err := c.Charts("0")
+		ch, err := c.Charts(genreID)
 		if err != nil {
 			return nil, err
 		}
 		return catalog(ch.Tracks, ch.Albums, ch.Artists, ch.Playlists), nil
+	})
+}
+
+// GenresJSON is {genres: [{id, name}]}, "All" (id "0") first.
+func GenresJSON() []byte {
+	return OnlineJSON(func(c *deezer.Client) (any, error) {
+		gs, err := c.Genres()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"genres": gs}, nil
 	})
 }
 

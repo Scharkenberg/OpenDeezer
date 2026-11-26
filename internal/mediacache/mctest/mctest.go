@@ -4,7 +4,7 @@ package mctest
 import (
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 // PutBody commits a placeholder body under key; the cache answers meta only

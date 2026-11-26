@@ -3,4 +3,6 @@
 # Meson build tree
 /build/
 # Final binary copied up by build.sh
-/opendeezer-gnome
+/purpledisc-gnome
+# Inter copied beside the binary by build.sh
+/fonts/

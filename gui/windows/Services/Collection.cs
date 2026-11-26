@@ -1,10 +1,10 @@
-// What a collection page shows: liked songs, Flow, a playlist, an album, a podcast's
+// What a collection page shows: liked songs, a playlist, an album, a podcast's
 // episodes, or tracks fetched elsewhere (radio, search).
 
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // The list a play comes from, as Deezer's players name it in their listen log: a page type and
 // the id of what it shows (DZSetListenContext).
@@ -14,12 +14,11 @@ internal sealed record ListenContext(string Type, string Id)
 }
 
 // Pinned: the tracks kept for offline use one by one.
-internal enum CollectionKind { Liked, Flow, Playlist, Album, Podcast, Tracks, Pinned }
+internal enum CollectionKind { Liked, Playlist, Album, Podcast, Tracks, Pinned }
 
 internal sealed record Collection(CollectionKind Kind, string Id, string Title, string Owner, string ArtUrl)
 {
     public static readonly Collection Liked = new(CollectionKind.Liked, "", Loc.S("Nav_LikedSongs"), "", "");
-    public static readonly Collection Flow = new(CollectionKind.Flow, "", Loc.S("Nav_Flow"), "", "");
 
     // Already fetched (radio, search): shown as is, not through the Library, with the list they came from.
     public IReadOnlyList<Track>? Tracks { get; init; }
@@ -44,7 +43,6 @@ internal sealed record Collection(CollectionKind Kind, string Id, string Title, 
     public string Key => Kind switch
     {
         CollectionKind.Liked => Library.LikedKey,
-        CollectionKind.Flow => Library.FlowKey,
         CollectionKind.Playlist => Library.Key("playlist", Id),
         CollectionKind.Album => Library.Key("album", Id),
         CollectionKind.Podcast => Library.Key("podcast", Id),
@@ -56,7 +54,6 @@ internal sealed record Collection(CollectionKind Kind, string Id, string Title, 
     public ListenContext Listen => Kind switch
     {
         CollectionKind.Liked => new("profile_loved", App.Session.Account.UserId),
-        CollectionKind.Flow => new("dynamic_page_user_radio", App.Session.Account.UserId),
         CollectionKind.Playlist => new("playlist_page", Id),
         CollectionKind.Album => new("album_page", Id),
         CollectionKind.Podcast => new("show_page", Id),

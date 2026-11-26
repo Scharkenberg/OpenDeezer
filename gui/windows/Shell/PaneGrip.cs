@@ -7,7 +7,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed partial class PaneGrip : Grid
 {

@@ -3,7 +3,7 @@ package audio
 import (
 	"os"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 // StreamCache is an optional on-disk cache of raw CDN bodies keyed "trackID.format",

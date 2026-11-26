@@ -1,21 +1,21 @@
 package deezer
 
-// OpenDeezer talks to Deezer as its web player does: a desktop browser User-Agent, the
+// Purple Disc talks to Deezer as its web player does: a desktop browser User-Agent, the
 // web player's origin, and its build number (releaseNumeric) in the listen log and on
 // the live socket, read from the script the logged-in page names.
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"net/http"
-	"regexp"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // webOrigin is the web player's origin.
@@ -36,7 +36,7 @@ func browserUserAgent(goos string) string {
 	return "Mozilla/5.0 (" + platform + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/160.0.0.0 Safari/537.36 Edg/160.0.0.0"
 }
 
-// fallbackRelease is the web player's build as of this OpenDeezer release
+// fallbackRelease is the web player's build as of this Purple Disc release
 // (2026-11-23), used until a login reads the current one.
 const fallbackRelease = "10020261123132810"
 
@@ -46,7 +46,7 @@ var (
 	releaseNumber string // "" for fallbackRelease
 )
 
-// WebRelease returns the web player's build number OpenDeezer reports and the
+// WebRelease returns the web player's build number Purple Disc reports and the
 // script it was read from ("" before one was).
 func WebRelease() (release, bundle string) {
 	releaseMu.Lock()
@@ -72,15 +72,46 @@ func KeepWebRelease(c *Client) {
 	c.LearnWebRelease()
 	if release, bundle := WebRelease(); bundle != before {
 		if err := config.SaveWebRelease(bundle, release); err != nil {
-			odlog.Warn("web-release.json: %v", err)
+			pdlog.Warn("web-release.json: %v", err)
 		}
 	}
 }
 
-var (
-	bundleRe  = regexp.MustCompile(`https://cdn-files\.dzcdn\.net/cache/js/app-web\.[0-9a-f]+\.js`)
-	releaseRe = regexp.MustCompile(`releaseNumeric:"(\d+)"`)
-)
+const bundlePrefix = "https://cdn-files.dzcdn.net/cache/js/app-web."
+
+// webBundle is the first app-web.<hex>.js script URL in page, or "".
+func webBundle(page []byte) string {
+	for rest := page; ; {
+		_, after, ok := bytes.Cut(rest, []byte(bundlePrefix))
+		if !ok {
+			return ""
+		}
+		n := 0
+		for n < len(after) && (after[n] >= '0' && after[n] <= '9' || after[n] >= 'a' && after[n] <= 'f') {
+			n++
+		}
+		if n > 0 && bytes.HasPrefix(after[n:], []byte(".js")) {
+			return bundlePrefix + string(after[:n]) + ".js"
+		}
+		rest = after
+	}
+}
+
+// releaseDigits is the digits of the first releaseNumeric:"<digits>" in stmt that holds
+// only digits.
+func releaseDigits(stmt []byte) (string, bool) {
+	for {
+		_, after, ok := bytes.Cut(stmt, []byte(`releaseNumeric:"`))
+		if !ok {
+			return "", false
+		}
+		num, _, ok := bytes.Cut(after, []byte(`"`))
+		if ok && len(num) > 0 && !bytes.ContainsFunc(num, func(r rune) bool { return r < '0' || r > '9' }) {
+			return string(num), true
+		}
+		stmt = after
+	}
+}
 
 // LearnWebRelease reads the build number from the script the logged-in page names, when
 // it differs from the last one read; hosts run it after a login, off their loop. On
@@ -97,7 +128,7 @@ func (c *Client) LearnWebRelease() {
 	webHeaders(req, "")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		odlog.Debug("web release: page: %v", err)
+		pdlog.Debug("web release: page: %v", err)
 		return
 	}
 	page, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -105,7 +136,7 @@ func (c *Client) LearnWebRelease() {
 	if err != nil {
 		return
 	}
-	bundle := string(bundleRe.Find(page))
+	bundle := webBundle(page)
 	if _, known := WebRelease(); bundle == "" || bundle == known {
 		return
 	}
@@ -116,7 +147,7 @@ func (c *Client) LearnWebRelease() {
 	webHeaders(req, "")
 	resp, err = c.http.Do(req)
 	if err != nil {
-		odlog.Debug("web release: script: %v", err)
+		pdlog.Debug("web release: script: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -135,9 +166,9 @@ func (c *Client) LearnWebRelease() {
 		return 0, nil, nil
 	})
 	for sc.Scan() {
-		if m := releaseRe.FindSubmatch(sc.Bytes()); m != nil {
-			SetWebRelease(bundle, string(m[1]))
-			odlog.Info("web release %s", m[1])
+		if num, ok := releaseDigits(sc.Bytes()); ok {
+			SetWebRelease(bundle, num)
+			pdlog.Info("web release %s", num)
 			return
 		}
 	}

@@ -1,4 +1,4 @@
-// opendeezer-login — a tiny STANDALONE QtWebEngine login window.
+// purpledisc-login — a tiny STANDALONE QtWebEngine login window.
 //
 // QtWebEngine cannot run reliably when the whole Qt app is dlopen'd by the
 // unified Linux launcher (its Chromium sandbox/zygote can't fork from a dlopen'd
@@ -38,17 +38,17 @@ int main(int argc, char **argv) {
     // Localization: load the embedded catalog for the current locale (falls
     // back to the English source strings when no matching .qm is present).
     auto *translator = new QTranslator(&app);
-    if (translator->load(QLocale(), QStringLiteral("opendeezer"),
+    if (translator->load(QLocale(), QStringLiteral("purpledisc"),
                          QStringLiteral("_"), QStringLiteral(":/i18n")))
         QApplication::installTranslator(translator);
     QApplication::setLayoutDirection(QLocale().textDirection());
-    app.setApplicationName("OpenDeezer Login");
+    app.setApplicationName("Purple Disc Login");
     app.setApplicationDisplayName(
         QCoreApplication::translate("LoginHelper", "Log in to Deezer"));
 
     QWidget win;
     win.setWindowTitle(
-        QCoreApplication::translate("LoginHelper", "Log in to Deezer — OpenDeezer"));
+        QCoreApplication::translate("LoginHelper", "Log in to Deezer — Purple Disc"));
     win.resize(520, 700);
     auto *v = new QVBoxLayout(&win);
     v->setContentsMargins(0, 0, 0, 0);

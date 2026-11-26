@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# gen-and-build.sh — finalize + test-build the OpenDeezer Flathub package on Linux
+# gen-and-build.sh — finalize + test-build the Purple Disc Flathub package on Linux
 # (e.g. your OrbStack Ubuntu machine — flatpak-builder does NOT run on macOS).
 #
 # It (1) installs flatpak + the KDE runtime/SDK + Go SDK extension + appstream
 # tools, (2) generates the offline Go module sources (go.mod.yml + vendor/),
 # (3) validates the MetaInfo, (4) builds the flatpak and installs it so you can
-# `flatpak run org.opendeezer.OpenDeezer.unified`.
+# `flatpak run dev.scharkenberg.PurpleDisc.unified`.
 #
 # Run from the repo root:  packaging/flatpak/flathub/gen-and-build.sh
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-APP=org.opendeezer.OpenDeezer.unified
+APP=dev.scharkenberg.PurpleDisc.unified
 cd "$ROOT"
 
 echo "==> [1/5] system deps (apt) + flathub remote"

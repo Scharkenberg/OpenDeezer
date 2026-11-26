@@ -8,7 +8,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 public static class Program
 {
@@ -52,7 +52,7 @@ public static class Program
     private static bool RedirectIfSecondary()
     {
         AppInstance key;
-        try { key = AppInstance.FindOrRegisterForKey("OpenDeezer.Main"); }
+        try { key = AppInstance.FindOrRegisterForKey("PurpleDisc.Main"); }
         catch (Exception ex) { AppLog.Write("single-instance check failed: " + ex.Message); return false; }
 
         if (key.IsCurrent)

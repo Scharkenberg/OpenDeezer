@@ -4,9 +4,12 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace OpenDeezer;
+// Every native call is source-generated ([LibraryImport]) or blittable: no runtime marshalling.
+[assembly: System.Runtime.CompilerServices.DisableRuntimeMarshalling]
 
-internal static class NativeMethods
+namespace PurpleDisc;
+
+internal static partial class NativeMethods
 {
     internal const uint WM_TRAYCALLBACK = 0x8000 + 1; // WM_APP + 1: the tray icon's callback message
     internal const uint WM_COMMAND = 0x0111;
@@ -39,13 +42,14 @@ internal static class NativeMethods
     internal const uint LR_LOADFROMFILE = 0x00000010;
     internal const int SM_CXSMICON = 49;
     internal const int SM_CYSMICON = 50;
+    internal const int SM_CXVIRTUALSCREEN = 78;
+    internal const int SM_CYVIRTUALSCREEN = 79;
     internal const uint TRAY_UID = 1;
 
     internal static readonly IntPtr IDI_APPLICATION = new(32512);
 
-    internal delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    // lpszMenuName and lpszClassName point at UTF-16 strings.
+    [StructLayout(LayoutKind.Sequential)]
     internal struct WNDCLASSEXW
     {
         public uint cbSize;
@@ -57,13 +61,14 @@ internal static class NativeMethods
         public IntPtr hIcon;
         public IntPtr hCursor;
         public IntPtr hbrBackground;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszMenuName;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszClassName;
+        public IntPtr lpszMenuName;
+        public IntPtr lpszClassName;
         public IntPtr hIconSm;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct NOTIFYICONDATAW
+    // The text fields are NUL-terminated UTF-16 in place (Tray.SetText).
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct NOTIFYICONDATAW
     {
         public uint cbSize;
         public IntPtr hWnd;
@@ -71,12 +76,12 @@ internal static class NativeMethods
         public uint uFlags;
         public uint uCallbackMessage;
         public IntPtr hIcon;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public fixed char szTip[128];
         public uint dwState;
         public uint dwStateMask;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public fixed char szInfo[256];
         public uint uVersionOrTimeout;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public fixed char szInfoTitle[64];
         public uint dwInfoFlags;
         public Guid guidItem;
         public IntPtr hBalloonIcon;
@@ -88,34 +93,42 @@ internal static class NativeMethods
     [StructLayout(LayoutKind.Sequential)]
     internal struct RECT { public int Left, Top, Right, Bottom; }
 
+    internal const uint WM_GETMINMAXINFO = 0x0024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MINMAXINFO { public POINT ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize; }
+
+    [LibraryImport("comctl32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SetWindowSubclass(IntPtr hWnd, IntPtr proc, nuint id, nuint refData);
+    [LibraryImport("comctl32.dll")] internal static partial IntPtr DefSubclassProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
     internal const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
-    [DllImport("dwmapi.dll")] internal static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
-    [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr hWnd, ref POINT pt);
+    [LibraryImport("dwmapi.dll")] internal static partial int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool ClientToScreen(IntPtr hWnd, ref POINT pt);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr GetModuleHandleW(string? lpModuleName);
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr GetModuleHandleW(string? lpModuleName);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern ushort RegisterClassExW(ref WNDCLASSEXW wc);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr CreateWindowExW(uint exStyle, string className, string windowName, uint style,
+    [LibraryImport("user32.dll")] internal static partial ushort RegisterClassExW(ref WNDCLASSEXW wc);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial IntPtr CreateWindowExW(uint exStyle, string className, string windowName, uint style,
         int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr hInstance, IntPtr param);
-    [DllImport("user32.dll")] internal static extern IntPtr DefWindowProcW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] internal static extern bool GetCursorPos(out POINT pt);
-    [DllImport("user32.dll")] internal static extern IntPtr CreatePopupMenu();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern bool AppendMenuW(IntPtr hMenu, uint flags, IntPtr id, string? item);
-    [DllImport("user32.dll")] internal static extern bool TrackPopupMenu(IntPtr hMenu, uint flags, int x, int y, int reserved, IntPtr hWnd, IntPtr rect);
-    [DllImport("user32.dll")] internal static extern bool DestroyMenu(IntPtr hMenu);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr LoadIconW(IntPtr hInstance, IntPtr lpIconName);
+    [LibraryImport("user32.dll")] internal static partial IntPtr DefWindowProcW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SetForegroundWindow(IntPtr hWnd);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool GetCursorPos(out POINT pt);
+    [LibraryImport("user32.dll")] internal static partial IntPtr CreatePopupMenu();
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool AppendMenuW(IntPtr hMenu, uint flags, IntPtr id, string? item);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool TrackPopupMenu(IntPtr hMenu, uint flags, int x, int y, int reserved, IntPtr hWnd, IntPtr rect);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool DestroyMenu(IntPtr hMenu);
+    [LibraryImport("user32.dll")] internal static partial IntPtr LoadIconW(IntPtr hInstance, IntPtr lpIconName);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern uint RegisterWindowMessageW(string name);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr LoadImageW(IntPtr hInst, string name, uint type, int cx, int cy, uint flags);
-    [DllImport("user32.dll")] internal static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] internal static extern bool AllowSetForegroundWindow(uint processId);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr CreateEventW(IntPtr attrs, bool manualReset, bool initialState, string? name);
-    [DllImport("kernel32.dll")] internal static extern bool SetEvent(IntPtr h);
-    [DllImport("ole32.dll")] internal static extern int CoWaitForMultipleObjects(uint flags, uint timeout, uint count, IntPtr[] handles, out uint index);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial uint RegisterWindowMessageW(string name);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr LoadImageW(IntPtr hInst, string name, uint type, int cx, int cy, uint flags);
+    [LibraryImport("user32.dll")] internal static partial int GetSystemMetrics(int index);
+    [LibraryImport("user32.dll")] internal static partial uint GetDpiForWindow(IntPtr hWnd);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool AllowSetForegroundWindow(uint processId);
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr CreateEventW(IntPtr attrs, [MarshalAs(UnmanagedType.Bool)] bool manualReset, [MarshalAs(UnmanagedType.Bool)] bool initialState, string? name);
+    [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SetEvent(IntPtr h);
+    [LibraryImport("ole32.dll")] internal static partial int CoWaitForMultipleObjects(uint flags, uint timeout, uint count, IntPtr[] handles, out uint index);
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] internal static extern bool Shell_NotifyIconW(uint msg, ref NOTIFYICONDATAW data);
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr ExtractIconW(IntPtr hInst, string exeFileName, uint iconIndex);
+    [LibraryImport("shell32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool Shell_NotifyIconW(uint msg, ref NOTIFYICONDATAW data);
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr ExtractIconW(IntPtr hInst, string exeFileName, uint iconIndex);
 }

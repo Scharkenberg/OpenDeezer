@@ -1,4 +1,4 @@
-// Package engine is the OpenDeezer engine hosted by corelib (C ABI) and mobile
+// Package engine is the Purple Disc engine hosted by corelib (C ABI) and mobile
 // (gomobile): client, player, queue, media cache, history, control server, phone
 // remote and Connect. The shells only convert arguments and results.
 package engine
@@ -11,12 +11,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 var errNotReady = errors.New("not logged in")
@@ -66,7 +66,7 @@ func Init(arl string) bool {
 		if err != nil {
 			mu.Unlock()
 			lastLoginKind.Store(loginNoAudio)
-			odlog.Warn("audio output: %v", err)
+			pdlog.Warn("audio output: %v", err)
 			return false
 		}
 		player = p
@@ -80,9 +80,9 @@ func Init(arl string) bool {
 		// The on-disk raw-stream cache (media.json: mediaCacheMB > 0, or anything pinned). A
 		// cache failure is logged and playback runs uncached.
 		if err := caches.Open(); err != nil {
-			odlog.Warn("media cache: %v", err)
+			pdlog.Warn("media cache: %v", err)
 		} else if caches.Current() != nil {
-			odlog.Info("media cache on (%d MB)", config.LoadMedia().MediaCacheMB)
+			pdlog.Info("media cache on (%d MB)", config.LoadMedia().MediaCacheMB)
 		}
 	}
 
@@ -93,7 +93,7 @@ func Init(arl string) bool {
 	if err := c.Login(); err != nil {
 		kind := loginKind(err)
 		lastLoginKind.Store(kind)
-		odlog.Warn("login failed: %v", err)
+		pdlog.Warn("login failed: %v", err)
 		if kind == 2 && !offlineOn.Load() {
 			offlineOn.Store(true)
 			offlineAuto.Store(true)
@@ -134,7 +134,7 @@ func Init(arl string) bool {
 	}
 	resumeJobs() // pins a quit or a failure left half fetched
 
-	odlog.Info("logged in: %s (%s)", c.Account().Name, c.Account().Offer)
+	pdlog.Info("logged in: %s (%s)", c.Account().Name, c.Account().Offer)
 	// Start engine-hosted services (Discord RP + control API) once.
 	startServices(c)
 	// On a re-login, hand the control server the new client: a same-account
@@ -238,7 +238,7 @@ func Play(id string, durationMS int64) PlayResult {
 	// off the engine's auto-advance while it resolves.
 	seq, done := plays.beginUser()
 	defer done()
-	// OpenDeezer Connect: when a device is selected, play there instead.
+	// Purple Disc Connect: when a device is selected, play there instead.
 	if rc := routedRemote(); rc != nil {
 		st, err := rc.PlayTrack(id)
 		if err != nil {
@@ -301,7 +301,7 @@ func PlayEpisode(id string, durationMS int64) PlayResult {
 	go func() { bookmark <- episodeMark(id) }()
 	plan, err := c.PodcastEpisodeStream(id)
 	if err != nil {
-		odlog.Warn("episode %s: %v", id, err)
+		pdlog.Warn("episode %s: %v", id, err)
 		if plays.superseded(seq) {
 			return PlaySuperseded
 		}

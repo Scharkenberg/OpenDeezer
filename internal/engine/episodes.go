@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // episodeBookmark is a bookmark to write: an episode, where it stopped and
@@ -183,7 +183,7 @@ func episodeProgress(p *audio.Player) {
 	go func() {
 		for _, b := range marks {
 			if err := c.SetEpisodeBookmark(b.id, b.posS, b.durS, b.heard); err != nil {
-				odlog.Warn("episode bookmark %s: %v", b.id, err)
+				pdlog.Warn("episode bookmark %s: %v", b.id, err)
 				continue
 			}
 			keepMark(b.id, deezer.EpisodeBookmark{OffsetS: b.posS, Heard: b.heard})

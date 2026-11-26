@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Shortcuts
 {

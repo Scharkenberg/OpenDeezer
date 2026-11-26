@@ -1,5 +1,5 @@
-// Package config centralizes OpenDeezer's user configuration (env vars +
-// ~/.config/opendeezer files) for the bits shared between the TUI and the GUI
+// Package config centralizes Purple Disc's user configuration (env vars +
+// ~/.config/purpledisc files) for the bits shared between the TUI and the GUI
 // engine (corelib): the control API and Discord Rich Presence settings.
 package config
 
@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 var (
@@ -31,7 +31,7 @@ func SetBaseDir(dir string) {
 	baseDirMu.Unlock()
 }
 
-// Dir is ~/.config/opendeezer (platform UserConfigDir + "opendeezer").
+// Dir is ~/.config/purpledisc (platform UserConfigDir + "purpledisc").
 func Dir() (string, error) {
 	baseDirMu.RLock()
 	override := baseDirOverride
@@ -43,7 +43,7 @@ func Dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "opendeezer"), nil
+	return filepath.Join(base, "purpledisc"), nil
 }
 
 // SetCacheBaseDir overrides the directory CacheBaseDir returns, for hosts
@@ -55,8 +55,8 @@ func SetCacheBaseDir(dir string) {
 	baseDirMu.Unlock()
 }
 
-// CacheBaseDir holds what the engine can lose: <user cache dir>/opendeezer
-// (%LOCALAPPDATA%\opendeezer on Windows). Stream temp files go in its tmp
+// CacheBaseDir holds what the engine can lose: <user cache dir>/purpledisc
+// (%LOCALAPPDATA%\purpledisc on Windows). Stream temp files go in its tmp
 // subfolder, and it is the default media cache folder.
 func CacheBaseDir() (string, error) {
 	baseDirMu.RLock()
@@ -69,7 +69,7 @@ func CacheBaseDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "opendeezer"), nil
+	return filepath.Join(base, "purpledisc"), nil
 }
 
 func readFile(name string) string {
@@ -79,10 +79,10 @@ func readFile(name string) string {
 			return strings.TrimSpace(string(b))
 		}
 	}
-	// Fallback: ~/.config/opendeezer (Linux-style), so a file placed there still
+	// Fallback: ~/.config/purpledisc (Linux-style), so a file placed there still
 	// works on macOS where UserConfigDir differs.
 	if home, err := os.UserHomeDir(); err == nil {
-		if b, err := os.ReadFile(filepath.Join(home, ".config", "opendeezer", name)); err == nil {
+		if b, err := os.ReadFile(filepath.Join(home, ".config", "purpledisc", name)); err == nil {
 			return strings.TrimSpace(string(b))
 		}
 	}
@@ -97,11 +97,11 @@ type Control struct {
 	SameAccount bool   // require a matching Deezer account when no token (LAN)
 }
 
-// LoadControl reads the control-API config from $OPENDEEZER_CONTROL ("1"/addr) +
-// $OPENDEEZER_CONTROL_TOKEN, else ~/.config/opendeezer/{control.txt,control-token.txt}.
+// LoadControl reads the control-API config from $PURPLEDISC_CONTROL ("1"/addr) +
+// $PURPLEDISC_CONTROL_TOKEN, else ~/.config/purpledisc/{control.txt,control-token.txt}.
 func LoadControl() Control {
 	c := Control{Addr: "127.0.0.1:7654"}
-	v := strings.TrimSpace(os.Getenv("OPENDEEZER_CONTROL"))
+	v := strings.TrimSpace(os.Getenv("PURPLEDISC_CONTROL"))
 	if v == "" {
 		v = readFile("control.txt")
 	}
@@ -118,7 +118,7 @@ func LoadControl() Control {
 		c.Enabled = true
 		c.Addr = v // an explicit host:port
 	}
-	c.Token = strings.TrimSpace(os.Getenv("OPENDEEZER_CONTROL_TOKEN"))
+	c.Token = strings.TrimSpace(os.Getenv("PURPLEDISC_CONTROL_TOKEN"))
 	if c.Token == "" {
 		c.Token = readFile("control-token.txt")
 	}
@@ -126,7 +126,7 @@ func LoadControl() Control {
 	if c.Enabled && c.Token == "" && !IsLoopbackAddr(c.Addr) {
 		c.SameAccount = true
 	}
-	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_CONTROL_SAMEACCOUNT")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PURPLEDISC_CONTROL_SAMEACCOUNT")); v != "" {
 		c.SameAccount = v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true")
 	}
 	return c
@@ -203,7 +203,7 @@ func IsLoopbackAddr(addr string) bool {
 }
 
 // LoadPeers returns manually configured Connect peers (host[:port]) from
-// $OPENDEEZER_CONNECT_PEERS (comma-separated) and connect-peers.txt (one per line),
+// $PURPLEDISC_CONNECT_PEERS (comma-separated) and connect-peers.txt (one per line),
 // for networks without multicast (e.g. Tailscale).
 func LoadPeers() []string {
 	var out []string
@@ -215,7 +215,7 @@ func LoadPeers() []string {
 			out = append(out, s)
 		}
 	}
-	for _, p := range strings.Split(os.Getenv("OPENDEEZER_CONNECT_PEERS"), ",") {
+	for _, p := range strings.Split(os.Getenv("PURPLEDISC_CONNECT_PEERS"), ",") {
 		add(p)
 	}
 	for _, line := range strings.Split(readFile("connect-peers.txt"), "\n") {
@@ -260,7 +260,7 @@ func NormalizePeer(addr string) (base, hostport string) {
 
 // EQ is the persisted equalizer + mono-downmix state. It is loaded and saved by
 // the audio engine itself (not per client), so the TUI, every GUI and the
-// control API all share one set of settings through ~/.config/opendeezer.
+// control API all share one set of settings through ~/.config/purpledisc.
 type EQ struct {
 	Enabled  bool      `json:"enabled"`
 	Mono     bool      `json:"mono"`
@@ -398,7 +398,7 @@ func migratePlayback() (pb Playback, ok bool) {
 		return Playback{}, false
 	}
 	if err := SavePlayback(pb); err != nil {
-		odlog.Warn("playback.json: %v", err)
+		pdlog.Warn("playback.json: %v", err)
 	}
 	return pb, true
 }
@@ -438,14 +438,14 @@ type Media struct {
 	MediaCacheMB int `json:"mediaCacheMB"`
 	// MediaCacheDir is the folder the user picked for the cache; "" (the
 	// default) is CacheBaseDir. The cache lives in its subfolder
-	// opendeezer-cache (CacheStoreDir).
+	// purpledisc-cache (CacheStoreDir).
 	MediaCacheDir string `json:"mediaCacheDir,omitempty"`
 	// MediaCacheMaxAgeDays removes cached tracks not played for longer than
 	// this many days; 0 (the default) keeps them. Negative values are
 	// clamped to 0.
 	MediaCacheMaxAgeDays int `json:"mediaCacheMaxAgeDays,omitempty"`
 	// OldCachesRemoved records that the old-layout caches kept outside
-	// an opendeezer-cache folder were looked for and removed.
+	// an purpledisc-cache folder were looked for and removed.
 	OldCachesRemoved bool `json:"oldCachesRemoved,omitempty"`
 }
 
@@ -479,14 +479,14 @@ func (m Media) CacheDir() (string, error) {
 }
 
 // CacheStoreDir is the folder the media cache lives in: the subfolder
-// opendeezer-cache of CacheDir, which the cache creates. The cache deletes
+// purpledisc-cache of CacheDir, which the cache creates. The cache deletes
 // nothing outside it.
 func (m Media) CacheStoreDir() (string, error) {
 	dir, err := m.CacheDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "opendeezer-cache"), nil
+	return filepath.Join(dir, "purpledisc-cache"), nil
 }
 
 // SaveMedia persists the media settings to media.json in the config dir,
@@ -503,25 +503,25 @@ func SaveMedia(m Media) error {
 }
 
 // LoadDiscordAppID returns the Discord application id for Rich Presence, from
-// $OPENDEEZER_DISCORD_APP_ID or ~/.config/opendeezer/discord-app-id.txt. Empty
+// $PURPLEDISC_DISCORD_APP_ID or ~/.config/purpledisc/discord-app-id.txt. Empty
 // disables the feature.
 func LoadDiscordAppID() string {
-	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_DISCORD_APP_ID")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PURPLEDISC_DISCORD_APP_ID")); v != "" {
 		return v
 	}
 	return readFile("discord-app-id.txt")
 }
 
-// LoadLanguage returns the UI language code (e.g. "fr") from $OPENDEEZER_LANG or
+// LoadLanguage returns the UI language code (e.g. "fr") from $PURPLEDISC_LANG or
 // language.txt, shared by every client. "" means auto: use locale detection.
 func LoadLanguage() string {
-	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_LANG")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PURPLEDISC_LANG")); v != "" {
 		return v
 	}
 	return readFile("language.txt")
 }
 
-// LanguageSetting returns only the saved language.txt value, ignoring $OPENDEEZER_LANG,
+// LanguageSetting returns only the saved language.txt value, ignoring $PURPLEDISC_LANG,
 // so the in-app Language menu shows and edits its own selection.
 func LanguageSetting() string {
 	return readFile("language.txt")
@@ -532,23 +532,23 @@ func SaveLanguage(code string) error {
 	return WriteFile("language.txt", strings.TrimSpace(code))
 }
 
-// DefaultDownloadDir is the download folder when none is chosen: <home>/Music/OpenDeezer,
-// else <home>/Downloads/OpenDeezer, else "OpenDeezer" in the working directory.
+// DefaultDownloadDir is the download folder when none is chosen: <home>/Music/PurpleDisc,
+// else <home>/Downloads/PurpleDisc, else "Purple Disc" in the working directory.
 func DefaultDownloadDir() string {
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		music := filepath.Join(home, "Music")
 		if fi, err := os.Stat(music); err == nil && fi.IsDir() {
-			return filepath.Join(music, "OpenDeezer")
+			return filepath.Join(music, "PurpleDisc")
 		}
-		return filepath.Join(home, "Downloads", "OpenDeezer")
+		return filepath.Join(home, "Downloads", "PurpleDisc")
 	}
-	return "OpenDeezer"
+	return "PurpleDisc"
 }
 
-// LoadDownloadDir returns the download folder from $OPENDEEZER_DOWNLOAD_DIR, then
+// LoadDownloadDir returns the download folder from $PURPLEDISC_DOWNLOAD_DIR, then
 // download-dir.txt, then [DefaultDownloadDir]; shared by every client.
 func LoadDownloadDir() string {
-	if v := strings.TrimSpace(os.Getenv("OPENDEEZER_DOWNLOAD_DIR")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PURPLEDISC_DOWNLOAD_DIR")); v != "" {
 		return v
 	}
 	if v := readFile("download-dir.txt"); v != "" {
@@ -564,10 +564,10 @@ func SaveDownloadDir(path string) error {
 }
 
 // LoadAdsDisabled reports whether the user opted out of free-tier play reporting, from
-// $OPENDEEZER_DISABLE_ADS or ads-disabled.txt (default false). It is the user's own
+// $PURPLEDISC_DISABLE_ADS or ads-disabled.txt (default false). It is the user's own
 // at-risk choice (see deezer.SetAdsDisabled).
 func LoadAdsDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("OPENDEEZER_DISABLE_ADS"))
+	v := strings.TrimSpace(os.Getenv("PURPLEDISC_DISABLE_ADS"))
 	if v == "" {
 		v = readFile("ads-disabled.txt")
 	}

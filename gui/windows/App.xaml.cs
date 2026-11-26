@@ -8,7 +8,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 public partial class App : Application
 {
@@ -41,7 +41,7 @@ public partial class App : Application
         AppLog.Write("Unhandled: " + ex);
         var w = s_window;
         if (w != null && s_dq.TryEnqueue(() => w.ShowUnhandledError(ex))) return;
-        MessageBoxW(IntPtr.Zero, Loc.S("Error_Unhandled") + "\n\n" + ex.Message, "OpenDeezer", 0x10);
+        MessageBoxW(IntPtr.Zero, Loc.S("Error_Unhandled") + "\n\n" + ex.Message, "Purple Disc", 0x10);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -71,11 +71,11 @@ public partial class App : Application
         return false;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }
 
-// %APPDATA%\opendeezer\windows.log; at 512 KB it moves to windows.log.old.
+// %APPDATA%\purpledisc\windows.log; at 512 KB it moves to windows.log.old.
 internal static class AppLog
 {
     private const long MaxBytes = 512 * 1024;

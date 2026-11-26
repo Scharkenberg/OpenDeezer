@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/hajimehoshi/go-mp3"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // TestMain points the config and cache directories, and with the latter the
 // stream temp directory, at directories of their own.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "od-audio-test-")
+	dir, err := os.MkdirTemp("", "pd-audio-test-")
 	if err != nil {
 		panic(err)
 	}
@@ -79,7 +78,7 @@ func pcmOf(t *testing.T, format string, r io.ReadSeeker) []byte {
 		}
 		dec = fs
 	} else {
-		d, err := mp3.NewDecoder(r)
+		d, err := newMP3Decoder(r)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -6,12 +6,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class TileGrid<T> where T : class
 {
     private IReadOnlyList<T> _all = [];
-    private ObservableCollection<T> _items = new();
+    // A closed type: under Native AOT WinUI sees a collection as a vector only for the closed
+    // types CsWinRT's generator saw, never one made inside a generic class.
+    private ObservableCollection<object> _items = new();
     // _columns is 0 until the first measure; _rows is the limit every SetItems starts from.
     private int _columns, _rows, _maxRows, _shown = -1;
 
@@ -32,9 +34,9 @@ internal sealed class TileGrid<T> where T : class
                 if (f.Target is MediaTile { Item: T item }) menu(f.Items, item);
             };
         }
-        var recycler = new Recycler<MediaTile, T>(
+        var recycler = new Recycler<MediaTile, object>(
             () => new MediaTile(tile => open((T)tile.Item!), play == null ? null : tile => play((T)tile.Item!)) { ContextFlyout = flyout },
-            (tile, item, _) => tile.Bind(item, map(item)));
+            (tile, item, _) => tile.Bind(item, map((T)item)));
         Root = recycler.Attach(new ItemsRepeater
         {
             Layout = new UniformGridLayout
@@ -71,13 +73,15 @@ internal sealed class TileGrid<T> where T : class
     public void ShowAll()
     {
         _maxRows = 0;
+        // "Show all" fills the grid afresh: the added rows do not fly in.
+        _shown = -1;
         Apply();
     }
 
     public void Update(IReadOnlyList<T> items)
     {
         _all = items;
-        if (_maxRows == 0 && Ui.TryEdit(_items, items))
+        if (_maxRows == 0 && Ui.TryEdit<object>(_items, items))
         {
             _shown = items.Count;
             ShownChanged?.Invoke(_all.Count, _shown);
@@ -96,10 +100,21 @@ internal sealed class TileGrid<T> where T : class
         int shown = _maxRows > 0 ? Math.Min(_all.Count, _columns * _maxRows) : _all.Count;
         if (shown != _shown)
         {
+            if (_shown < 0)
+            {
+                _items = new ObservableCollection<object>();
+                for (int i = 0; i < shown; i++) _items.Add(_all[i]);
+                Root.ItemsSource = _items;
+            }
+            else
+            {
+                // A new column count (the window resized): the tiles shown stay and the row's end
+                // grows or shrinks, without the edit transitions.
+                if (Root.ItemTransitionProvider is EditTransitions t) t.QuietOnce();
+                while (_items.Count > shown) _items.RemoveAt(_items.Count - 1);
+                while (_items.Count < shown) _items.Add(_all[_items.Count]);
+            }
             _shown = shown;
-            _items = new ObservableCollection<T>();
-            for (int i = 0; i < shown; i++) _items.Add(_all[i]);
-            Root.ItemsSource = _items;
         }
         ShownChanged?.Invoke(_all.Count, shown);
     }

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 // Host runs the media cache as the engine hosts do (the desktop library, the
@@ -155,7 +155,7 @@ func (h *Host) Stats() Stats {
 	return st
 }
 
-// SetDir moves the cache to dir\opendeezer-cache (dir absolute, "" = default), copying
+// SetDir moves the cache to dir\purpledisc-cache (dir absolute, "" = default), copying
 // the pinned entries and then clearing the old cache. On any error the old folder stays
 // in use. Other calls are served by the old folder during the copy.
 func (h *Host) SetDir(dir string) error {

@@ -1,4 +1,4 @@
-// Command deezercore exposes the OpenDeezer engine as a C library for native GUIs
+// Command deezercore exposes the Purple Disc engine as a C library for native GUIs
 // (go build -buildmode=c-archive ./corelib, which also emits the header). List and
 // search calls return a malloc'd JSON string the caller releases with DZFree.
 package main
@@ -17,13 +17,13 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/update"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/version"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/engine"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/version"
 )
 
 func main() {} // required for buildmode=c-archive
@@ -110,7 +110,7 @@ var logOnce sync.Once
 func DZInit(arl *C.char) C.int {
 	logOnce.Do(func() {
 		if base, err := os.UserConfigDir(); err == nil {
-			_ = odlog.OpenFile(filepath.Join(base, "opendeezer"))
+			_ = pdlog.OpenFile(filepath.Join(base, "purpledisc"))
 		}
 	})
 	return cBool(engine.Init(C.GoString(arl)))
@@ -252,11 +252,6 @@ func DZMarkEpisodePlayed(id *C.char, played C.int) C.int {
 //
 //export DZSetPlaybackSpeed
 func DZSetPlaybackSpeed(speed C.double) { engine.SetPlaybackSpeed(float64(speed)) }
-
-// DZPlaybackSpeed returns the speed episodes play at.
-//
-//export DZPlaybackSpeed
-func DZPlaybackSpeed() C.double { return C.double(engine.PlaybackSpeed()) }
 
 // DZPlaylistDetailsJSON returns {"id","title","description","isPrivate",
 // "isCollaborative","ownerId"} for a playlist. Release with DZFree.
@@ -538,7 +533,7 @@ func DZSetMediaCacheMaxAgeDays(days C.int) C.int {
 
 // DZMediaCacheStatsJSON returns {"entries","bytes","pinnedBytes","maxBytes","dir"}:
 // bytes includes pinned tracks, maxBytes 0 means off, dir is the chosen folder (the
-// cache is its opendeezer-cache subfolder). Release with DZFree.
+// cache is its purpledisc-cache subfolder). Release with DZFree.
 //
 //export DZMediaCacheStatsJSON
 func DZMediaCacheStatsJSON() *C.char { return jsonStr(engine.Caches().Stats(), nil) }
@@ -549,16 +544,7 @@ func DZMediaCacheStatsJSON() *C.char { return jsonStr(engine.Caches().Stats(), n
 //export DZClearMediaCache
 func DZClearMediaCache(includePinned C.int) C.int { return ok(engine.ClearCache(includePinned != 0)) }
 
-// DZMediaCacheDir returns the media cache folder (default <user cache dir>\opendeezer,
-// "" when unknown); the cache is its opendeezer-cache subfolder. Release with DZFree.
-//
-//export DZMediaCacheDir
-func DZMediaCacheDir() *C.char {
-	dir, _ := config.LoadMedia().CacheDir()
-	return C.CString(dir)
-}
-
-// DZSetMediaCacheDir moves the cache to dir\opendeezer-cache (dir absolute, "" =
+// DZSetMediaCacheDir moves the cache to dir\purpledisc-cache (dir absolute, "" =
 // default), copying pinned tracks first; on any error the old folder stays in use.
 // Returns {"error":""} or {"error":"reason"}. Release with DZFree.
 //
@@ -611,6 +597,19 @@ func DZAccountJSON() *C.char {
 //export DZChartsJSON
 func DZChartsJSON() *C.char { return C.CString(string(engine.ChartsJSON())) }
 
+// DZGenresJSON returns {"genres":[{"id","name"}]}, "All" (id "0") first. Release with DZFree.
+//
+//export DZGenresJSON
+func DZGenresJSON() *C.char { return C.CString(string(engine.GenresJSON())) }
+
+// DZGenreChartsJSON returns a genre's top tracks/albums/artists/playlists ("0": all genres).
+// Release with DZFree.
+//
+//export DZGenreChartsJSON
+func DZGenreChartsJSON(genreID *C.char) *C.char {
+	return C.CString(string(engine.GenreChartsJSON(C.GoString(genreID))))
+}
+
 // DZHomeJSON returns the Home sections in one call: {topTracks, topAlbums} from the
 // charts and the user's {playlists}. A section that fails to load comes back empty.
 // Greeting and quick-pick cards are client-side.
@@ -618,7 +617,7 @@ func DZChartsJSON() *C.char { return C.CString(string(engine.ChartsJSON())) }
 //export DZHomeJSON
 func DZHomeJSON() *C.char { return C.CString(string(engine.HomeJSON())) }
 
-// DZCheckUpdateJSON checks GitHub for a newer OpenDeezer release and returns
+// DZCheckUpdateJSON checks GitHub for a newer Purple Disc release and returns
 // {current, latest, hasUpdate, url, notes}. Network failure -> hasUpdate:false.
 //
 //export DZCheckUpdateJSON
@@ -689,7 +688,7 @@ func DZReplayGain() C.int { return cBool(engine.ReplayGain()) }
 func clientOp(fn func(c *deezer.Client) error) C.int {
 	c, err := engine.Online()
 	if err != nil {
-		odlog.Warn("%v", err)
+		pdlog.Warn("%v", err)
 		return 0
 	}
 	return ok(fn(c))

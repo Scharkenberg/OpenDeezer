@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 	"golang.org/x/net/websocket"
 )
 
@@ -114,6 +114,11 @@ func IsARLExpired(err error) bool { return errors.Is(err, ErrARLExpired) }
 // IsNoFullMedia reports whether err indicates an entitlement rejection
 // (no full track source) rather than a transient problem.
 func IsNoFullMedia(err error) bool { return errors.Is(err, ErrNoFullMedia) }
+
+// errNoSource marks a get_url answer with neither media nor errors ({"data":[{"media":[]}]},
+// as Deezer answers a track listed with empty RIGHTS): its FALLBACK version may play,
+// never the preview.
+var errNoSource = errors.New("neither media nor errors")
 
 // errMediaBusy marks a get_url answer of 5xx or 429: retried, never a preview.
 var errMediaBusy = errors.New("media service busy")
@@ -730,8 +735,9 @@ type restTrackDTO struct {
 	ReleaseDate string     `json:"release_date"`
 	Artist      restArtist `json:"artist"`
 	Album       struct {
-		Title       string `json:"title"`
-		CoverMedium string `json:"cover_medium"`
+		ID          json.Number `json:"id"`
+		Title       string      `json:"title"`
+		CoverMedium string      `json:"cover_medium"`
 	} `json:"album"`
 }
 
@@ -744,6 +750,7 @@ func (r restTrackDTO) toTrack() Track {
 		DurationMS:  durSec * 1000,
 		Artists:     []Artist{{ID: r.Artist.ID.String(), Name: r.Artist.Name}},
 		AlbumName:   r.Album.Title,
+		AlbumID:     r.Album.ID.String(),
 		ArtworkURL:  r.Album.CoverMedium,
 		Explicit:    r.ExplicitLyric,
 		TrackNumber: int(pos),
@@ -775,15 +782,35 @@ type gwTrackDTO struct {
 	Duration   json.Number `json:"DURATION"`
 	ArtID      json.Number `json:"ART_ID"`
 	ArtName    string      `json:"ART_NAME"`
+	AlbID      json.Number `json:"ALB_ID"`
 	AlbTitle   string      `json:"ALB_TITLE"`
 	AlbPicture string      `json:"ALB_PICTURE"`
 	Explicit   json.Number `json:"EXPLICIT_LYRICS"` // "0"/"1" (or absent)
 	// Fallback is the version Deezer serves instead when the track has no
 	// rights in the account's country; absent otherwise.
 	Fallback gwFallback `json:"FALLBACK"`
+	// Rights says where the track streams; {} when nowhere (Deezer's players then grey
+	// it out), absent from replies that do not list it.
+	Rights *gwRights `json:"RIGHTS"`
 }
 
-// gwFallback is the part of a track's FALLBACK version OpenDeezer uses.
+// gwRights is where a track streams.
+type gwRights struct {
+	Ads bool `json:"STREAM_ADS_AVAILABLE"`
+	Sub bool `json:"STREAM_SUB_AVAILABLE"`
+}
+
+// UnmarshalJSON reads [], the gateway's way of writing an empty object, as no rights.
+func (r *gwRights) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '[' {
+		*r = gwRights{}
+		return nil
+	}
+	type plain gwRights
+	return json.Unmarshal(b, (*plain)(r))
+}
+
+// gwFallback is the part of a track's FALLBACK version Purple Disc uses.
 type gwFallback struct {
 	SngID      json.Number `json:"SNG_ID"`
 	TrackToken string      `json:"TRACK_TOKEN"`
@@ -806,8 +833,11 @@ func (g gwTrackDTO) toTrack() Track {
 		DurationMS: durSec * 1000,
 		Artists:    []Artist{{ID: g.ArtID.String(), Name: g.ArtName}},
 		AlbumName:  g.AlbTitle,
+		AlbumID:    g.AlbID.String(),
 		ArtworkURL: gwImage("cover", pic),
 		Explicit:   exp != 0,
+		// Without rights a track plays only through its fallback version.
+		Unavailable: g.Rights != nil && !g.Rights.Ads && !g.Rights.Sub && g.Fallback.TrackToken == "",
 	}
 }
 
@@ -1204,7 +1234,7 @@ func (c *Client) songData(trackID string) (t Track, token string, fallback gwFal
 
 // StreamPlan is the resolved CDN URL + track id for decryption.
 type StreamPlan struct {
-	CDNURL  string
+	CDNURL string
 	// AltURLs are the media service's other sources for the same stream, tried in order
 	// when CDNURL's host fails.
 	AltURLs []string `json:"-"`
@@ -1394,7 +1424,7 @@ func (c *Client) getMediaURL(licenseToken, trackToken, media string) (urls []str
 			}
 		}
 	}
-	return nil, "", fmt.Errorf("get_url: HTTP %d: neither media nor errors", resp.StatusCode)
+	return nil, "", fmt.Errorf("get_url: HTTP %d: %w", resp.StatusCode, errNoSource)
 }
 
 // PrepareStream resolves a track id to a playable stream at the client's
@@ -1420,9 +1450,9 @@ func (c *Client) PrepareStreamAt(trackID string, q int) (*StreamPlan, error) {
 		u, format, err = c.resolveMediaURL(tok, media)
 	}
 	keyID := ""
-	// A track refused for rights plays the version Deezer names as its
-	// fallback, as Deezer's web player does.
-	if errors.Is(err, ErrNoFullMedia) && fb.TrackToken != "" {
+	// A track refused for rights, or answered without a source, plays the version
+	// Deezer names as its fallback, as Deezer's web player does.
+	if (errors.Is(err, ErrNoFullMedia) || errors.Is(err, errNoSource)) && fb.TrackToken != "" {
 		if fu, fformat, fErr := c.resolveMediaURL(fb.TrackToken, media); fErr == nil {
 			u, format, keyID, err = fu, fformat, fb.SngID.String(), nil
 		}

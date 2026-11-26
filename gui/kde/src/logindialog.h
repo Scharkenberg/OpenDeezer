@@ -1,7 +1,7 @@
-// OpenDeezer — Deezer login dialog.
+// Purple Disc — Deezer login dialog.
 //
 // Two ways to authenticate:
-//   1. "Log in with Deezer" — launches the standalone `opendeezer-login` helper
+//   1. "Log in with Deezer" — launches the standalone `purpledisc-login` helper
 //      (a separate QtWebEngine process; see src/loginhelper.cpp). It opens the
 //      Deezer web login and prints the captured `arl` cookie to stdout. Running
 //      it out-of-process is what makes login work in the dlopen'd unified
@@ -10,7 +10,7 @@
 //   2. Manual ARL entry — the fallback for users who already have an ARL.
 //
 // Either way the ARL is verified with DZInit on a worker thread, persisted to
-// the file the frontend reads at startup (~/.config/opendeezer/arl.txt), and the
+// the file the frontend reads at startup (~/.config/purpledisc/arl.txt), and the
 // dialog accept()s with arl() set.
 #pragma once
 
@@ -39,12 +39,12 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private:
-    void runHelper();                // launch opendeezer-login, read the arl
+    void runHelper();                // launch purpledisc-login, read the arl
     void submitManual();             // "Use this ARL" button
     void tryArl(const QString &arl); // DZInit on a worker thread
     void setBusy(bool busy);
     void showError(const QString &msg);
-    QString helperPath() const; // locate the opendeezer-login executable
+    QString helperPath() const; // locate the purpledisc-login executable
 
     QString m_arlPath;
     QString m_arl;

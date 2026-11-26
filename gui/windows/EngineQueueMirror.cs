@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 /// <summary>The engine queue (DZQueue*). Content edits bump Version, cursor moves don't; Set resets
 /// the cursor to 0; removing the current row is refused; InsertNext inserts after the cursor;

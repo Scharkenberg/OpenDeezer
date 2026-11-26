@@ -1,6 +1,6 @@
 # Fuzzing
 
-OpenDeezer decodes untrusted bytes (encrypted streams, MP3/FLAC, LAN packets), so
+Purple Disc decodes untrusted bytes (encrypted streams, MP3/FLAC, LAN packets), so
 those paths are fuzzed. The harnesses are Go's native `testing.F` fuzzers, kept
 next to the code they exercise:
 

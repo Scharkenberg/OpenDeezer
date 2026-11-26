@@ -75,6 +75,70 @@ func makeTestJPEG() []byte {
 	return buf.Bytes()
 }
 
+// tagMP3 writes, frame for frame and byte for byte, the tag the id3v2 library wrote before it
+// (the library orders frames at random, so the frames are compared as a set), over a file
+// that already has a tag, and keeps the audio.
+func TestTagMP3MatchesLibrary(t *testing.T) {
+	dir := t.TempDir()
+	audio := append([]byte("\xff\xfb\x90\x00"), bytes.Repeat([]byte{7}, 300)...)
+	old := append([]byte("ID3\x04\x00\x00\x00\x00\x00\x0bTIT2\x00\x00\x00\x01\x00\x00\x03"), audio...)
+	tr := Track{Name: "Ça va – 東京", Artists: []Artist{{Name: "A"}, {Name: "B"}}, AlbumName: "Album"}
+	art := makeTestJPEG()
+
+	lib, own := filepath.Join(dir, "lib.mp3"), filepath.Join(dir, "own.mp3")
+	for _, p := range []string{lib, own} {
+		if err := os.WriteFile(p, old, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tag, err := id3v2.Open(lib, id3v2.Options{Parse: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag.SetDefaultEncoding(id3v2.EncodingUTF8)
+	tag.SetTitle(tr.Name)
+	tag.SetArtist(tr.ArtistLine())
+	tag.SetAlbum(tr.AlbumName)
+	tag.SetYear("2026")
+	tag.AddTextFrame(tag.CommonID("Track number/Position in set"), id3v2.EncodingUTF8, "7")
+	tag.AddAttachedPicture(id3v2.PictureFrame{Encoding: id3v2.EncodingUTF8, MimeType: "image/jpeg", PictureType: id3v2.PTFrontCover, Description: "Front cover", Picture: art})
+	if err := tag.Save(); err != nil {
+		t.Fatal(err)
+	}
+	_ = tag.Close()
+	if err := tagMP3(own, tr, art, 7, "2026"); err != nil {
+		t.Fatal(err)
+	}
+
+	frames := func(p string) (map[string]bool, []byte) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		size, _ := id3Size(bytes.NewReader(b))
+		set := map[string]bool{}
+		for i := 10; i+10 <= int(size); {
+			n := int(b[i+4])<<21 | int(b[i+5])<<14 | int(b[i+6])<<7 | int(b[i+7])
+			set[string(b[i:i+10+n])] = true
+			i += 10 + n
+		}
+		return set, b[size:]
+	}
+	libFrames, libAudio := frames(lib)
+	ownFrames, ownAudio := frames(own)
+	if len(libFrames) != 6 || len(ownFrames) != len(libFrames) {
+		t.Fatalf("%d frames, the library wrote %d (want 6)", len(ownFrames), len(libFrames))
+	}
+	for f := range libFrames {
+		if !ownFrames[f] {
+			t.Errorf("frame %q differs from the library's", f[:4])
+		}
+	}
+	if !bytes.Equal(ownAudio, audio) || !bytes.Equal(libAudio, audio) {
+		t.Error("the audio after the tag changed")
+	}
+}
+
 func TestTagFile_WritesID3v24AndCover(t *testing.T) {
 	tmp := t.TempDir()
 	mp3Path := filepath.Join(tmp, "song.mp3")

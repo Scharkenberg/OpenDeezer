@@ -5,49 +5,51 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
-internal sealed class Tray(Action restore, Action quit)
+internal sealed unsafe class Tray(Action restore, Action quit)
 {
     private static Tray? s_instance;
-    private static NativeMethods.WndProcDelegate? s_proc;
     private static uint s_taskbarCreated;
     private NativeMethods.NOTIFYICONDATAW _nid;
+    private string _tip = "";
     private IntPtr _hwnd;
 
     public bool Added { get; private set; }
 
-    public static string IconPath() => Path.Combine(AppContext.BaseDirectory, "opendeezer.ico");
+    public static string IconPath() => Path.Combine(AppContext.BaseDirectory, "purpledisc.ico");
 
     public void Add()
     {
         try
         {
             s_instance = this;
-            s_proc ??= WndProc; // the delegate must outlive the window class
             s_taskbarCreated = NativeMethods.RegisterWindowMessageW("TaskbarCreated");
-            var wc = new NativeMethods.WNDCLASSEXW
+            IntPtr hInstance = NativeMethods.GetModuleHandleW(null);
+            fixed (char* className = "PurpleDiscTrayWnd")
             {
-                cbSize = (uint)Marshal.SizeOf<NativeMethods.WNDCLASSEXW>(),
-                lpfnWndProc = Marshal.GetFunctionPointerForDelegate(s_proc),
-                hInstance = NativeMethods.GetModuleHandleW(null),
-                lpszClassName = "OpenDeezerTrayWnd",
-            };
-            NativeMethods.RegisterClassExW(ref wc);
+                var wc = new NativeMethods.WNDCLASSEXW
+                {
+                    cbSize = (uint)sizeof(NativeMethods.WNDCLASSEXW),
+                    lpfnWndProc = (IntPtr)(delegate* unmanaged<IntPtr, uint, IntPtr, IntPtr, IntPtr>)&WndProc,
+                    hInstance = hInstance,
+                    lpszClassName = (IntPtr)className,
+                };
+                NativeMethods.RegisterClassExW(ref wc);
+            }
             if (_hwnd == IntPtr.Zero)
-                _hwnd = NativeMethods.CreateWindowExW(0, "OpenDeezerTrayWnd", "OpenDeezerTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+                _hwnd = NativeMethods.CreateWindowExW(0, "PurpleDiscTrayWnd", "PurpleDiscTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
             _nid = new NativeMethods.NOTIFYICONDATAW
             {
-                cbSize = (uint)Marshal.SizeOf<NativeMethods.NOTIFYICONDATAW>(),
+                cbSize = (uint)sizeof(NativeMethods.NOTIFYICONDATAW),
                 hWnd = _hwnd,
                 uID = NativeMethods.TRAY_UID,
                 uFlags = NativeMethods.NIF_ICON | NativeMethods.NIF_MESSAGE | NativeMethods.NIF_TIP,
                 uCallbackMessage = NativeMethods.WM_TRAYCALLBACK,
                 hIcon = LoadIcon(),
-                szTip = "OpenDeezer",
-                szInfo = "",
-                szInfoTitle = "",
             };
+            _tip = "Purple Disc";
+            fixed (char* tip = _nid.szTip) SetText(tip, 128, _tip);
             Added = NativeMethods.Shell_NotifyIconW(NativeMethods.NIM_ADD, ref _nid);
         }
         catch (Exception ex) { AppLog.Write("tray: " + ex.Message); }
@@ -63,10 +65,11 @@ internal sealed class Tray(Action restore, Action quit)
     public void SetTip(string text)
     {
         if (!Added) return;
-        string tip = text.Length == 0 ? "OpenDeezer" : "OpenDeezer\n" + text;
+        string tip = text.Length == 0 ? "Purple Disc" : "Purple Disc\n" + text;
         if (tip.Length > 127) tip = tip[..126] + "…";
-        if (tip == _nid.szTip) return;
-        _nid.szTip = tip;
+        if (tip == _tip) return;
+        _tip = tip;
+        fixed (char* p = _nid.szTip) SetText(p, 128, tip);
         _nid.uFlags = NativeMethods.NIF_TIP;
         NativeMethods.Shell_NotifyIconW(NativeMethods.NIM_MODIFY, ref _nid);
     }
@@ -75,12 +78,20 @@ internal sealed class Tray(Action restore, Action quit)
     {
         if (!Added) return;
         _nid.uFlags = NativeMethods.NIF_INFO;
-        _nid.szInfoTitle = title.Length > 63 ? title[..63] : title;
-        _nid.szInfo = body.Length > 255 ? body[..255] : body;
+        fixed (char* t = _nid.szInfoTitle) SetText(t, 64, title);
+        fixed (char* b = _nid.szInfo) SetText(b, 256, body);
         _nid.dwInfoFlags = NativeMethods.NIIF_INFO;
         NativeMethods.Shell_NotifyIconW(NativeMethods.NIM_MODIFY, ref _nid);
-        _nid.szInfo = "";
-        _nid.szInfoTitle = "";
+        fixed (char* t = _nid.szInfoTitle) SetText(t, 64, "");
+        fixed (char* b = _nid.szInfo) SetText(b, 256, "");
+    }
+
+    // Writes text into a fixed field of `size` chars, cut to fit, NUL-terminated.
+    private static void SetText(char* field, int size, string text)
+    {
+        var dst = new Span<char>(field, size);
+        dst.Clear();
+        text.AsSpan(0, Math.Min(text.Length, size - 1)).CopyTo(dst);
     }
 
     private static IntPtr LoadIcon()
@@ -119,6 +130,7 @@ internal sealed class Tray(Action restore, Action quit)
     }
 
     // Called from native code: an exception escaping here would end the process.
+    [UnmanagedCallersOnly]
     private static IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         try

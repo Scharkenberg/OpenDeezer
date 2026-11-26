@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // SearchPodcasts finds shows via the public REST /search/podcast endpoint.
@@ -73,6 +73,23 @@ func (c *Client) PodcastEpisodes(podcastID string) ([]Episode, error) {
 			break
 		}
 	}
+	// The listing leaves many episodes without a picture: those show the show's.
+	for i := range out {
+		if out[i].ArtworkURL != "" {
+			continue
+		}
+		var show struct {
+			PictureMedium string `json:"picture_medium"`
+		}
+		if b, err := c.restGet("/podcast/" + podcastID); err == nil && json.Unmarshal(b, &show) == nil {
+			for j := range out {
+				if out[j].ArtworkURL == "" {
+					out[j].ArtworkURL = show.PictureMedium
+				}
+			}
+		}
+		break
+	}
 	return out, nil
 }
 
@@ -128,7 +145,7 @@ func (c *Client) PodcastEpisodeStream(episodeID string) (*StreamPlan, error) {
 		if raw, ok := r.Results[k]; ok {
 			var u string
 			if json.Unmarshal(raw, &u) == nil && strings.HasPrefix(u, "http") {
-				odlog.Info("episode %s: stream url from field %s", episodeID, k)
+				pdlog.Info("episode %s: stream url from field %s", episodeID, k)
 				return &StreamPlan{CDNURL: u, TrackID: episodeID, Format: "MP3", Encrypted: false}, nil
 			}
 		}
@@ -138,7 +155,7 @@ func (c *Client) PodcastEpisodeStream(episodeID string) (*StreamPlan, error) {
 	// media stream (not artwork), so a renamed field still resolves. Prefer keys
 	// mentioning STREAM/MEDIA/URL; skip picture/image/cover fields.
 	if u, k := findStreamURL(r.Results); u != "" {
-		odlog.Info("episode %s: stream url detected from field %s", episodeID, k)
+		pdlog.Info("episode %s: stream url detected from field %s", episodeID, k)
 		return &StreamPlan{CDNURL: u, TrackID: episodeID, Format: "MP3", Encrypted: false}, nil
 	}
 

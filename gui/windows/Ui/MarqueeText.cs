@@ -13,7 +13,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using WSize = Windows.Foundation.Size;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // Paused while the window is inactive; only labels that are moving are registered.
 internal static class Marquee

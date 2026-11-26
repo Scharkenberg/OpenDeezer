@@ -1,4 +1,4 @@
-// Package update checks GitHub for a newer OpenDeezer release so clients can show an
+// Package update checks GitHub for a newer Purple Disc release so clients can show an
 // "update available" prompt. It never downloads or installs anything.
 package update
 
@@ -14,7 +14,7 @@ import (
 )
 
 // Repo is the GitHub owner/name that publishes releases.
-const Repo = "Cycl0o0/OpenDeezer"
+const Repo = "Scharkenberg/PurpleDisc"
 
 // Info is the result of a check.
 type Info struct {
@@ -47,7 +47,7 @@ func Check(current string) (Info, error) {
 		return info, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "OpenDeezer-update-check")
+	req.Header.Set("User-Agent", "PurpleDisc-update-check")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -1,7 +1,7 @@
 # F-Droid packaging
 
 This directory contains a **candidate** build recipe for the phone/tablet
-Android application (`fr.cyclooo.opendeezer`) and points to the repository's
+Android application (`dev.scharkenberg.purpledisc`) and points to the repository's
 canonical store text. It has not yet been accepted into the main F-Droid
 repository.
 
@@ -9,16 +9,16 @@ repository.
 
 - `../../fastlane/metadata/android/en-US/` is the canonical upstream store
   metadata in the layout F-Droid imports.
-- `fdroiddata/fr.cyclooo.opendeezer.yml` is a proposal to copy to
-  `metadata/fr.cyclooo.opendeezer.yml` in an `fdroiddata` checkout.
+- `fdroiddata/dev.scharkenberg.purpledisc.yml` is a proposal to copy to
+  `metadata/dev.scharkenberg.purpledisc.yml` in an `fdroiddata` checkout.
 
-The recipe builds `odmobile.aar` from the reviewed Go source; it never downloads
+The recipe builds `pdmobile.aar` from the reviewed Go source; it never downloads
 or bundles the generated AAR. It pins Go through the `go` srclib, derives the
 exact `golang.org/x/mobile` version from `go.mod`, pins NDK r26d, and assembles
 four unsigned `mobileRelease` APKs for F-Droid to compare with the signed
 upstream binaries. Each build selects exactly one ABI and has its own ordered
 version code. The Android TV
-flavor has a different application ID (`fr.cyclooo.opendeezer.tv`) and needs a
+flavor has a different application ID (`dev.scharkenberg.purpledisc.tv`) and needs a
 separate submission after the phone recipe is proven on the official build
 infrastructure.
 
@@ -29,16 +29,16 @@ infrastructure.
    the reproducible-binary workflow.
 2. Add an icon and real phone screenshots under
    `fastlane/metadata/android/en-US/images/`.
-3. Confirm that the OpenDeezer name and artwork do not infringe Deezer's
+3. Confirm that the Purple Disc name and artwork do not infringe Deezer's
    trademark or other third-party rights. F-Droid reviews this explicitly.
 4. Run the candidate in an `fdroiddata` checkout:
 
    ```sh
-   cp packaging/fdroid/fdroiddata/fr.cyclooo.opendeezer.yml \
+   cp packaging/fdroid/fdroiddata/dev.scharkenberg.purpledisc.yml \
      /path/to/fdroiddata/metadata/
-   fdroid lint fr.cyclooo.opendeezer
+   fdroid lint dev.scharkenberg.purpledisc
    for code in 261 262 263 264; do
-     fdroid build --test "fr.cyclooo.opendeezer:$code"
+     fdroid build --test "dev.scharkenberg.purpledisc:$code"
    done
    ```
 
@@ -54,7 +54,7 @@ infrastructure.
 
 - Gomobile records its absolute local-module replacement in Go's build-info
   section. The upstream reproducible workflow therefore builds at F-Droid's
-  canonical `/home/vagrant/build/fr.cyclooo.opendeezer` path. Keep that path and
+  canonical `/home/vagrant/build/dev.scharkenberg.purpledisc` path. Keep that path and
   the source commit identical when comparing the four binaries.
 - The tagged release currently requires Go 1.25.12. The recipe builds it from
   F-Droid's `go` srclib, using Debian's Go only as a bootstrap compiler. This is
@@ -63,7 +63,7 @@ infrastructure.
 - The app contains no Google Play Services, Firebase, proprietary analytics or
   proprietary advertising SDK dependency. AndroidX/Compose and Coil are fetched
   from trusted Maven repositories by Gradle.
-- OpenDeezer necessarily contacts Deezer's proprietary service and requires a
+- Purple Disc necessarily contacts Deezer's proprietary service and requires a
   Deezer account, and reports playback events to Deezer. Those behaviors require
   anti-feature disclosure; they do not by themselves prevent a source build.
 - The F-Droid recipe disables both the automatic GitHub update check and the

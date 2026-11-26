@@ -13,7 +13,7 @@ import (
 // instead of holding the list for the control client's 15 s.
 func TestProbePeersListsConfiguredPeers(t *testing.T) {
 	answering := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-OpenDeezer-Account") != "" {
+		if r.Header.Get("X-PurpleDisc-Account") != "" {
 			t.Errorf("%s sent the account id to an unauthenticated peer", r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"name":"Den","auth":"account","client":"tui","version":"9"}`))
@@ -27,7 +27,7 @@ func TestProbePeersListsConfiguredPeers(t *testing.T) {
 	defer close(release)
 	a := strings.TrimPrefix(answering.URL, "http://")
 	s := strings.TrimPrefix(silent.URL, "http://")
-	t.Setenv("OPENDEEZER_CONNECT_PEERS", a+","+s+","+answering.URL)
+	t.Setenv("PURPLEDISC_CONNECT_PEERS", a+","+s+","+answering.URL)
 
 	start := time.Now()
 	devs, _ := ProbePeers(500*time.Millisecond, 0)

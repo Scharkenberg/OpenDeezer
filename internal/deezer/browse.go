@@ -92,6 +92,39 @@ func (c *Client) Charts(genreID string) (*Chart, error) {
 	return ch, nil
 }
 
+// Genre is a chart genre.
+type Genre struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Genres lists the chart genres (public REST /genre), "All" (id "0") first.
+func (c *Client) Genres() ([]Genre, error) {
+	b, err := c.restGet("/genre")
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Data []struct {
+			ID   json.Number `json:"id"`
+			Name string      `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	out := []Genre{{ID: "0", Name: "All"}}
+	for _, g := range r.Data {
+		if g.ID.String() != "0" {
+			out = append(out, Genre{ID: g.ID.String(), Name: g.Name})
+		}
+	}
+	return out, nil
+}
+
+// artistAlbumsMax bounds an artist page's albums.
+const artistAlbumsMax = 500
+
 // ArtistTop lists an artist's most popular tracks (public REST).
 func (c *Client) ArtistTop(id string) ([]Track, error) {
 	b, err := c.restGet("/artist/" + id + "/top?limit=50")
@@ -127,13 +160,27 @@ func (c *Client) ArtistProfile(id string) (*ArtistPage, error) {
 		page.Artist, infoErr = info.toArtistInfo(), err
 	})
 	wg.Go(func() { page.Top, _ = c.ArtistTop(id) })
+	// Every album, page after page while REST names a next one, up to artistAlbumsMax; an
+	// album a later page repeats is listed once (clients key their rows by id).
 	wg.Go(func() {
-		var r struct {
-			Data []restAlbumDTO `json:"data"`
-		}
-		if ab, err := c.restGet("/artist/" + id + "/albums?limit=50"); err == nil && json.Unmarshal(ab, &r) == nil {
+		seen := map[string]bool{}
+		for index := 0; index < artistAlbumsMax; index += 100 {
+			var r struct {
+				Data []restAlbumDTO `json:"data"`
+				Next string         `json:"next"`
+			}
+			ab, err := c.restGet(fmt.Sprintf("/artist/%s/albums?limit=100&index=%d", id, index))
+			if err != nil || json.Unmarshal(ab, &r) != nil {
+				return
+			}
 			for _, a := range r.Data {
-				page.Albums = append(page.Albums, a.toAlbum())
+				if id := a.ID.String(); !seen[id] {
+					seen[id] = true
+					page.Albums = append(page.Albums, a.toAlbum())
+				}
+			}
+			if r.Next == "" || len(r.Data) == 0 {
+				return
 			}
 		}
 	})

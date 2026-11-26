@@ -2,7 +2,7 @@
 /build/
 
 # Final binary
-/opendeezer-kde
+/purpledisc-kde
 
 # Generated Go c-archive + header
 /lib/libdeezercore.a

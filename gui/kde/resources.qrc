@@ -1,5 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
   <qresource prefix="/">
-    <file>opendeezer.png</file>
+    <file>purpledisc.png</file>
+    <file alias="fonts/InterVariable.ttf">../../assets/fonts/InterVariable.ttf</file>
+    <file alias="fonts/Inter-OFL.txt">../../assets/fonts/Inter-OFL.txt</file>
   </qresource>
 </RCC>

@@ -35,7 +35,7 @@ char *cstr(const QByteArray &b) { return const_cast<char *>(b.constData()); }
 
 LoginDialog::LoginDialog(QString arlPath, QWidget *parent)
     : QDialog(parent), m_arlPath(std::move(arlPath)) {
-    setWindowTitle(tr("Log in — OpenDeezer"));
+    setWindowTitle(tr("Log in — Purple Disc"));
     setModal(true);
     resize(440, 360);
 
@@ -43,7 +43,7 @@ LoginDialog::LoginDialog(QString arlPath, QWidget *parent)
     v->setContentsMargins(28, 28, 28, 28);
     v->setSpacing(14);
 
-    auto *title = new QLabel(tr("Welcome to OpenDeezer"));
+    auto *title = new QLabel(tr("Welcome to Purple Disc"));
     QFont tf = title->font();
     tf.setPointSize(tf.pointSize() + 6);
     tf.setBold(true);
@@ -97,13 +97,13 @@ LoginDialog::LoginDialog(QString arlPath, QWidget *parent)
     v->addStretch(1);
 }
 
-// Locate the opendeezer-login helper: next to this executable first (where both
+// Locate the purpledisc-login helper: next to this executable first (where both
 // the standalone build and the unified launcher install it), then PATH.
 QString LoginDialog::helperPath() const {
-    const QString beside = QCoreApplication::applicationDirPath() + "/opendeezer-login";
+    const QString beside = QCoreApplication::applicationDirPath() + "/purpledisc-login";
     if (QFileInfo::exists(beside))
         return beside;
-    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("opendeezer-login"));
+    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("purpledisc-login"));
     if (!onPath.isEmpty())
         return onPath;
     return beside; // report the expected location in the error if missing

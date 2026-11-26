@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- As values-night/themes.xml, with the mark's circle on the system splash. -->
+    <style name="Theme.PurpleDisc" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="android:windowSplashScreenBackground">?android:colorBackground</item>
+    </style>
+</resources>

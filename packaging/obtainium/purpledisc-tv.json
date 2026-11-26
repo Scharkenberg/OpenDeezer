@@ -1,0 +1,11 @@
+{
+    "apps": [
+        {
+            "id": "dev.scharkenberg.purpledisc.tv",
+            "url": "https://github.com/Scharkenberg/PurpleDisc",
+            "author": "Scharkenberg",
+            "name": "Purple Disc TV",
+            "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"versionExtractionRegEx\":\"^v?([0-9]+(?:\\\\.[0-9]+)*)$\",\"matchGroupToUse\":\"$1-tv\",\"naiveStandardVersionDetection\":true,\"apkFilterRegEx\":\"^PurpleDisc-androidtv(?:-(?:armeabi-v7a|arm64-v8a|x86|x86_64))?\\\\.apk$\",\"invertAPKFilter\":false,\"autoApkFilterByArch\":true,\"appName\":\"Purple Disc TV\",\"appAuthor\":\"Scharkenberg\"}"
+        }
+    ]
+}

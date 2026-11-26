@@ -2,7 +2,7 @@
 
 using System.Globalization;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Fmt
 {
@@ -44,13 +44,8 @@ internal static class Fmt
         return string.Join(" ", parts);
     }
 
-    // The chip keeps the codec, plus the bitrate when the engine gives one.
-    public static string FormatChip(string format)
-    {
-        var parts = format.Split(" · ");
-        if (parts.Length < 2 || parts[1].Length == 0 || !char.IsDigit(parts[1][0])) return parts[0];
-        return parts[0] + " " + parts[1].Split(' ')[0];
-    }
+    // The chip keeps the codec alone (MP3, AAC, FLAC).
+    public static string FormatChip(string format) => format.Split(" · ")[0];
 
     // A discovery client id as a device type. OS names stay verbatim.
     public static string ConnectType(string client) => client.ToLowerInvariant() switch

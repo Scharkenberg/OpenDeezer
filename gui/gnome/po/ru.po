@@ -1,14 +1,14 @@
-# ru translation for OpenDeezer (GNOME front-end).
-# Copyright (C) 2026 OpenDeezer contributors
-# This file is distributed under the same license as the opendeezer-gnome package.
+# ru translation for Purple Disc (GNOME front-end).
+# Copyright (C) 2026 Purple Disc contributors
+# This file is distributed under the same license as the purpledisc-gnome package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: opendeezer-gnome 3.1.4\n"
-"Report-Msgid-Bugs-To: https://github.com/Cycl0o0/OpenDeezer/issues\n"
+"Project-Id-Version: purpledisc-gnome 4.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/Scharkenberg/PurpleDisc/issues\n"
 "POT-Creation-Date: 2026-07-03 09:29+0200\n"
 "PO-Revision-Date: 2026-07-02 22:00+0000\n"
-"Last-Translator: OpenDeezer <contact@cyclooo.fr>\n"
+"Last-Translator: Purple Disc translators\n"
 "Language-Team: ru\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -209,13 +209,13 @@ msgstr "Не удалось открыть браузер"
 
 #: src/main.c:1717
 #, c-format
-msgid "OpenDeezer %s available"
-msgstr "Доступна версия OpenDeezer %s"
+msgid "Purple Disc %s available"
+msgstr "Доступна версия Purple Disc %s"
 
 #: src/main.c:1722
 #, c-format
-msgid "OpenDeezer %s is available"
-msgstr "Доступна версия OpenDeezer %s"
+msgid "Purple Disc %s is available"
+msgstr "Доступна версия Purple Disc %s"
 
 #: src/main.c:1724
 #, c-format
@@ -235,8 +235,8 @@ msgid "Check for updates"
 msgstr "Проверить обновления"
 
 #: src/main.c:1757
-msgid "Look for a newer OpenDeezer release on GitHub"
-msgstr "Искать новую версию OpenDeezer на GitHub"
+msgid "Look for a newer Purple Disc release on GitHub"
+msgstr "Искать новую версию Purple Disc на GitHub"
 
 #: src/main.c:1759
 msgid "Check Now"
@@ -716,11 +716,11 @@ msgstr "К сожалению, ваш аккаунт не поддерживае
 #: src/main.c:4944
 #, c-format
 msgid ""
-"OpenDeezer needs a Deezer Premium subscription to stream. Your account: %s. "
-"Subscribe at deezer.com, then restart OpenDeezer."
+"Purple Disc needs a Deezer Premium subscription to stream. Your account: %s. "
+"Subscribe at deezer.com, then restart Purple Disc."
 msgstr ""
-"Для потоковой передачи OpenDeezer требуется подписка Deezer Premium. Ваш "
-"аккаунт: %s. Оформите подписку на deezer.com и перезапустите OpenDeezer."
+"Для потоковой передачи Purple Disc требуется подписка Deezer Premium. Ваш "
+"аккаунт: %s. Оформите подписку на deezer.com и перезапустите Purple Disc."
 
 #: src/main.c:4946
 msgid "Deezer Free"
@@ -731,8 +731,8 @@ msgid "Sign in with a different account"
 msgstr "Войти в другой аккаунт"
 
 #: src/main.c:4958
-msgid "Quit OpenDeezer"
-msgstr "Выйти из OpenDeezer"
+msgid "Quit Purple Disc"
+msgstr "Выйти из Purple Disc"
 
 #: src/main.c:4986
 msgid "No Internet Connection"
@@ -769,17 +769,17 @@ msgstr "Не удалось войти — проверьте ARL"
 #: src/main.c:5131
 #, c-format
 msgid ""
-"An open source reimplementation of Deezer.\n"
+"Unofficial open-source client for Deezer.\n"
 "\n"
 "Signed in as %s · %s"
 msgstr ""
-"Открытая реализация Deezer.\n"
+"Неофициальный клиент Deezer с открытым исходным кодом.\n"
 "\n"
 "Выполнен вход как %s · %s"
 
 #: src/main.c:5135
-msgid "An open source reimplementation of Deezer."
-msgstr "Открытая реализация Deezer."
+msgid "Unofficial open-source client for Deezer."
+msgstr "Неофициальный клиент Deezer с открытым исходным кодом."
 
 #: src/main.c:5247
 msgid "Device"
@@ -871,8 +871,8 @@ msgid "Phone Remote…"
 msgstr "Пульт на телефоне…"
 
 #: src/main.c:5751
-msgid "About OpenDeezer"
-msgstr "О программе OpenDeezer"
+msgid "About Purple Disc"
+msgstr "О программе Purple Disc"
 
 #: src/main.c:5752
 msgid "Quit"
@@ -971,22 +971,22 @@ msgid "Don't report my plays"
 msgstr "Не сообщать о моих прослушиваниях"
 
 #: src/main.c:1842
-msgid "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
-msgstr "OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
+msgid "Purple Disc plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk."
+msgstr "Purple Disc не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
 
-#: data/org.opendeezer.OpenDeezer.desktop.in:3
-msgid "OpenDeezer"
-msgstr "OpenDeezer"
+#: data/dev.scharkenberg.PurpleDisc.desktop.in:3
+msgid "PurpleDisc"
+msgstr "PurpleDisc"
 
-#: data/org.opendeezer.OpenDeezer.desktop.in:4
+#: data/dev.scharkenberg.PurpleDisc.desktop.in:4
 msgid "Music Player"
 msgstr "Музыкальный проигрыватель"
 
-#: data/org.opendeezer.OpenDeezer.desktop.in:5
-msgid "An open source reimplementation of Deezer"
-msgstr "Открытая реализация Deezer"
+#: data/dev.scharkenberg.PurpleDisc.desktop.in:5
+msgid "Unofficial open-source client for Deezer"
+msgstr "Неофициальный клиент Deezer с открытым исходным кодом"
 
-#: data/org.opendeezer.OpenDeezer.desktop.in:11
+#: data/dev.scharkenberg.PurpleDisc.desktop.in:11
 msgid "music;deezer;streaming;player;"
 msgstr "музыка;deezer;стриминг;плеер;music;"
 

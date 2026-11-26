@@ -12,7 +12,7 @@ so a tagged release can never accidentally publish a debug-signed APK.
 
 ## The keystore
 
-A stable PKCS12 keystore (alias `opendeezer`) is configured in the repository's
+A stable PKCS12 keystore (alias `purpledisc`) is configured in the repository's
 GitHub Actions secrets. GitHub secrets are write-only deployment copies and do
 **not** count as a recoverable backup.
 
@@ -29,13 +29,13 @@ upgrades for existing users):
 
 ```sh
 # JDK keytool:
-keytool -genkeypair -v -keystore opendeezer-release.p12 -storetype PKCS12 \
-  -alias opendeezer -keyalg RSA -keysize 4096 -validity 12000 \
-  -dname "CN=Youssef Chabb, O=OpenDeezer, C=FR"
+keytool -genkeypair -v -keystore purpledisc-release.p12 -storetype PKCS12 \
+  -alias purpledisc -keyalg RSA -keysize 4096 -validity 12000 \
+  -dname "CN=Youssef Chabb, O=PurpleDisc, C=FR"
 # or, without a working JVM, openssl:
 openssl req -x509 -newkey rsa:4096 -keyout k.pem -out c.pem -days 12000 -nodes \
-  -subj "/CN=Youssef Chabb/O=OpenDeezer/C=FR"
-openssl pkcs12 -export -inkey k.pem -in c.pem -name opendeezer -out opendeezer-release.p12
+  -subj "/CN=Youssef Chabb/O=PurpleDisc/C=FR"
+openssl pkcs12 -export -inkey k.pem -in c.pem -name purpledisc -out purpledisc-release.p12
 ```
 
 ## F-Droid APK
@@ -45,14 +45,14 @@ The regular Android release is built explicitly with
 The F-Droid binaries are built with `-PupstreamUpdates=false`, because F-Droid
 owns updates for that installation. There is one APK per ABI:
 
-- `OpenDeezer-android-fdroid-<version>-<versionCode>.apk`
+- `PurpleDisc-android-fdroid-<version>-<versionCode>.apk`
 - `armeabi-v7a`: base Android version code × 10 + 1
 - `arm64-v8a`: base Android version code × 10 + 2
 - `x86`: base Android version code × 10 + 3
 - `x86_64`: base Android version code × 10 + 4
 
-For version `3.1.4` (base code `26`), the four APKs therefore use codes
-`261` through `264`. Normal phone and TV GitHub builds use the same mapping;
+For version `4.0.0` (base code `27`), the four APKs therefore use codes
+`271` through `274`. Normal phone and TV GitHub builds use the same mapping;
 their universal APKs use the `× 10` code. A later GitHub release can therefore
 still upgrade an installation that originated from F-Droid.
 
@@ -69,16 +69,16 @@ The job requires and checks all four values before it starts the release build.
 
 | Secret | Value |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | base64 of the `.p12`: `base64 -i opendeezer-release.p12` |
+| `ANDROID_KEYSTORE_BASE64` | base64 of the `.p12`: `base64 -i purpledisc-release.p12` |
 | `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
-| `ANDROID_KEY_ALIAS` | `opendeezer` |
+| `ANDROID_KEY_ALIAS` | `purpledisc` |
 | `ANDROID_KEY_PASSWORD` | same password (PKCS12 uses one password for store + key) |
 
 `gui/android/app/build.gradle.kts` reads these via environment variables set by
 the workflow. CI produces a universal APK plus `armeabi-v7a`, `arm64-v8a`, `x86`
 and `x86_64` APKs for both the mobile and TV flavors, all signed with the same
-release key. The stable release names are `OpenDeezer-android*.apk` and
-`OpenDeezer-androidtv*.apk`.
+release key. The stable release names are `PurpleDisc-android*.apk` and
+`PurpleDisc-androidtv*.apk`.
 
 ## Notes
 

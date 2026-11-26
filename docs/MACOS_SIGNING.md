@@ -1,7 +1,7 @@
 # macOS code signing & notarization
 
 Gatekeeper blocks every downloaded macOS build that is not **notarized** with an
-Apple **Developer ID** identity — the "OpenDeezer can't be opened because Apple
+Apple **Developer ID** identity — the "Purple Disc can't be opened because Apple
 cannot check it for malicious software" / "is damaged" dialogs. This is the
 one-time setup that makes the `.app` open with no prompt and no quarantine.
 
@@ -60,9 +60,9 @@ is signed, notarized and stapled automatically.
 After downloading and unzipping a signed release:
 
 ```sh
-spctl -a -vvv --type exec OpenDeezer.app     # -> "accepted, source=Notarized Developer ID"
-codesign --verify --deep --strict --verbose=2 OpenDeezer.app
-xcrun stapler validate OpenDeezer.app        # -> "The validate action worked!"
+spctl -a -vvv --type exec PurpleDisc.app     # -> "accepted, source=Notarized Developer ID"
+codesign --verify --deep --strict --verbose=2 PurpleDisc.app
+xcrun stapler validate PurpleDisc.app        # -> "The validate action worked!"
 ```
 
 ## Notes & troubleshooting
@@ -71,21 +71,21 @@ xcrun stapler validate OpenDeezer.app        # -> "The validate action worked!"
   `--options runtime`. The app is *not* App-Sandboxed (Developer ID distribution
   outside the Mac App Store does not require it), so outbound/LAN networking and
   CoreAudio need **no entitlements**. If a future dependency trips a hardened-
-  runtime check at launch, add a `gui/macos/OpenDeezer.entitlements` file (e.g.
+  runtime check at launch, add a `gui/macos/PurpleDisc.entitlements` file (e.g.
   `com.apple.security.cs.allow-unsigned-executable-memory`) and pass it to the
   bundle `codesign` with `--entitlements`.
 - **`stapler` can only staple `.app`/`.dmg`/`.pkg`**, not a bare CLI binary. The
-  TUI (`opendeezer-tui-darwin-*`) is best installed via Homebrew, which strips
+  TUI (`purpledisc-tui-darwin-*`) is best installed via Homebrew, which strips
   quarantine on install; notarizing the CLI would mean shipping it inside a
   notarized zip/pkg instead of a raw binary (a follow-up if needed).
 - **Local dry run** of the whole chain:
   ```sh
   cd gui/macos && make app
-  codesign --force --timestamp --options runtime --sign "$IDENTITY" OpenDeezer.app/Contents/MacOS/OpenDeezer
-  codesign --force --timestamp --options runtime --sign "$IDENTITY" OpenDeezer.app
-  ditto -c -k --keepParent OpenDeezer.app OpenDeezer.zip
-  xcrun notarytool submit OpenDeezer.zip --key AuthKey.p8 --key-id "$KID" --issuer "$ISS" --wait
-  xcrun stapler staple OpenDeezer.app
+  codesign --force --timestamp --options runtime --sign "$IDENTITY" PurpleDisc.app/Contents/MacOS/PurpleDisc
+  codesign --force --timestamp --options runtime --sign "$IDENTITY" PurpleDisc.app
+  ditto -c -k --keepParent PurpleDisc.app PurpleDisc.zip
+  xcrun notarytool submit PurpleDisc.zip --key AuthKey.p8 --key-id "$KID" --issuer "$ISS" --wait
+  xcrun stapler staple PurpleDisc.app
   ```
 - A notarization rejection prints a submission id; read the log with
   `xcrun notarytool log <id> --key … --key-id … --issuer …`.

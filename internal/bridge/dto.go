@@ -6,7 +6,7 @@ package bridge
 import (
 	"fmt"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // Artist is a track or album credit on the native JSON wire.
@@ -23,9 +23,12 @@ type Track struct {
 	Artists    []Artist `json:"artists"`
 	ArtistLine string   `json:"artistLine"`
 	ArtistID   string   `json:"artistId,omitempty"`
+	AlbumID    string   `json:"albumId,omitempty"`
 	AlbumName  string   `json:"albumName"`
 	ArtworkURL string   `json:"artworkUrl"`
 	Explicit   bool     `json:"explicit"`
+	// Unavailable: Deezer streams the track nowhere (see deezer.Track).
+	Unavailable bool `json:"unavailable,omitempty"`
 }
 
 // Album is an album on the native JSON wire.
@@ -146,15 +149,17 @@ func FromTrack(track deezer.Track) Track {
 		artistID = track.Artists[0].ID
 	}
 	return Track{
-		ID:         track.ID,
-		Name:       track.Name,
-		DurationMS: track.DurationMS,
-		Artists:    FromArtists(track.Artists),
-		ArtistLine: track.ArtistLine(),
-		ArtistID:   artistID,
-		AlbumName:  track.AlbumName,
-		ArtworkURL: track.ArtworkURL,
-		Explicit:   track.Explicit,
+		ID:          track.ID,
+		Name:        track.Name,
+		DurationMS:  track.DurationMS,
+		Artists:     FromArtists(track.Artists),
+		ArtistLine:  track.ArtistLine(),
+		ArtistID:    artistID,
+		AlbumID:     track.AlbumID,
+		AlbumName:   track.AlbumName,
+		ArtworkURL:  track.ArtworkURL,
+		Explicit:    track.Explicit,
+		Unavailable: track.Unavailable,
 	}
 }
 

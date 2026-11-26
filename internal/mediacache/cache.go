@@ -19,7 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // removeFile is os.Remove, indirected so tests can simulate removal failures
@@ -104,8 +105,9 @@ type Cache struct {
 	fileSeq uint64              // monotonic; makes every committed file name unique
 	writing map[string]struct{} // keys with active Put writers (protect from eviction)
 	metas   map[string]StreamMeta
-	dirty   bool        // recency changed since index.json was written
-	flush   *time.Timer // pending recency flush, nil when none
+	dirty   bool        // entries or recency changed since index.json was written
+	flush   *time.Timer // pending index write, nil when none
+	flushAt time.Time   // when flush fires
 	// maxAge removes entries not used for longer (0 = never); lastExpire is
 	// when that was last checked.
 	maxAge     time.Duration
@@ -115,6 +117,11 @@ type Cache struct {
 // recencyFlush is how long a hit's recency may wait in memory for the next
 // index write.
 const recencyFlush = 30 * time.Second
+
+// installFlush is how long an installed entry may wait in memory for the index write:
+// a pin of many tracks writes the index about once a second, not once per track. A var
+// for tests.
+var installFlush = time.Second
 
 // expireEvery is how often, at most, a commit or a recency flush removes the
 // entries older than maxAge.
@@ -198,7 +205,7 @@ func New(dir string, maxBytes int64) (*Cache, error) {
 	return c, nil
 }
 
-// Close writes pending recency to the index and releases the folder. Afterward Get,
+// Close writes the pending index (installs and recency) and releases the folder. Afterward Get,
 // Put, Adopt and PutMeta refuse and an open Put commits nothing; a stream started with
 // this cache plays uncached.
 func (c *Cache) Close() {
@@ -426,6 +433,30 @@ func (c *Cache) rebuildFromFSLocked(files map[string]os.FileInfo) {
 	}
 }
 
+// writeWithinLocked marks the index changed and has it written within d: a pending
+// write due later is brought forward, never pushed back.
+func (c *Cache) writeWithinLocked(d time.Duration) {
+	c.dirty = true
+	if c.flush != nil && time.Until(c.flushAt) <= d {
+		return
+	}
+	if c.flush != nil {
+		c.flush.Stop()
+	}
+	c.flushAt = time.Now().Add(d)
+	c.flush = time.AfterFunc(d, c.flushRecency)
+}
+
+// Flush writes index.json now when anything changed since the last write: the end
+// of a batch of installs (a pin's fetch).
+func (c *Cache) Flush() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.dirty {
+		c.saveIndexLocked()
+	}
+}
+
 // flushRecency removes entries older than the age limit when that is due, and
 // writes index.json if anything changed since the last write.
 func (c *Cache) flushRecency() {
@@ -512,34 +543,41 @@ func (c *Cache) saveIndexLocked() {
 	for k, m := range c.metas {
 		d.Metas[k] = m
 	}
+	if err := c.writeIndex(d); err != nil {
+		pdlog.Warn("mediacache: index.json not written: %v", err)
+		return
+	}
+	c.dirty = false
+}
+
+// writeIndex writes d as index.json through a synced temp file.
+func (c *Cache) writeIndex(d indexData) error {
 	b, err := json.Marshal(d)
 	if err != nil {
-		return
+		return err
 	}
 	tmp, err := os.CreateTemp(c.dir, "index.json.tmp*")
 	if err != nil {
-		return
+		return err
 	}
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(b); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
-		return
+		return err
 	}
 	// The index reaches the disk before it replaces the previous one, and
 	// after the data files it names were synced.
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
-		return
+		return err
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
-		return
+		return err
 	}
-	if os.Rename(tmpName, filepath.Join(c.dir, "index.json")) == nil {
-		c.dirty = false
-	}
+	return os.Rename(tmpName, filepath.Join(c.dir, "index.json"))
 }
 
 // Get opens a cached entry's file and returns it, its size and true; the caller closes
@@ -562,10 +600,7 @@ func (c *Cache) Get(key string) (*os.File, int64, bool) {
 	e.accessSeq = c.nextSeq
 	e.used = time.Now()
 	c.entries[key] = e
-	c.dirty = true
-	if c.flush == nil {
-		c.flush = time.AfterFunc(recencyFlush, c.flushRecency)
-	}
+	c.writeWithinLocked(recencyFlush)
 	pth := e.path
 	c.mu.Unlock()
 
@@ -724,7 +759,7 @@ func (c *Cache) install(key, tmp string, size int64, meta *StreamMeta, pins []st
 	if time.Since(c.lastExpire) >= expireEvery {
 		c.expireLocked()
 	}
-	c.saveIndexLocked()
+	c.writeWithinLocked(installFlush)
 	c.mu.Unlock()
 	return nil
 }
@@ -833,7 +868,7 @@ func (c *Cache) evictIfNeeded() {
 		}
 		c.forgetLocked(victim, e)
 	}
-	// caller will saveIndex after unlock in the commit path
+	// the caller writes the index
 }
 
 // CheckDir reports whether dir can be chosen as the folder a cache goes in:
@@ -866,7 +901,7 @@ func Purge(dir string) error {
 	return nil
 }
 
-// RemoveOldCaches removes caches kept outside an opendeezer-cache folder: the default
+// RemoveOldCaches removes caches kept outside an purpledisc-cache folder: the default
 // <config dir>/mediacache and one directly in the chosen folder. It runs once
 // (recorded in media.json), at startup before a cache opens.
 func RemoveOldCaches() {

@@ -1,6 +1,6 @@
 // Segoe Fluent Icons glyphs, by name.
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Icons
 {
@@ -22,6 +22,7 @@ internal static class Icons
     public const string Mute = "\uE74F";
     public const string More = "\uE712";
     public const string Person = "\uE77B";
+    public const string Album = "\uE93C";
     public const string Sleep = "\uE708";
     public const string Settings = "\uE713";
     public const string Home = "\uE80F";

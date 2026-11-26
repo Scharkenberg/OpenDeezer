@@ -3,7 +3,7 @@
      templates the code-built UI picks by name (Ui.Styles). Colors come through
      ThemeResource setters, so light, dark and high contrast follow the system. -->
 <Application
-    x:Class="OpenDeezer.App"
+    x:Class="PurpleDisc.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- Spacing in styles and templates stays on the 4-px grid (Space in Ui/Tokens.cs). -->
@@ -16,10 +16,10 @@
             <!-- A page backdrop's veil: acrylic over the page's artwork, tinted like the window. -->
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Default">
-                    <AcrylicBrush x:Key="BackdropVeilBrush" TintColor="#FF1C1C1C" TintOpacity="0.45" TintLuminosityOpacity="0.62" FallbackColor="#FF1C1C1C" />
+                    <SolidColorBrush x:Key="BackdropVeilBrush" Color="#FF1C1C1C" Opacity="0.62" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
-                    <AcrylicBrush x:Key="BackdropVeilBrush" TintColor="#FFF3F3F3" TintOpacity="0.45" TintLuminosityOpacity="0.7" FallbackColor="#FFF3F3F3" />
+                    <SolidColorBrush x:Key="BackdropVeilBrush" Color="#FFF3F3F3" Opacity="0.7" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="BackdropVeilBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -33,6 +33,13 @@
                 <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
             </Style>
 
+            <!-- The mark's circle (assets/icon.svg), also the play triangle cut into its disc. -->
+            <Color x:Key="MarkColor">#FF9A45FF</Color>
+            <SolidColorBrush x:Key="MarkBrush" Color="{StaticResource MarkColor}" />
+            <!-- The mark's outer arc and disc, and its inner arc and dot at 65 %. -->
+            <Color x:Key="MarkLineColor">#FFFFFFFF</Color>
+            <Color x:Key="MarkFaintColor">#A6FFFFFF</Color>
+
             <!-- Deezer violet as the system accent: every themed control derives from it. -->
             <Color x:Key="SystemAccentColor">#FFA238FF</Color>
             <Color x:Key="SystemAccentColorLight1">#FFB55BFF</Color>
@@ -41,6 +48,9 @@
             <Color x:Key="SystemAccentColorDark1">#FF8A1FE6</Color>
             <Color x:Key="SystemAccentColorDark2">#FF7016C2</Color>
             <Color x:Key="SystemAccentColorDark3">#FF560F99</Color>
+
+            <!-- Inter for all text: the themed text styles and controls read this key. -->
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Fonts/InterVariable.ttf#Inter Variable</FontFamily>
 
             <!-- Text: body 15 and caption 13 (one step above the Fluent defaults, for a media app read at a distance). -->
             <Style x:Key="BaseBody" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
@@ -84,10 +94,10 @@
                 <Setter Property="LineHeight" Value="28" />
             </Style>
             <Style x:Key="PairingCodeText" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="Consolas" />
                 <Setter Property="FontSize" Value="40" />
-                <Setter Property="FontWeight" Value="Bold" />
-                <Setter Property="CharacterSpacing" Value="400" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CharacterSpacing" Value="300" />
+                <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
             </Style>
             <Style x:Key="ChipText" TargetType="TextBlock" BasedOn="{StaticResource BaseCaption}">
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />

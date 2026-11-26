@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenDeezer</string>
+    <string name="app_name">Purple Disc</string>
 
     <string name="action_back">वापस</string>
     <string name="action_close">बंद करें</string>
@@ -11,7 +11,6 @@
     <string name="action_ok">ठीक है</string>
     <string name="action_sign_out">साइन आउट करें</string>
     <string name="action_play">चलाएँ</string>
-    <string name="action_pause">पॉज़ करें</string>
     <string name="action_next">अगला</string>
     <string name="action_previous">पिछला</string>
     <string name="action_play_all">सभी चलाएँ</string>
@@ -19,6 +18,8 @@
     <string name="common_enable">सक्षम करें</string>
     <string name="common_off">बंद</string>
     <string name="unknown_title">अज्ञात</string>
+    <string name="playing_elsewhere">किसी अन्य प्लेयर में चल रहा है</string>
+    <string name="action_play_here">यहाँ चलाएँ</string>
 
     <string name="cd_connect">कनेक्ट करें</string>
     <string name="cd_like">पसंद करें</string>
@@ -33,13 +34,12 @@
     <string name="cd_qr_code">QR कोड</string>
     <string name="cd_remote_qr">रिमोट QR</string>
 
-    <string name="notif_channel_playback">प्लेबैक</string>
 
     <string name="login_error_empty_arl">ARL खाली है</string>
     <string name="login_error_failed">लॉगिन विफल — अपना ARL और कनेक्शन जाँचें।</string>
     <string name="login_error_account">खाता लोड नहीं हो सका।</string>
     <string name="login_error_secure_storage">आपका लॉगिन सुरक्षित रूप से सेव नहीं किया जा सका। डिवाइस की सुरक्षा सेटिंग जाँचें और फिर कोशिश करें।</string>
-    <string name="login_error_secure_clear">सेव किया गया लॉगिन हटाया नहीं जा सका। रीस्टार्ट के बाद अपने-आप लॉगिन होने से रोकने के लिए Android सेटिंग में OpenDeezer का स्टोरेज साफ़ करें।</string>
+    <string name="login_error_secure_clear">सेव किया गया लॉगिन हटाया नहीं जा सका। रीस्टार्ट के बाद अपने-आप लॉगिन होने से रोकने के लिए Android सेटिंग में Purple Disc का स्टोरेज साफ़ करें।</string>
 
     <!-- No internet (retry reuses action_retry) -->
     <string name="no_internet_title">इंटरनेट कनेक्शन नहीं है</string>
@@ -53,7 +53,6 @@
     <string name="lyrics_title">बोल</string>
     <string name="charts_title">चार्ट</string>
     <string name="search_title">खोजें</string>
-    <string name="now_playing_title">अभी चल रहा है</string>
     <string name="playlists_title">मेरी प्लेलिस्ट</string>
     <string name="podcasts_title">पॉडकास्ट</string>
     <string name="equalizer_title">इक्वलाइज़र</string>
@@ -61,12 +60,10 @@
     <string name="greeting_morning">सुप्रभात</string>
     <string name="greeting_afternoon">शुभ दोपहर</string>
     <string name="greeting_evening">शुभ संध्या</string>
-    <string name="greeting_named">%1$s, %2$s</string>
     <string name="home_liked">पसंदीदा गाने</string>
     <string name="section_top_tracks">टॉप ट्रैक</string>
     <string name="section_your_playlists">आपकी प्लेलिस्ट</string>
 
-    <string name="settings_audio_quality">ऑडियो गुणवत्ता</string>
     <string name="quality_normal">सामान्य</string>
     <string name="quality_high">उच्च</string>
     <string name="quality_desc_flac">FLAC · लॉसलेस</string>
@@ -83,22 +80,22 @@
     <string name="sleep_desc_off">प्लेबैक अपने आप पॉज़ नहीं होगा</string>
     <string name="sleep_desc_end">मौजूदा ट्रैक खत्म होने पर पॉज़ होगा</string>
     <string name="connect_reachable_title">इस डिवाइस को पहुँच योग्य बनाएँ</string>
-    <string name="connect_reachable_sub">अपने अन्य OpenDeezer ऐप्स को इस डिवाइस को ढूँढने और नियंत्रित करने दें</string>
+    <string name="connect_reachable_sub">अपने अन्य Purple Disc ऐप्स को इस डिवाइस को ढूँढने और नियंत्रित करने दें</string>
     <string name="reachable_at">%1$s पर उपलब्ध</string>
     <string name="settings_phone_remote">फ़ोन रिमोट</string>
     <string name="phone_remote_sub">अपने लोकल Wi-Fi पर एक रिमोट कंट्रोल पेज प्रदान करें</string>
     <string name="phone_remote_scan">अपने फ़ोन से स्कैन करें (वही Wi-Fi), फिर कोड डालें।</string>
     <string name="settings_about">परिचय</string>
+    <string name="about_credits">Scharkenberg द्वारा, Cycl0o0 के OpenDeezer पर आधारित। AGPL-3.0 के तहत लाइसेंस प्राप्त।</string>
     <string name="update_check_title">अपडेट जाँचें</string>
     <string name="update_checking">जाँचा जा रहा है…</string>
     <string name="update_check_sub">नए रिलीज़ के लिए GitHub जाँचता है</string>
     <string name="settings_account">खाता</string>
     <string name="plan_label">प्लान: %1$s</string>
-    <string name="plan_free">निःशुल्क</string>
     <string name="update_uptodate_title">आप अपडेटेड हैं</string>
     <string name="update_latest_generic">यह नवीनतम संस्करण है।</string>
-    <string name="update_latest_named">OpenDeezer v%1$s नवीनतम संस्करण है।</string>
-    <string name="update_available_title">OpenDeezer %1$s उपलब्ध है</string>
+    <string name="update_latest_named">Purple Disc v%1$s नवीनतम संस्करण है।</string>
+    <string name="update_available_title">Purple Disc %1$s उपलब्ध है</string>
     <string name="update_available_generic">GitHub पर एक नया संस्करण उपलब्ध है।</string>
     <string name="update_failed_title">अपडेट जाँच नहीं सका</string>
     <string name="update_failed_body">अपना कनेक्शन जाँचें और फिर से प्रयास करें।</string>
@@ -130,13 +127,8 @@
 
     <string name="playlists_empty">आपके पास अभी कोई प्लेलिस्ट नहीं है।</string>
 
-    <string name="podcasts_search_hint">शो खोजें</string>
-    <string name="podcasts_empty_prompt">Deezer के पॉडकास्ट खोजें।</string>
     <string name="podcasts_no_results">कोई शो नहीं मिला।</string>
 
-    <string name="premium_required">Premium आवश्यक</string>
-    <string name="premium_body_named">ऑन-डिमांड स्ट्रीमिंग के लिए एक सशुल्क Deezer प्लान चाहिए। आपका खाता (%1$s) “%2$s” पर है।</string>
-    <string name="premium_body_anon">ऑन-डिमांड स्ट्रीमिंग के लिए एक सशुल्क Deezer प्लान चाहिए। आपका खाता “%1$s” पर है।</string>
 
     <string name="search_hint">ट्रैक, एल्बम, कलाकार, प्लेलिस्ट</string>
     <string name="search_empty_prompt">Deezer की कैटलॉग खोजें।</string>
@@ -149,7 +141,7 @@
 
     <string name="tracklist_empty">यहाँ अभी कुछ नहीं है।</string>
 
-    <string name="section_related_artists">Related Artists</string>
+    <string name="section_related_artists">मिलते-जुलते कलाकार</string>
     <string name="artist_load_error">Couldn\'t load this artist — check your connection.</string>
 
     <string name="update_release_notes">रिलीज़ नोट्स</string>
@@ -157,8 +149,6 @@
     <string name="connect_this_device">यह डिवाइस</string>
     <string name="connect_no_devices">आपके नेटवर्क पर कोई डिवाइस नहीं मिला।</string>
 
-    <string name="tv_premium_body">OpenDeezer स्ट्रीम के लिए एक Deezer Premium खाता चाहिए।</string>
-    <string name="tv_use_another_account">दूसरा खाता उपयोग करें</string>
     <string name="nav_home">होम</string>
     <string name="nav_library">लाइब्रेरी</string>
 
@@ -185,7 +175,7 @@
     <string name="tv_high_hifi_needs_plan">High/HiFi के लिए Deezer HQ या HiFi प्लान चाहिए।</string>
     <string name="eq_custom_edited">कस्टम — बैंड मैन्युअल रूप से बदले गए</string>
     <string name="eq_adjust_hint">नीचे किसी बैंड पर बाएँ/दाएँ से उसे 1 dB समायोजित करें</string>
-    <string name="tv_connect_reachable_sub">अपने अन्य OpenDeezer ऐप्स को इस TV को नियंत्रित करने दें</string>
+    <string name="tv_connect_reachable_sub">अपने अन्य Purple Disc ऐप्स को इस TV को नियंत्रित करने दें</string>
     <string name="tv_phone_remote">फ़ोन रिमोट</string>
     <string name="tv_phone_remote_sub">अपने Wi-Fi पर ब्राउज़र रिमोट प्रदान करें (QR स्कैन करें)</string>
     <string name="tv_remote_scan">अपने फ़ोन से स्कैन करें (वही Wi-Fi), फिर कोड डालें:</string>
@@ -220,10 +210,8 @@
         <item quantity="other">%1$d मिनट में पॉज़ होगा</item>
     </plurals>
     <!-- Downloads / preview / free account / ads -->
-    <string name="settings_downloads">डाउनलोड</string>
     <string name="download_folder_title">डाउनलोड फ़ोल्डर</string>
     <string name="download_folder_default">डिफ़ॉल्ट फ़ोल्डर</string>
-    <string name="download_requires_premium">सशुल्क Deezer योजना आवश्यक है</string>
     <string name="download_started">%1$s डाउनलोड हो रहा है…</string>
     <string name="download_saved">%1$s में सहेजा गया</string>
     <string name="download_saved_generic">%1$s डाउनलोड हो गया</string>
@@ -232,9 +220,8 @@
     <string name="favorite_update_failed">पसंद अपडेट नहीं हो सकी — अपना कनेक्शन जांचें।</string>
     <string name="preview_chip">झलक</string>
     <string name="account_free_hint">मुफ़्त खाता · मानक गुणवत्ता (128 kbps)</string>
-    <string name="settings_ads">प्ले रिपोर्टिंग</string>
     <string name="setting_disable_ads_title">मेरे प्ले रिपोर्ट न करें</string>
-    <string name="setting_disable_ads_disclaimer">OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।</string>
+    <string name="setting_disable_ads_disclaimer">Purple Disc कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -248,13 +235,12 @@
     <string name="history_title">Recently played</string>
     <string name="history_empty">No listening history yet.</string>
     <string name="history_stats_section">Last 30 days</string>
-    <string name="history_top_artists">Top Artists</string>
+    <string name="history_top_artists">सबसे ज़्यादा सुने गए कलाकार</string>
     <string name="history_total">%1$s listened</string>
     <string name="dur_hm">%1$dh %2$dm</string>
     <string name="dur_m">%1$dm</string>
     <string name="settings_stream_cache">Stream cache</string>
     <string name="stream_cache_mb">%1$d MB</string>
-    <string name="stream_cache_hint">Applies at next launch. 0 = off.</string>
     <plurals name="n_plays">
         <item quantity="one">%1$d play</item>
         <item quantity="other">%1$d plays</item>
@@ -263,15 +249,83 @@
     <string name="action_play_next">अगला चलाएँ</string>
     <string name="action_add_to_queue">कतार में जोड़ें</string>
     <string name="action_clear_queue">कतार साफ़ करें</string>
-    <string name="action_download_offline">ऑफ़लाइन के लिए डाउनलोड करें</string>
     <string name="action_remove">हटाएँ</string>
     <string name="cd_downloaded">डाउनलोड किया गया</string>
     <string name="cd_reorder">क्रम बदलें</string>
-    <string name="offline_ready">%1$s ऑफ़लाइन उपलब्ध</string>
-    <string name="device_self_phone">OpenDeezer (Android)</string>
-    <string name="device_self_tv">OpenDeezer (Android TV)</string>
-    <string name="settings_connect">OpenDeezer Connect</string>
-    <string name="update_notes_title">OpenDeezer %1$s</string>
     <string name="settings_material_you">Material You</string>
     <string name="settings_material_you_hint">अपने सिस्टम के रंगों से मिलाएँ</string>
+    <string name="load_failed">यह पेज लोड नहीं हो सका।</string>
+    <string name="lyrics_translation">अनुवाद</string>
+    <string name="playback_failed">यह ट्रैक चलाया नहीं जा सका।</string>
+    <string name="playback_skipping">अगले ट्रैक पर जा रहे हैं</string>
+    <string name="playback_stopped">लगातार कई ट्रैक नहीं चल सके। प्लेबैक रुक गया</string>
+    <string name="radio_failed">Deezer के पास इसके लिए कोई रेडियो नहीं है। कोई दूसरा गाना या कलाकार आज़माएँ</string>
+    <string name="connect_failed">कनेक्ट नहीं हो सका</string>
+    <string name="session_expired">आपका सत्र समाप्त हो गया। फिर से साइन इन करें।</string>
+    <string name="queue_next_up">आगे</string>
+    <string name="menu_like">पसंद करें</string>
+    <string name="menu_unlike">पसंद हटाएँ</string>
+    <string name="menu_add_to_playlist">प्लेलिस्ट में जोड़ें</string>
+    <string name="menu_new_playlist">नई प्लेलिस्ट</string>
+    <string name="menu_remove_from_playlist">इस प्लेलिस्ट से हटाएँ</string>
+    <string name="menu_go_to_artist">कलाकार पर जाएँ</string>
+    <string name="ban_track">यह ट्रैक सुझाएँ नहीं</string>
+    <string name="ban_artist">यह कलाकार सुझाएँ नहीं</string>
+    <string name="ban_done">ठीक है। हम यह ट्रैक दोबारा नहीं सुझाएँगे</string>
+    <string name="offline_keep">ऑफ़लाइन उपलब्ध</string>
+    <string name="offline_remove">ऑफ़लाइन से हटाएँ</string>
+    <string name="queue_remove">कतार से हटाएँ</string>
+    <string name="queue_move_up">ऊपर ले जाएँ</string>
+    <string name="queue_move_down">नीचे ले जाएँ</string>
+    <string name="queue_left">%1$s शेष</string>
+    <string name="menu_add_favorite">पसंदीदा में जोड़ें</string>
+    <string name="menu_remove_favorite">पसंदीदा से हटाएँ</string>
+    <string name="btn_shuffle">शफ़ल करें</string>
+    <string name="dialog_new_playlist">नई प्लेलिस्ट</string>
+    <string name="playlist_title_label">शीर्षक</string>
+    <string name="dialog_delete_playlist">प्लेलिस्ट मिटाएँ</string>
+    <string name="dialog_delete_playlist_body">“%1$s” मिटाएँ? इसे पूर्ववत नहीं किया जा सकता।</string>
+    <string name="action_delete">मिटाएँ</string>
+    <string name="action_cancel">रद्द करें</string>
+    <string name="action_save">सहेजें</string>
+    <string name="episode_mark_played">चलाया गया चिह्नित करें</string>
+    <string name="episode_mark_unplayed">नहीं चलाया गया चिह्नित करें</string>
+    <string name="section_recently_played">हाल में चलाए गए</string>
+    <string name="action_show_all">सभी दिखाएँ</string>
+    <string name="menu_share">साझा करें</string>
+    <string name="action_rename">नाम बदलें</string>
+    <string name="library_downloaded">डाउनलोड किया गया</string>
+    <string name="action_create">बनाएँ</string>
+    <string name="filter_all">सभी</string>
+    <string name="search_top_result">सबसे अच्छा परिणाम</string>
+    <string name="search_clear_recent">हाल की खोजें साफ़ करें</string>
+    <string name="settings_explicit">स्पष्ट सामग्री</string>
+    <string name="explicit_display">स्पष्ट सामग्री दिखाएँ</string>
+    <string name="explicit_no_recommendation">स्पष्ट सामग्री न सुझाएँ</string>
+    <string name="explicit_hide">स्पष्ट सामग्री छिपाएँ</string>
+    <string name="settings_clear_cache">कैश साफ़ करें</string>
+    <string name="cache_used">%1$s उपयोग में</string>
+    <string name="cache_used_offline">%1$s उपयोग में, %2$s ऑफ़लाइन</string>
+    <string name="settings_single_device">एक समय में एक प्लेयर</string>
+    <string name="single_device_on">आपके खाते का कोई अन्य प्लेयर शुरू होने पर रुकता है; यहाँ चलाने से अन्य प्लेयर रुकते हैं</string>
+    <string name="single_device_off">आपके खाते के अन्य प्लेयरों के साथ-साथ चलता है</string>
+    <string name="offline_mode">ऑफ़लाइन मोड</string>
+    <string name="offline_mode_hint">बिना नेटवर्क के, केवल इस डिवाइस पर रखा संगीत चलाएँ।</string>
+    <string name="offline_empty">जिन एल्बम, प्लेलिस्ट और ट्रैक को आप ऑफ़लाइन उपलब्ध करेंगे, वे यहाँ दिखेंगे।</string>
+    <string name="offline_progress">%2$s में से %1$s</string>
+    <string name="cd_speed">चलाने की गति</string>
+    <string name="sleep_turn_off">बंद करें</string>
+    <string name="settings_group_playback">प्लेबैक</string>
+    <string name="settings_group_app">ऐप</string>
+    <string name="settings_group_storage">स्टोरेज</string>
+    <string name="quality_hifi">HiFi (FLAC)</string>
+    <string name="track_unavailable">Deezer पर उपलब्ध नहीं</string>
+    <string name="filter_by_you">आपकी बनाई</string>
+    <string name="filter_by_others">दूसरों की</string>
+    <string name="sort_added">हाल में जोड़े गए</string>
+    <string name="sort_title_az">शीर्षक A–Z</string>
+    <string name="list_search">इस सूची में खोजें</string>
+    <string name="list_no_match">आपकी खोज से कुछ मेल नहीं खाता।</string>
+    <string name="menu_go_to_album">एल्बम पर जाएं</string>
+    <string name="charts_all_genres">सभी शैलियां</string>
 </resources>

@@ -7,14 +7,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class Library
 {
     public const string HomeKey = "home";
     public const string PlaylistsKey = "playlists";
     public const string LikedKey = "liked";
-    public const string FlowKey = "flow";
     public const string ChartsKey = "charts";
     // The favorite albums, artists and podcasts: Key(LibraryKind, "album"), ...
     public const string LibraryKind = "library";
@@ -206,8 +205,8 @@ internal sealed class Library
             HomeKey => DeezerCore.Home(),
             PlaylistsKey => DeezerCore.Playlists(),
             LikedKey => DeezerCore.Favorites(),
-            FlowKey => DeezerCore.Flow(),
-            ChartsKey => DeezerCore.Charts(),
+            // "charts" is every genre; Key(ChartsKey, id) one genre's.
+            ChartsKey => id.Length == 0 ? DeezerCore.Charts() : DeezerCore.GenreCharts(id),
             "playlist" or "album" when offline => DeezerCore.OfflineTracks(kind, id),
             Offline.TrackKind => DeezerCore.OfflineTracks(kind, id),
             "playlist" => DeezerCore.PlaylistTracks(id),

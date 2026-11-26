@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/update"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

@@ -1,24 +1,25 @@
 package engine
 
-// OpenDeezer Connect: discover OpenDeezer instances on the LAN and route playback to
+// Purple Disc Connect: discover Purple Disc instances on the LAN and route playback to
 // one. While a device is connected, playback calls forward to its control API and read
 // its status.
 
 import (
 	"encoding/json"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // selfControlPort is this instance's control API port (0 if disabled), used to
@@ -119,7 +120,7 @@ func DiscoverDevices(timeout time.Duration) []discovery.Device {
 	if err != nil {
 		// A discovery error is expected/partial (e.g. no multicast on a VPN); the
 		// configured unicast peers still fill the picker.
-		odlog.Debug("discover: %v", err)
+		pdlog.Debug("discover: %v", err)
 	}
 	return devs
 }
@@ -131,6 +132,57 @@ func remoteTrack(t *control.Track) deezer.Track {
 		Artists:   []deezer.Artist{{ID: t.ArtistID, Name: t.Artist}},
 		AlbumName: t.Album, Explicit: t.Explicit, ArtworkURL: t.ArtworkURL,
 	}
+}
+
+// TakeOverJSON finds the Purple Disc host of the account on the LAN that plays trackID
+// and returns its queue, for playing it on here where it stands:
+// {"tracks":[...],"index":i,"positionMs":n,"shuffle":b,"repeat":"off|all|one"}.
+// "" when no host plays it (another Deezer app, or one out of reach).
+func TakeOverJSON(trackID string) string {
+	c := Client()
+	if c == nil || trackID == "" {
+		return ""
+	}
+	var bases []string
+	for _, d := range DiscoverDevices(700 * time.Millisecond) {
+		if base, _ := config.NormalizePeer(d.Addr); base != "" {
+			bases = append(bases, base)
+		}
+	}
+	return takeOver(trackID, c.UserID(), bases)
+}
+
+// takeOverWait bounds each host's status answer: a host on the LAN answers at once.
+const takeOverWait = 2 * time.Second
+
+// takeOver asks each host at bases, with the account id as Connect does, until one plays
+// trackID.
+func takeOver(trackID, userID string, bases []string) string {
+	for _, base := range bases {
+		rc := control.NewClient(base, "", userID)
+		rc.HTTP = &http.Client{Timeout: takeOverWait}
+		st, err := rc.Status()
+		if err != nil || st.Track == nil || st.Track.ID != trackID {
+			continue
+		}
+		tracks := make([]deezer.Track, 0, len(st.Queue))
+		index := -1
+		for i := range st.Queue {
+			if index < 0 && st.Queue[i].ID == trackID {
+				index = i
+			}
+			tracks = append(tracks, remoteTrack(&st.Queue[i]))
+		}
+		if index < 0 {
+			tracks, index = []deezer.Track{remoteTrack(st.Track)}, 0
+		}
+		b, _ := json.Marshal(map[string]any{
+			"tracks": bridge.FromTracks(tracks), "index": index, "positionMs": st.PositionMS,
+			"shuffle": st.Shuffle, "repeat": st.Repeat,
+		})
+		return string(b)
+	}
+	return ""
 }
 
 // ConnectDevice routes playback to the device at addr ("host", "host:port" or a URL;
@@ -150,13 +202,13 @@ func ConnectDevice(addr string) bool {
 	// drives nothing.
 	st, err := rc.Status()
 	if err != nil {
-		odlog.Warn("connect %s: %v", hp, err)
+		pdlog.Warn("connect %s: %v", hp, err)
 		return false
 	}
 	// Set the host's repeat to "off" once: repeat stays local here (a forwarded Repeat-All
 	// would loop the host's single-item queue). A failure is ignored.
 	if _, e := rc.SetRepeat("off"); e != nil {
-		odlog.Debug("connect %s: normalize repeat: %v", hp, e)
+		pdlog.Debug("connect %s: normalize repeat: %v", hp, e)
 	}
 	// Audio moves to the device: stop local playback, the peer being proven
 	// controllable.
@@ -188,7 +240,7 @@ func ConnectDevice(addr string) bool {
 
 	nowPlayingChanged()
 	go remotePoller(rc, stop)
-	odlog.Info("connected to device %s", hp)
+	pdlog.Info("connected to device %s", hp)
 	return true
 }
 

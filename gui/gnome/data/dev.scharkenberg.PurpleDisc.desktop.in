@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Purple Disc
+GenericName=Music Player
+Comment=Unofficial open-source client for Deezer
+Exec=purpledisc-gnome
+Icon=dev.scharkenberg.PurpleDisc
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=music;deezer;streaming;player;

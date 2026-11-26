@@ -15,7 +15,7 @@ packaging/snap/build.sh
 
 The build uses a pinned Canonical Snapcraft 8/core24 OCI image and writes the
 result to `packaging/snap/dist/`. Docker (with its daemon running) and `curl`
-must be available. The recipe downloads a checksum-pinned Go 1.25.12 toolchain
+must be available. The recipe downloads a checksum-pinned Go 1.27.4 toolchain
 for `amd64` or `arm64` and removes it from the final snap. This local OCI build
 produces an `amd64` snap; use native Snapcraft or Launchpad remote builds for
 `arm64`. Application source is archived from the `v<version>` tag named in
@@ -30,18 +30,18 @@ For a native Snapcraft installation, copy `snapcraft.yaml` to
 On an Ubuntu host with snapd:
 
 ```sh
-sudo snap install --dangerous packaging/snap/dist/opendeezer_*.snap
-snap connections opendeezer
-opendeezer
+sudo snap install --dangerous packaging/snap/dist/purpledisc_*.snap
+snap connections purpledisc
+purpledisc
 ```
 
 Verify login, audio playback, a download to a user-selected home directory,
 Wayland and X11 startup, and media-key/MPRIS control. Configuration and the ARL
 credential are kept in
-`$SNAP_USER_COMMON/.config/opendeezer`, which is private to the snap and
+`$SNAP_USER_COMMON/.config/purpledisc`, which is private to the snap and
 survives revisions.
 
-Publishing requires the project maintainer to register the `opendeezer` name,
+Publishing requires the project maintainer to register the `purpledisc` name,
 upload the built snap, and complete the Snap Store review. The `mpris` slot is
 not auto-connected by default, so request an auto-connection from the store if
 media-key integration should work without a manual connection.

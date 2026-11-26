@@ -43,7 +43,7 @@ jobs:
     env:
       ANDROID_BUILD_TOOLS: 34.0.0
       ANDROID_NDK_VERSION: 26.3.11579264
-      FIXED_ROOT: /home/vagrant/build/fr.cyclooo.opendeezer
+      FIXED_ROOT: /home/vagrant/build/dev.scharkenberg.purpledisc
       LANG: en_US.UTF-8
       TZ: UTC
 
@@ -104,7 +104,7 @@ jobs:
               exit 1
             fi
 
-            metadata_path=packaging/fdroid/fdroiddata/fr.cyclooo.opendeezer.yml
+            metadata_path=packaging/fdroid/fdroiddata/dev.scharkenberg.purpledisc.yml
             mapfile -t fdroid_commits < <(
               git show "origin/$DEFAULT_BRANCH:$metadata_path" \
                 | sed -n 's/^    commit: \([0-9a-f]\{40\}\)$/\1/p'
@@ -187,7 +187,7 @@ jobs:
           gomobile bind -trimpath -target=android -androidapi 24 \
             -bootclasspath "$ANDROID_HOME/platforms/android-34/android.jar" \
             -ldflags="-s -w -buildid=" \
-            -o gui/android/app/libs/odmobile.aar ./mobile
+            -o gui/android/app/libs/pdmobile.aar ./mobile
 
           cd gui/android/app
           unsigned_dir="$RUNNER_TEMP/fdroid-unsigned"
@@ -208,7 +208,7 @@ jobs:
             test -f "$unsigned"
             badging=$("$aapt" dump badging "$unsigned")
             head -1 <<< "$badging"
-            grep -Fq "package: name='fr.cyclooo.opendeezer'" <<< "$badging"
+            grep -Fq "package: name='dev.scharkenberg.purpledisc'" <<< "$badging"
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$VERSION'" <<< "$badging"
             native_abis=$(sed -n "s/^native-code: //p" <<< "$badging" | tr -d "'")
@@ -218,7 +218,7 @@ jobs:
               echo "::error::$unsigned is unexpectedly signed"
               exit 1
             fi
-            destination="$unsigned_dir/OpenDeezer-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
+            destination="$unsigned_dir/PurpleDisc-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
             cp "$unsigned" "$destination"
             sha256sum "$destination"
           done
@@ -227,7 +227,7 @@ jobs:
       - name: Upload unsigned comparison APKs
         uses: actions/upload-artifact@v4
         with:
-          name: opendeezer-fdroid-unsigned
+          name: purpledisc-fdroid-unsigned
           path: ${{ runner.temp }}/fdroid-unsigned/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -260,7 +260,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: opendeezer-fdroid-unsigned
+          name: purpledisc-fdroid-unsigned
           path: ${{ runner.temp }}/unsigned
 
       - name: Validate unsigned APK identities
@@ -272,12 +272,12 @@ jobs:
           for index in "${!abis[@]}"; do
             abi="${abis[$index]}"
             version_code=$((BASE_VERSION_CODE * 10 + index + 1))
-            apk="$RUNNER_TEMP/unsigned/OpenDeezer-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
+            apk="$RUNNER_TEMP/unsigned/PurpleDisc-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
             test -f "$apk"
 
             badging=$("$aapt" dump badging "$apk")
             head -1 <<< "$badging"
-            grep -Fq "package: name='fr.cyclooo.opendeezer'" <<< "$badging"
+            grep -Fq "package: name='dev.scharkenberg.purpledisc'" <<< "$badging"
             grep -Fq "versionCode='$version_code'" <<< "$badging"
             grep -Fq "versionName='$VERSION'" <<< "$badging"
             native_abis=$(sed -n "s/^native-code: //p" <<< "$badging" | tr -d "'")
@@ -313,7 +313,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          keystore="$RUNNER_TEMP/opendeezer-release.p12"
+          keystore="$RUNNER_TEMP/purpledisc-release.p12"
           trap 'rm -f "$keystore"' EXIT
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
 
@@ -324,8 +324,8 @@ jobs:
           abis=(armeabi-v7a arm64-v8a x86 x86_64)
           for index in "${!abis[@]}"; do
             version_code=$((BASE_VERSION_CODE * 10 + index + 1))
-            unsigned="$RUNNER_TEMP/unsigned/OpenDeezer-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
-            signed="$signed_dir/OpenDeezer-android-fdroid-${VERSION}-${version_code}.apk"
+            unsigned="$RUNNER_TEMP/unsigned/PurpleDisc-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
+            signed="$signed_dir/PurpleDisc-android-fdroid-${VERSION}-${version_code}.apk"
             "$apksigner" sign \
               --ks "$keystore" \
               --ks-type PKCS12 \
@@ -359,7 +359,7 @@ jobs:
       - name: Upload signed APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: opendeezer-fdroid-signed-${{ needs.build.outputs.version }}
+          name: purpledisc-fdroid-signed-${{ needs.build.outputs.version }}
           path: ${{ runner.temp }}/fdroid-signed/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -384,12 +384,12 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: opendeezer-fdroid-unsigned
+          name: purpledisc-fdroid-unsigned
           path: ${{ runner.temp }}/unsigned
 
       - uses: actions/download-artifact@v4
         with:
-          name: opendeezer-fdroid-signed-${{ needs.build.outputs.version }}
+          name: purpledisc-fdroid-signed-${{ needs.build.outputs.version }}
           path: ${{ runner.temp }}/signed
 
       - name: Reconstruct the signed APKs with F-Droid's signature copier
@@ -406,8 +406,8 @@ jobs:
 
           for offset in 1 2 3 4; do
             version_code=$((BASE_VERSION_CODE * 10 + offset))
-            signed="$RUNNER_TEMP/signed/OpenDeezer-android-fdroid-${VERSION}-${version_code}.apk"
-            unsigned="$RUNNER_TEMP/unsigned/OpenDeezer-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
+            signed="$RUNNER_TEMP/signed/PurpleDisc-android-fdroid-${VERSION}-${version_code}.apk"
+            unsigned="$RUNNER_TEMP/unsigned/PurpleDisc-android-fdroid-${VERSION}-${version_code}-unsigned.apk"
             reconstructed="$RUNNER_TEMP/reconstructed-${version_code}.apk"
             test -f "$signed"
             test -f "$unsigned"
@@ -434,7 +434,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: opendeezer-fdroid-signed-${{ needs.build.outputs.version }}
+          name: purpledisc-fdroid-signed-${{ needs.build.outputs.version }}
           path: ${{ runner.temp }}/signed
 
       - name: Publish immutable ABI APKs and update release checksums
@@ -464,7 +464,7 @@ jobs:
           # idempotent, so rerunning repairs an interrupted partial upload.
           for offset in 1 2 3 4; do
             version_code=$((BASE_VERSION_CODE * 10 + offset))
-            asset_name="OpenDeezer-android-fdroid-${VERSION}-${version_code}.apk"
+            asset_name="PurpleDisc-android-fdroid-${VERSION}-${version_code}.apk"
             asset_path="$RUNNER_TEMP/signed/$asset_name"
             test -f "$asset_path"
             local_sha=$(sha256sum "$asset_path" | cut -d ' ' -f1)

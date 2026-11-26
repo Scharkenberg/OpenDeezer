@@ -7,10 +7,10 @@ package engine
 import (
 	"sync/atomic"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // quality is the stream quality (0..2), kept also before a login.
@@ -53,7 +53,7 @@ func savePlayback(edit func(*config.Playback)) {
 		return pb
 	}
 	if err := config.UpdatePlayback(current, edit); err != nil {
-		odlog.Warn("playback.json: %v", err)
+		pdlog.Warn("playback.json: %v", err)
 	}
 }
 

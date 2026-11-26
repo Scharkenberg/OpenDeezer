@@ -666,6 +666,88 @@
         }
       }
     },
+    "About": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حول"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À propos"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "परिचय"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "О приложении"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于"
+          }
+        }
+      }
+    },
+    "By Scharkenberg, based on OpenDeezer by Cycl0o0. Licensed under AGPL-3.0.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بواسطة Scharkenberg، مبني على OpenDeezer من Cycl0o0. مرخّص بموجب AGPL-3.0."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por Scharkenberg, basado en OpenDeezer de Cycl0o0. Con licencia AGPL-3.0."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par Scharkenberg, d'après OpenDeezer de Cycl0o0. Sous licence AGPL-3.0."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scharkenberg द्वारा, Cycl0o0 के OpenDeezer पर आधारित। AGPL-3.0 के तहत लाइसेंस प्राप्त।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автор Scharkenberg, на основе OpenDeezer от Cycl0o0. Лицензия AGPL-3.0."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者 Scharkenberg，基于 Cycl0o0 的 OpenDeezer。基于 AGPL-3.0 许可。"
+          }
+        }
+      }
+    },
     "Accessibility": {
       "extractionState": "manual",
       "localizations": {
@@ -1773,43 +1855,43 @@
         }
       }
     },
-    "OpenDeezer plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk.": {
+    "Purple Disc plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk.": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك."
+            "value": "لا يعرض Purple Disc أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad."
+            "value": "Purple Disc no reproduce anuncios. Informa a Deezer de tus reproducciones como lo hace el reproductor de Deezer, lo que acredita a los artistas. Si activas esto, deja de hacerlo: los artistas no reciben crédito por esas reproducciones y se incumplen las condiciones de uso de Deezer. Bajo tu propia responsabilidad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l'arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d'utilisation de Deezer. À vos risques et périls."
+            "value": "Purple Disc ne diffuse aucune publicité. Il signale vos écoutes à Deezer comme le lecteur de Deezer, ce qui rémunère les artistes. Activer cette option l'arrête : les artistes ne sont pas crédités pour ces écoutes, et cela enfreint les conditions d'utilisation de Deezer. À vos risques et périls."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।"
+            "value": "Purple Disc कोई विज्ञापन नहीं चलाता। यह Deezer के अपने प्लेयर की तरह आपके प्ले Deezer को रिपोर्ट करता है, जिससे कलाकारों को श्रेय मिलता है। इसे चालू करने पर यह रुक जाता है: कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। अपने जोखिम पर।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
+            "value": "Purple Disc не показывает рекламу. Он сообщает Deezer о ваших прослушиваниях, как плеер Deezer, и так они засчитываются исполнителям. Если включить этот параметр, этого не будет: исполнители не получат эти прослушивания в зачёт, а условия использования Deezer будут нарушены. На ваш риск."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。"
+            "value": "Purple Disc 不播放任何广告。它会像 Deezer 自己的播放器一样向 Deezer 上报你的播放，从而为艺人计入播放量。开启此项后将不再上报：这些播放不会计入艺人，并且违反 Deezer 的使用条款。风险自负。"
           }
         }
       }
@@ -3167,43 +3249,43 @@
         }
       }
     },
-    "Let your other OpenDeezer devices (same Deezer account) find this iPhone and control its playback over the local network.": {
+    "Let your other Purple Disc devices (same Deezer account) find this iPhone and control its playback over the local network.": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسمح لأجهزة OpenDeezer الأخرى (بنفس حساب Deezer) بالعثور على هذا الـ iPhone والتحكم في تشغيله عبر الشبكة المحلية."
+            "value": "اسمح لأجهزة Purple Disc الأخرى (بنفس حساب Deezer) بالعثور على هذا الـ iPhone والتحكم في تشغيله عبر الشبكة المحلية."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permite que tus otros dispositivos OpenDeezer (con la misma cuenta de Deezer) encuentren este iPhone y controlen su reproducción a través de la red local."
+            "value": "Permite que tus otros dispositivos Purple Disc (con la misma cuenta de Deezer) encuentren este iPhone y controlen su reproducción a través de la red local."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permet à vos autres appareils OpenDeezer (même compte Deezer) de détecter cet iPhone et de contrôler sa lecture sur le réseau local."
+            "value": "Permet à vos autres appareils Purple Disc (même compte Deezer) de détecter cet iPhone et de contrôler sa lecture sur le réseau local."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "अपने अन्य OpenDeezer डिवाइस (उसी Deezer खाते वाले) को लोकल नेटवर्क पर इस iPhone को खोजने और इसका प्लेबैक नियंत्रित करने दें।"
+            "value": "अपने अन्य Purple Disc डिवाइस (उसी Deezer खाते वाले) को लोकल नेटवर्क पर इस iPhone को खोजने और इसका प्लेबैक नियंत्रित करने दें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Позволяет другим вашим устройствам OpenDeezer (с тем же аккаунтом Deezer) находить этот iPhone и управлять воспроизведением по локальной сети."
+            "value": "Позволяет другим вашим устройствам Purple Disc (с тем же аккаунтом Deezer) находить этот iPhone и управлять воспроизведением по локальной сети."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让你的其他 OpenDeezer 设备（同一 Deezer 账户）通过局域网发现这台 iPhone 并控制其播放。"
+            "value": "让你的其他 Purple Disc 设备（同一 Deezer 账户）通过局域网发现这台 iPhone 并控制其播放。"
           }
         }
       }
@@ -4028,125 +4110,125 @@
         }
       }
     },
-    "On iOS, tracks are saved inside OpenDeezer and available in the Files app. Choosing another folder isn't supported.": {
+    "On iOS, tracks are saved inside Purple Disc and available in the Files app. Choosing another folder isn't supported.": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على iOS، تُحفظ المقاطع داخل OpenDeezer وتتوفر في تطبيق «الملفات». اختيار مجلد آخر غير مدعوم."
+            "value": "على iOS، تُحفظ المقاطع داخل Purple Disc وتتوفر في تطبيق «الملفات». اختيار مجلد آخر غير مدعوم."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En iOS, las canciones se guardan dentro de OpenDeezer y están disponibles en la app Archivos. No se admite elegir otra carpeta."
+            "value": "En iOS, las canciones se guardan dentro de Purple Disc y están disponibles en la app Archivos. No se admite elegir otra carpeta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur iOS, les titres sont enregistrés dans OpenDeezer et disponibles dans l'app Fichiers. Choisir un autre dossier n'est pas pris en charge."
+            "value": "Sur iOS, les titres sont enregistrés dans Purple Disc et disponibles dans l'app Fichiers. Choisir un autre dossier n'est pas pris en charge."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "iOS पर, ट्रैक OpenDeezer के अंदर सहेजे जाते हैं और Files ऐप में उपलब्ध होते हैं। दूसरा फ़ोल्डर चुनना समर्थित नहीं है।"
+            "value": "iOS पर, ट्रैक Purple Disc के अंदर सहेजे जाते हैं और Files ऐप में उपलब्ध होते हैं। दूसरा फ़ोल्डर चुनना समर्थित नहीं है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На iOS треки сохраняются внутри OpenDeezer и доступны в приложении «Файлы». Выбор другой папки не поддерживается."
+            "value": "На iOS треки сохраняются внутри Purple Disc и доступны в приложении «Файлы». Выбор другой папки не поддерживается."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 iOS 上，曲目保存在 OpenDeezer 内，并可在“文件” App 中查看。不支持选择其他文件夹。"
+            "value": "在 iOS 上，曲目保存在 Purple Disc 内，并可在“文件” App 中查看。不支持选择其他文件夹。"
           }
         }
       }
     },
-    "OpenDeezer %@ available": {
+    "Purple Disc %@ available": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يتوفر OpenDeezer %@"
+            "value": "يتوفر Purple Disc %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer %@ disponible"
+            "value": "Purple Disc %@ disponible"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer %@ disponible"
+            "value": "Purple Disc %@ disponible"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer %@ उपलब्ध है"
+            "value": "Purple Disc %@ उपलब्ध है"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Доступна версия OpenDeezer %@"
+            "value": "Доступна версия Purple Disc %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer %@ 已发布"
+            "value": "Purple Disc %@ 已发布"
           }
         }
       }
     },
-    "OpenDeezer Connect": {
+    "Purple Disc Connect": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenDeezer Connect"
+            "value": "Purple Disc Connect"
           }
         }
       }

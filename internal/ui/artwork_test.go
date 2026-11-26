@@ -15,7 +15,7 @@ func TestRenderCoverDimensions(t *testing.T) {
 		}
 	}
 	const cols, rows = 8, 4
-	out := renderCover(img, cols, rows)
+	out, _ := renderCover(img, cols, rows)
 	if got := strings.Count(out, "\n") + 1; got != rows {
 		t.Fatalf("rows: got %d want %d", got, rows)
 	}

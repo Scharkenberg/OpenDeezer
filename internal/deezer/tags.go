@@ -2,21 +2,23 @@ package deezer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/bogem/id3v2/v2"
 	"github.com/go-flac/flacpicture"
 	"github.com/go-flac/flacvorbis"
 	flac "github.com/go-flac/go-flac"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // ArtworkFetcher fetches bytes for a Deezer artwork URL (or upgraded size).
@@ -77,7 +79,7 @@ func tagFile(ctx context.Context, path, ext string, t Track, artworkURL string, 
 		if b, err := fetch(ctx, artworkURL); err == nil && len(b) > 0 {
 			art = b
 		} else if err != nil {
-			odlog.Debug("tag: artwork fetch for %s: %v (continuing without art)", path, err)
+			pdlog.Debug("tag: artwork fetch for %s: %v (continuing without art)", path, err)
 		}
 	}
 
@@ -87,45 +89,93 @@ func tagFile(ctx context.Context, path, ext string, t Track, artworkURL string, 
 	return tagMP3(path, t, art, trackNumber, date)
 }
 
-func tagMP3(path string, t Track, art []byte, trackNumber int, date string) (err error) {
-	tag, err := id3v2.Open(path, id3v2.Options{Parse: false})
+// tagMP3 puts an ID3v2.4 tag in front of the audio, replacing one already there: UTF-8
+// text frames (title, artist, album, date, track number) and the cover as the front
+// cover picture. The tag and the audio go to a temp file renamed over path.
+func tagMP3(path string, t Track, art []byte, trackNumber int, date string) error {
+	var frames bytes.Buffer
+	frame := func(id string, body []byte) {
+		frames.WriteString(id)
+		frames.Write(synchsafe(len(body)))
+		frames.Write([]byte{0, 0}) // flags
+		frames.Write(body)
+	}
+	text := func(id, s string) { frame(id, append(append([]byte{3}, s...), 0)) } // 3: UTF-8
+	text("TIT2", t.Name)
+	text("TPE1", t.ArtistLine())
+	text("TALB", t.AlbumName)
+	if date != "" {
+		text("TDRC", date)
+	}
+	if trackNumber > 0 {
+		text("TRCK", strconv.Itoa(trackNumber))
+	}
+	if len(art) > 0 {
+		pic := append([]byte{3}, "image/jpeg\x00\x03Front cover\x00"...) // UTF-8, MIME, front cover, description
+		frame("APIC", append(pic, art...))
+	}
+
+	src, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("id3v2 open: %w", err)
 	}
-	// Close closes the underlying file, flushing the write done by Save. If Save
-	// succeeded, surface a Close/flush error instead of silently dropping it; if
-	// Save already failed, keep that error (it's the more informative one).
-	defer func() {
-		if cerr := tag.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("id3v2 close: %w", cerr)
-		}
-	}()
-
-	tag.SetDefaultEncoding(id3v2.EncodingUTF8)
-	tag.SetTitle(t.Name)
-	tag.SetArtist(t.ArtistLine())
-	tag.SetAlbum(t.AlbumName)
-	if date != "" {
-		tag.SetYear(date)
+	defer func() { _ = src.Close() }()
+	skip, err := id3Size(src)
+	if err != nil {
+		return fmt.Errorf("id3v2 read: %w", err)
 	}
-	if trackNumber > 0 {
-		id := tag.CommonID("Track number/Position in set")
-		tag.AddTextFrame(id, id3v2.EncodingUTF8, fmt.Sprintf("%d", trackNumber))
+	if _, err := src.Seek(skip, io.SeekStart); err != nil {
+		return fmt.Errorf("id3v2 read: %w", err)
 	}
-	if len(art) > 0 {
-		pic := id3v2.PictureFrame{
-			Encoding:    id3v2.EncodingUTF8,
-			MimeType:    "image/jpeg",
-			PictureType: id3v2.PTFrontCover,
-			Description: "Front cover",
-			Picture:     art,
-		}
-		tag.AddAttachedPicture(pic)
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tag-*")
+	if err != nil {
+		return fmt.Errorf("id3v2 save: %w", err)
 	}
-	if err := tag.Save(); err != nil {
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	w := bufio.NewWriter(tmp)
+	_, _ = w.Write(append([]byte("ID3\x04\x00\x00"), synchsafe(frames.Len())...))
+	_, _ = w.Write(frames.Bytes())
+	_, err = io.Copy(w, src)
+	if err == nil {
+		err = w.Flush()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		_ = src.Close()
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
 		return fmt.Errorf("id3v2 save: %w", err)
 	}
 	return nil
+}
+
+// synchsafe is n as ID3v2.4 writes sizes: four bytes of seven bits each.
+func synchsafe(n int) []byte {
+	return []byte{byte(n >> 21 & 0x7f), byte(n >> 14 & 0x7f), byte(n >> 7 & 0x7f), byte(n & 0x7f)}
+}
+
+// id3Size is the length of the ID3v2 tag at the start of r (header, frames and a
+// footer when its flag is set), 0 when r starts with none.
+func id3Size(r io.Reader) (int64, error) {
+	h := make([]byte, 10)
+	if _, err := io.ReadFull(r, h); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if string(h[:3]) != "ID3" {
+		return 0, nil
+	}
+	n := int64(h[6]&0x7f)<<21 | int64(h[7]&0x7f)<<14 | int64(h[8]&0x7f)<<7 | int64(h[9]&0x7f)
+	n += 10
+	if h[5]&0x10 != 0 {
+		n += 10
+	}
+	return n, nil
 }
 
 // tagFLAC replaces the file's comment and picture blocks: it reads only the

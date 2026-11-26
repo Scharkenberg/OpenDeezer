@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
 // cacheProfile points the config and cache directories at a fresh folder for
@@ -77,7 +77,7 @@ func TestMediaCacheBudgetAppliesAtOnce(t *testing.T) {
 	if caches.Current() != nil {
 		t.Fatal("a cache is still attached with a budget of 0")
 	}
-	if f := dataFiles(t, filepath.Join(base, "opendeezer-cache")); len(f) != 0 {
+	if f := dataFiles(t, filepath.Join(base, "purpledisc-cache")); len(f) != 0 {
 		t.Fatalf("files left with a budget of 0: %v", f)
 	}
 	if st := caches.Stats(); st.Entries != 0 || st.Bytes != 0 || st.MaxBytes != 0 || st.Dir != want.Dir {
@@ -89,7 +89,7 @@ func TestMediaCacheBudgetAppliesAtOnce(t *testing.T) {
 // folder when no cache was opened in this one.
 func TestMediaCacheZeroPurgesUnopenedFolder(t *testing.T) {
 	base := cacheProfile(t)
-	dir := filepath.Join(base, "opendeezer-cache")
+	dir := filepath.Join(base, "purpledisc-cache")
 	earlier, err := mediacache.New(dir, 1<<20)
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func oldTrackInFolder(t *testing.T, dir string) {
 // The age limit in media.json is applied when the cache opens.
 func TestMediaCacheMaxAgeReadAtOpen(t *testing.T) {
 	base := cacheProfile(t)
-	oldTrackInFolder(t, filepath.Join(base, "opendeezer-cache"))
+	oldTrackInFolder(t, filepath.Join(base, "purpledisc-cache"))
 	if err := config.SaveMedia(config.Media{MediaCacheMaxAgeDays: 30}); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestMediaCacheMaxAgeReadAtOpen(t *testing.T) {
 // Setting the age limit applies it at once; 0 keeps every track.
 func TestSetMediaCacheMaxAgeAppliesAtOnce(t *testing.T) {
 	base := cacheProfile(t)
-	oldTrackInFolder(t, filepath.Join(base, "opendeezer-cache"))
+	oldTrackInFolder(t, filepath.Join(base, "purpledisc-cache"))
 	_ = caches.SetMB(1)
 	if caches.SetMaxAgeDays(0) != nil || caches.Stats().Entries != 2 {
 		t.Fatal("an age limit of 0 removed tracks")
@@ -182,7 +182,7 @@ func TestClearMediaCache(t *testing.T) {
 	}
 }
 
-// A new cache folder takes over empty, in its subfolder opendeezer-cache; the
+// A new cache folder takes over empty, in its subfolder purpledisc-cache; the
 // old cache is cleared. A relative path or a file is refused and the old
 // folder stays in use.
 func TestSetMediaCacheDir(t *testing.T) {
@@ -208,11 +208,11 @@ func TestSetMediaCacheDir(t *testing.T) {
 	if st := caches.Stats(); st.Dir != next || st.Entries != 0 || st.MaxBytes != 1<<20 {
 		t.Fatalf("after the move stats = %+v", st)
 	}
-	if f := dataFiles(t, filepath.Join(base, "opendeezer-cache")); len(f) != 0 {
+	if f := dataFiles(t, filepath.Join(base, "purpledisc-cache")); len(f) != 0 {
 		t.Fatalf("old cache not cleared: %v", f)
 	}
 	mctest.PutBody(t, caches.Current(), "2.MP3_128")
-	if f := dataFiles(t, filepath.Join(next, "opendeezer-cache")); len(f) != 1 {
+	if f := dataFiles(t, filepath.Join(next, "purpledisc-cache")); len(f) != 1 {
 		t.Fatalf("new cache holds %v, want the new track", f)
 	}
 	if err := caches.SetDir(""); err != nil {
@@ -250,7 +250,7 @@ func TestMediaCacheDirKeepsForeignFiles(t *testing.T) {
 		t.Fatalf("stats dir = %s, want the picked folder %s", st.Dir, music)
 	}
 	mctest.PutBody(t, caches.Current(), "1.MP3_128")
-	if f := dataFiles(t, filepath.Join(music, "opendeezer-cache")); len(f) != 1 {
+	if f := dataFiles(t, filepath.Join(music, "purpledisc-cache")); len(f) != 1 {
 		t.Fatalf("cache subfolder holds %v, want the track", f)
 	}
 	_ = caches.Clear(true)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // ErrWrite marks a fetch that failed because its stream could not be written

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <!-- App icon, embedded so it resolves by app-id even when not installed.
+       Registered via gtk_icon_theme_add_resource_path() at startup. -->
+  <gresource prefix="/dev/scharkenberg/PurpleDisc/icons/512x512/apps">
+    <file alias="dev.scharkenberg.PurpleDisc.png">purpledisc.png</file>
+  </gresource>
+</gresources>

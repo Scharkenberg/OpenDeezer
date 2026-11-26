@@ -3,7 +3,7 @@
 using System;
 using Microsoft.UI.Xaml.Data;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed partial class TimeTextConverter : IValueConverter
 {

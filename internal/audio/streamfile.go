@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
 )
 
 // readWindow is each reader's buffer: the only copy of the stream in memory.
@@ -232,9 +232,25 @@ func (r *streamReader) Read(p []byte) (int, error) {
 	return c, nil
 }
 
+// Size is the stream's declared length, or what arrived once it is complete; 0 when
+// not known yet.
+func (r *streamReader) Size() int64 {
+	b := r.b
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.total > 0 {
+		return b.total
+	}
+	if b.done && b.err == nil {
+		return b.written
+	}
+	return 0
+}
+
 // Seek blocks until the target has arrived (or the stream ended or closed);
-// a target past the end resolves to the end. No decoder seeks from the end,
-// so io.SeekEnd is refused.
+// a target past the end resolves to the end. io.SeekEnd is refused: dr_flac's
+// seek from the end is answered from Size by its source (flac_cgo.go) and never
+// reaches here.
 func (r *streamReader) Seek(off int64, whence int) (int64, error) {
 	b := r.b
 	b.mu.Lock()

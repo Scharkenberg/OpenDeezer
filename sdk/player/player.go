@@ -3,8 +3,8 @@ package player
 import (
 	"time"
 
-	internalaudio "github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	sdkdeezer "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	internalaudio "github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	sdkdeezer "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 // ---- type aliases ----

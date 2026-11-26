@@ -34,12 +34,14 @@ type Event struct {
 
 // Client talks to a control Server over HTTP. It is the shared driver for the
 // MCP server and the TUI's remote-play feature: both point it at another
-// OpenDeezer client's control API and issue the same commands a local user would.
+// Purple Disc client's control API and issue the same commands a local user would.
 type Client struct {
 	base    string // e.g. http://127.0.0.1:7654
-	token   string // X-OpenDeezer-Token (optional)
-	account string // X-OpenDeezer-Account (same-account auth, optional)
-	http    *http.Client
+	token   string // X-PurpleDisc-Token (optional)
+	account string // X-PurpleDisc-Account (same-account auth, optional)
+	// HTTP sends the requests; NewClient's has a 15 s whole-request timeout. Set
+	// before the first call.
+	HTTP *http.Client
 }
 
 // NewClient builds a control client. base is the server's URL; token/account are
@@ -47,7 +49,7 @@ type Client struct {
 func NewClient(base, token, account string) *Client {
 	return &Client{
 		base: base, token: token, account: account,
-		http: &http.Client{Timeout: 15 * time.Second},
+		HTTP: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -61,17 +63,17 @@ func (c *Client) reqBody(method, path string, body io.Reader) (*http.Request, er
 		return nil, err
 	}
 	if c.token != "" {
-		r.Header.Set("X-OpenDeezer-Token", c.token)
+		r.Header.Set("X-PurpleDisc-Token", c.token)
 	}
 	if c.account != "" {
-		r.Header.Set("X-OpenDeezer-Account", c.account)
+		r.Header.Set("X-PurpleDisc-Account", c.account)
 	}
 	return r, nil
 }
 
 // rawRequest issues req and returns the response body, erroring on non-2xx.
 func (c *Client) rawRequest(req *http.Request) ([]byte, error) {
-	resp, err := c.http.Do(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -141,9 +143,9 @@ func (c *Client) EventsTyped(ctx context.Context) (<-chan Event, error) {
 	// NewClient's HTTP client has a whole-request timeout; a stream lives until ctx is
 	// canceled and keeps the configured transport, redirects and cookie jar.
 	streamClient := &http.Client{
-		Transport:     c.http.Transport,
-		CheckRedirect: c.http.CheckRedirect,
-		Jar:           c.http.Jar,
+		Transport:     c.HTTP.Transport,
+		CheckRedirect: c.HTTP.CheckRedirect,
+		Jar:           c.HTTP.Jar,
 	}
 	resp, err := streamClient.Do(req)
 	if err != nil {

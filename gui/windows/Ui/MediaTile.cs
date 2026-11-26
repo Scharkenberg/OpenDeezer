@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed record TileData(string Title, string Subtitle, string ArtUrl, bool Round = false);
 
@@ -26,7 +26,7 @@ internal static class Tiles
         string.Join(" · ", new[] { SearchView.KindLabel(p.Type), p.Subtitle }.Where(s => s.Length > 0)), p.Picture, Round: p.Type == "Artist");
     // How much of it is stored while that is not all of it.
     public static TileData Offline(OfflineCollection o) => new(
-        o.Kind == OpenDeezer.Offline.TrackKind ? Loc.S("Offline_Songs") : o.Title,
+        o.Kind == PurpleDisc.Offline.TrackKind ? Loc.S("Offline_Songs") : o.Title,
         o.Fetched < o.TrackCount ? Loc.Format("Offline_ProgressFormat", o.Fetched, o.TrackCount) : Loc.Plural("Tracks", o.TrackCount),
         o.Cover);
 }

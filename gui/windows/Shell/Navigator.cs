@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class Navigator
 {

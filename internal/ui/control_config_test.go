@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 // The TUI's control config is the shared one: an empty control.txt still
@@ -14,8 +14,8 @@ import (
 func TestTUIControlConfigIsShared(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("APPDATA", dir)
-	t.Setenv("OPENDEEZER_CONTROL", "")
-	t.Setenv("OPENDEEZER_CONTROL_TOKEN", "")
+	t.Setenv("PURPLEDISC_CONTROL", "")
+	t.Setenv("PURPLEDISC_CONTROL_TOKEN", "")
 	config.SetBaseDir(dir)
 	t.Cleanup(func() { config.SetBaseDir("") })
 	_ = os.WriteFile(filepath.Join(dir, "control.txt"), []byte("\n"), 0o600)

@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // Every object-shaped export answers {"error":"..."} on failure.
 internal record Reply
@@ -148,6 +148,18 @@ internal sealed record CatalogReply : Reply
     public IReadOnlyList<Album> Albums { get; init; } = [];
     public IReadOnlyList<ArtistInfo> Artists { get; init; } = [];
     public IReadOnlyList<Playlist> Playlists { get; init; } = [];
+}
+
+internal sealed record Genre
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+}
+
+// The chart genres, "All" (id "0") first.
+internal sealed record GenresReply : Reply
+{
+    public IReadOnlyList<Genre> Genres { get; init; } = [];
 }
 
 internal sealed record HomeReply : Reply
@@ -430,6 +442,17 @@ internal sealed record WebRemoteInfo : Reply
     public string Url { get; init; } = "";
 }
 
+// DZTakeOverJSON: the queue another Purple Disc of the account on the network plays, from where
+// it stands; no tracks when none plays the track asked about.
+internal sealed record TakeOver
+{
+    public List<Track> Tracks { get; init; } = [];
+    public int Index { get; init; }
+    public long PositionMs { get; init; }
+    public bool Shuffle { get; init; }
+    public string Repeat { get; init; } = "";
+}
+
 // DZElsewhereJSON: what another session of the account plays. Deezer announces no pause, so it
 // counts as playing there until UntilMs (Unix ms). Track is null when that session went on to a
 // track it did not name.
@@ -449,6 +472,7 @@ internal sealed record Elsewhere
 [JsonSerializable(typeof(TracksReply))]
 [JsonSerializable(typeof(PlaylistsReply))]
 [JsonSerializable(typeof(CatalogReply))]
+[JsonSerializable(typeof(GenresReply))]
 [JsonSerializable(typeof(HomeReply))]
 [JsonSerializable(typeof(Account))]
 [JsonSerializable(typeof(ArtistProfile))]
@@ -484,6 +508,7 @@ internal sealed record Elsewhere
 [JsonSerializable(typeof(IReadOnlyList<string>))]
 [JsonSerializable(typeof(Dictionary<string, EpisodeBookmark>))]
 [JsonSerializable(typeof(Elsewhere))]
+[JsonSerializable(typeof(TakeOver))]
 internal sealed partial class WireJson : JsonSerializerContext;
 
 internal static class Dto

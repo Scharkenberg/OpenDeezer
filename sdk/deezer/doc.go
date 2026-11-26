@@ -1,4 +1,4 @@
-// Package deezer is the OpenDeezer SDK's Deezer API layer: account login via
+// Package deezer is the Purple Disc SDK's Deezer API layer: account login via
 // ARL, browse (favorites, playlists, albums, search, charts, Flow, artists,
 // lyrics, podcasts), library write operations (like/unlike, playlist CRUD),
 // stream resolution, and Blowfish BF_CBC_STRIPE decryption.

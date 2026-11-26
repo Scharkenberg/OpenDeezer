@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
 )
 
 // closeControlServer closes and forgets the control server a test started.
@@ -101,7 +101,7 @@ func TestLogoutClearsRemoteRouting(t *testing.T) {
 // token-protected control API is NOT downgraded to token-less (same-account
 // only) auth when bound for the LAN. lanHost is loopback here.
 func TestLANServerKeepsToken(t *testing.T) {
-	t.Setenv("OPENDEEZER_CONTROL_TOKEN", "s3cr3t")
+	t.Setenv("PURPLEDISC_CONTROL_TOKEN", "s3cr3t")
 	prevHost := lanHost
 	lanHost = "127.0.0.1"
 	t.Cleanup(func() { lanHost = prevHost })

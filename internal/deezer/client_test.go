@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
 func TestTrackIDOf(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"net"
 	"strconv"
 
-	sdkcontrol "github.com/Cycl0o0/OpenDeezer/v3/sdk/control"
-	sdkdeezer "github.com/Cycl0o0/OpenDeezer/v3/sdk/deezer"
+	sdkcontrol "github.com/Scharkenberg/PurpleDisc/v4/sdk/control"
+	sdkdeezer "github.com/Scharkenberg/PurpleDisc/v4/sdk/deezer"
 )
 
 // ErrAdvertise is wrapped into [Host.Start]'s error when the control endpoint bound but
@@ -15,7 +15,7 @@ import (
 // call [Host.Close].
 var ErrAdvertise = errors.New("connect: control endpoint is serving but LAN advertising failed")
 
-// This file is the inbound side of OpenDeezer Connect: a control server for
+// This file is the inbound side of Purple Disc Connect: a control server for
 // [RemoteClient] paired with a discovery responder for [Discover], so becoming a
 // Connect device is a single call.
 
@@ -36,11 +36,11 @@ type HostConfig struct {
 	// Device is the human device label reported by [RemoteClient.Whoami]
 	// (e.g. "Kitchen Speaker"). Defaults to Client when empty.
 	Device string
-	// Version is the advertised OpenDeezer/app version.
+	// Version is the advertised PurpleDisc/app version.
 	Version string
 }
 
-// Host is the inbound side of OpenDeezer Connect: a control endpoint advertised on the
+// Host is the inbound side of Purple Disc Connect: a control endpoint advertised on the
 // LAN for [Discover]. Create it with [NewHost], [Host.Start] binds and advertises,
 // [Host.Close] stops. Safe for concurrent use once started.
 type Host struct {

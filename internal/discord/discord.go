@@ -1,5 +1,5 @@
 // Package discord shows the playing track as Discord Rich Presence over the local IPC
-// socket, given an app id ($OPENDEEZER_DISCORD_APP_ID or discord-app-id.txt). IPC runs
+// socket, given an app id ($PURPLEDISC_DISCORD_APP_ID or discord-app-id.txt). IPC runs
 // lazily on a worker goroutine (a Unix socket, or a named pipe on Windows).
 package discord
 
@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // State is a now-playing snapshot pushed by the UI.
@@ -208,7 +208,7 @@ func (r *richPresence) connect() error {
 		// Common case: Discord isn't running. Log once at debug to avoid spam.
 		if !r.warnedNoIPC {
 			r.warnedNoIPC = true
-			odlog.Debug("discord: no IPC socket (is Discord running?): %v", err)
+			pdlog.Debug("discord: no IPC socket (is Discord running?): %v", err)
 		}
 		return err
 	}
@@ -233,7 +233,7 @@ func (r *richPresence) connect() error {
 	r.lastStart = 0
 	r.warnedNoIPC = false
 	go r.drain(conn, r.dead) // read+discard responses (and PING->PONG) so the RX buffer never fills
-	odlog.Info("discord: rich presence connected (app %s)", r.appID)
+	pdlog.Info("discord: rich presence connected (app %s)", r.appID)
 	return nil
 }
 
@@ -315,8 +315,8 @@ func (r *richPresence) activityFrame(s State) []byte {
 		"type":    2, // Listening
 		"details": pad2(trim(s.Title, 128)),
 		"assets": map[string]any{
-			"large_image": "opendeezer",
-			"large_text":  pad2(trim(firstNonEmpty(s.Album, "OpenDeezer"), 128)),
+			"large_image": "purpledisc",
+			"large_text":  pad2(trim(firstNonEmpty(s.Album, "Purple Disc"), 128)),
 		},
 	}
 	if s.Artist != "" {

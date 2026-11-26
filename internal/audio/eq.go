@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 const (

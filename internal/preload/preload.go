@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // Resolver turns a request (id, and length when known) into the plan to arm

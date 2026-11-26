@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 const (
@@ -113,13 +113,13 @@ func noteElsewhere(ctx context.Context, c *deezer.Client, s deezer.StreamStart) 
 	if same || ctx.Err() != nil {
 		return
 	}
-	odlog.Info("live: another player started track %s", s.TrackID)
+	pdlog.Info("live: another player started track %s", s.TrackID)
 	if !playAlongside.Load() {
 		pauseForOther()
 	}
 	t, err := c.Track(s.TrackID)
 	if err != nil {
-		odlog.Warn("live: track %s: %v", s.TrackID, err)
+		pdlog.Warn("live: track %s: %v", s.TrackID, err)
 		return
 	}
 	elseMu.Lock()
@@ -146,7 +146,7 @@ func followElsewhere(ctx context.Context, c *deezer.Client, now int64) {
 	}
 	plays, err := c.RecentPlays(elseHistoryN)
 	if err != nil {
-		odlog.Warn("live: history: %v", err)
+		pdlog.Warn("live: history: %v", err)
 		return
 	}
 	for _, p := range plays {
@@ -165,7 +165,7 @@ func followElsewhere(ctx context.Context, c *deezer.Client, now int64) {
 		elseCur = elsewhere{SinceMS: now, UntilMS: now + elseUnknownFor.Milliseconds(), session: cur.session, dueMS: now, lastMS: p.StartMS}
 		elseMu.Unlock()
 		elseVersion.Add(1)
-		odlog.Info("live: another player went on past track %s", p.TrackID)
+		pdlog.Info("live: another player went on past track %s", p.TrackID)
 		return
 	}
 }

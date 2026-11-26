@@ -4,7 +4,7 @@ SmartScreen shows "Windows protected your PC — unknown publisher" for every
 unsigned download. The fix is an **Authenticode** signature. This project signs
 via **Azure Trusted Signing** (Microsoft's cloud signing service, ~$10/mo, no
 hardware token — unlike a traditional OV/EV cert). The release workflow
-(`.github/workflows/release.yml`, `windows-gui` job) signs `OpenDeezer.exe` when
+(`.github/workflows/release.yml`, `windows-gui` job) signs `PurpleDisc.exe` when
 the Azure secrets are present; without them it produces the same unsigned zip.
 
 ## One-time Azure setup
@@ -46,20 +46,20 @@ Settings → Secrets and variables → Actions. The `windows-gui` job checks for
 | `TRUSTED_SIGNING_ACCOUNT_NAME` | the Trusted Signing account name (step 2) |
 | `TRUSTED_SIGNING_CERT_PROFILE` | the certificate profile name (step 4) |
 
-Cut the next tag and `OpenDeezer.exe` is Authenticode-signed + RFC-3161
+Cut the next tag and `PurpleDisc.exe` is Authenticode-signed + RFC-3161
 timestamped. SmartScreen recognizes the Microsoft-rooted publisher; a brand-new
 identity may still accrue reputation over the first downloads, but the "unknown
 publisher" scare is gone.
 
 ## Notes
 
-- Only the launcher `OpenDeezer.exe` is signed. The WinAppSDK DLLs are already
+- Only the launcher `PurpleDisc.exe` is signed. The WinAppSDK DLLs are already
   Microsoft-signed and `libdeezercore.dll` is loaded by the signed exe, so
   SmartScreen (which assesses the launched exe) doesn't need every DLL signed.
-- The **TUI** `opendeezer-tui-windows-amd64.exe` (built in the `tui` job) is not
+- The **TUI** `purpledisc-tui-windows-amd64.exe` (built in the `tui` job) is not
   signed yet — add the same `azure/trusted-signing-action` step there if you
   distribute it as a raw download rather than via winget/scoop.
 - Verify a signed build: right-click the exe → *Properties* → *Digital
-  Signatures*, or `Get-AuthenticodeSignature OpenDeezer.exe` in PowerShell.
+  Signatures*, or `Get-AuthenticodeSignature PurpleDisc.exe` in PowerShell.
 - Pin the action version (`azure/trusted-signing-action@vX.Y.Z`) once you've
   confirmed a working release, instead of the floating `@v0`.

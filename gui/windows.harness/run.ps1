@@ -1,6 +1,6 @@
 # Builds and runs the harness; prints its results. The window stays off screen and takes no focus.
 #   .\run.ps1                    all tests but the avatar
-#   .\run.ps1 -Only bar,states   some tests: bar, states, tiles, rows, fills, stale, transport, chrome, layout,
+#   .\run.ps1 -Only bar,states   some tests: bar, states, tiles, rows, fills, stale, transport, chrome, frame, resize, layout,
 #                                cards, pane, rail, pages, offline, cost, memory, fixes, avatar
 #   .\run.ps1 -Picture <url>     also loads that profile picture (network)
 param([string[]]$Only = @(), [string]$Picture = '')
@@ -11,11 +11,11 @@ dotnet build (Join-Path $here 'Harness.csproj') -c Debug -p:Platform=x64 --nolog
     Select-String -Pattern ' error |Build succeeded' | Select-Object -Unique | ForEach-Object { $_.Line }
 # A failed build must not run the last good one: its results would describe other code.
 if ($LASTEXITCODE -ne 0) { Write-Error 'harness build failed'; return }
-$exe = Get-ChildItem (Join-Path $here 'bin') -Recurse -Filter OdHarness.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+$exe = Get-ChildItem (Join-Path $here 'bin') -Recurse -Filter PdHarness.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $exe) { Write-Error 'build failed'; return }
 
 # A throwaway profile, so the real settings and login are never read.
-New-Item -ItemType Directory -Force (Join-Path $out 'profile\opendeezer') | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $out 'profile\purpledisc') | Out-Null
 $result = Join-Path $out 'result.txt'
 Remove-Item $result -ErrorAction SilentlyContinue
 $saved = $env:APPDATA

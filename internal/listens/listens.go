@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // Context is the list a track was played from, as Deezer's players name it in
@@ -174,7 +174,7 @@ func (l *Log) drain() {
 			if err := s.LogListen(j.params, j.next); err != nil {
 				keep = deezer.IsNoNetwork(err)
 				if !keep {
-					odlog.Warn("listen log: dropped: %v", err)
+					pdlog.Warn("listen log: dropped: %v", err)
 				}
 				s = nil
 			}
@@ -183,7 +183,7 @@ func (l *Log) drain() {
 		switch {
 		case keep && j.params != nil:
 			if err := config.SaveListens(append(kept, j.params)); err != nil {
-				odlog.Warn("listens.json: %v", err)
+				pdlog.Warn("listens.json: %v", err)
 			}
 		case s != nil && len(kept) > 0:
 			err := s.LogListens(kept)
@@ -191,10 +191,10 @@ func (l *Log) drain() {
 				break
 			}
 			if err != nil {
-				odlog.Warn("listen log batch: dropped: %v", err)
+				pdlog.Warn("listen log batch: dropped: %v", err)
 			}
 			if err := config.SaveListens(nil); err != nil {
-				odlog.Warn("listens.json: %v", err)
+				pdlog.Warn("listens.json: %v", err)
 			}
 		}
 		l.sends.Done()

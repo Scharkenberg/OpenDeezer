@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately to **security@cyclooo.fr**. Do not open a
+Please report security issues privately through GitHub's private vulnerability reporting: <https://github.com/Scharkenberg/PurpleDisc/security/advisories/new>. Do not open a
 public GitHub issue for a vulnerability.
 
 Include what you found, how to reproduce it, and the affected version if you know
@@ -11,7 +11,7 @@ triaged. Coordinated disclosure is appreciated.
 
 ## Scope
 
-OpenDeezer logs in, decrypts and decodes everything **on your own machine** — it
+Purple Disc logs in, decrypts and decodes everything **on your own machine** — it
 processes untrusted bytes from several sources, which is where the security
 attention goes:
 
@@ -19,13 +19,13 @@ attention goes:
   audio (`internal/deezer/decrypt.go`).
 - **Media decoders** — MP3 and FLAC are decoded from whatever the CDN (or, for
   podcasts, an off-Deezer host) returns (`internal/audio`).
-- **LAN packets** — OpenDeezer Connect discovery parses UDP packets from the
+- **LAN packets** — Purple Disc Connect discovery parses UDP packets from the
   local network (`internal/discovery`).
 - **The control / web-remote API** — an opt-in HTTP/JSON server
   (`internal/control`); see its auth model in the README.
 
 Your **ARL** (Deezer session cookie) is stored locally and only ever sent to
-deezer.com in the requests OpenDeezer makes for you.
+deezer.com in the requests Purple Disc makes for you.
 
 ## Continuous fuzzing
 

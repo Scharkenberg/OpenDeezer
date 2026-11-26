@@ -197,7 +197,7 @@
     <value>आपके नेटवर्क पर कोई अन्य डिवाइस नहीं मिला।</value>
   </data>
   <data name="Connect_VersionFormat" xml:space="preserve">
-    <value>{0} · OpenDeezer {1}</value>
+    <value>{0} · Purple Disc {1}</value>
   </data>
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>{0} पर चल रहा है</value>
@@ -215,7 +215,7 @@
     <value>कोई बोल उपलब्ध नहीं।</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>OpenDeezer में साइन इन करें</value>
+    <value>Purple Disc में साइन इन करें</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>अपना Deezer ARL पेस्ट करें</value>
@@ -266,7 +266,7 @@
     <value>पुनः प्रयास करें</value>
   </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>OpenDeezer दिखाएँ</value>
+    <value>Purple Disc दिखाएँ</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>बाहर निकलें</value>
@@ -344,7 +344,7 @@
     <value>विंडो बंद करने पर ट्रे में चलता रहता है</value>
   </data>
   <data name="Settings_TrayOff" xml:space="preserve">
-    <value>विंडो बंद करने पर OpenDeezer बंद हो जाता है</value>
+    <value>विंडो बंद करने पर Purple Disc बंद हो जाता है</value>
   </data>
   <data name="Settings_RemoteControl" xml:space="preserve">
     <value>रिमोट कंट्रोल</value>
@@ -383,7 +383,7 @@
     <value>सिस्टम डिफ़ॉल्ट</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>नई भाषा लागू करने के लिए OpenDeezer को दोबारा शुरू करें</value>
+    <value>नई भाषा लागू करने के लिए Purple Disc को दोबारा शुरू करें</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>प्रीसेट</value>
@@ -401,13 +401,13 @@
     <value>अपने फ़ोन से स्कैन करें (वही Wi-Fi), फिर कोड दर्ज करें।</value>
   </data>
   <data name="About_Title" xml:space="preserve">
-    <value>OpenDeezer के बारे में</value>
+    <value>Purple Disc के बारे में</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
     <value>Deezer के लिए अनौपचारिक ओपन-सोर्स क्लाइंट।</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Cycl0o0 द्वारा; Windows ऐप Scharkenberg द्वारा। AGPL-3.0 के तहत लाइसेंस प्राप्त।</value>
+    <value>Scharkenberg द्वारा, Cycl0o0 के OpenDeezer पर आधारित। AGPL-3.0 के तहत लाइसेंस प्राप्त।</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} ट्रैक</value>
@@ -470,7 +470,7 @@
     <value>मेरे प्ले रिपोर्ट न करें</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Deezer को आपके प्ले रिपोर्ट करना बंद करता है। कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। OpenDeezer किसी भी स्थिति में विज्ञापन नहीं चलाता।</value>
+    <value>Deezer को आपके प्ले रिपोर्ट करना बंद करता है। कलाकारों को उन प्ले का श्रेय नहीं मिलता, और यह Deezer की उपयोग शर्तों का उल्लंघन है। Purple Disc किसी भी स्थिति में विज्ञापन नहीं चलाता।</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>हाल ही में</value>
@@ -557,7 +557,7 @@
     <value>वेब साइन इन के लिए Microsoft Edge WebView2 Runtime चाहिए। इसे इंस्टॉल करें या ARL टोकन का उपयोग करें।</value>
   </data>
   <data name="Error_EngineMissing" xml:space="preserve">
-    <value>libdeezercore.dll लोड नहीं हो सका। OpenDeezer को फिर से इंस्टॉल करें।</value>
+    <value>libdeezercore.dll लोड नहीं हो सका। Purple Disc को फिर से इंस्टॉल करें।</value>
   </data>
   <data name="Error_NoAudio" xml:space="preserve">
     <value>कोई ऑडियो आउटपुट नहीं मिला। स्पीकर या हेडफ़ोन कनेक्ट करें, फिर दोबारा कोशिश करें।</value>
@@ -626,10 +626,10 @@
     <value>टोकन के बिना, आपके Deezer खाते से साइन इन किया हुआ कोई भी डिवाइस प्लेबैक नियंत्रित कर सकता है।</value>
   </data>
   <data name="Tray_HintTitle" xml:space="preserve">
-    <value>OpenDeezer अभी भी चल रहा है</value>
+    <value>Purple Disc अभी भी चल रहा है</value>
   </data>
   <data name="Tray_HintBody" xml:space="preserve">
-    <value>संगीत चलता रहता है। ट्रे आइकन से OpenDeezer खोलें या बंद करें।</value>
+    <value>संगीत चलता रहता है। ट्रे आइकन से Purple Disc खोलें या बंद करें।</value>
   </data>
   <data name="Sleep_RemainingFormat" xml:space="preserve">
     <value>{0} में रुकेगा</value>
@@ -765,9 +765,6 @@
   </data>
   <data name="Empty_Artist" xml:space="preserve">
     <value>इस कलाकार के लिए कुछ नहीं मिला</value>
-  </data>
-  <data name="Lyrics_PaidOnly" xml:space="preserve">
-    <value>गीत के बोल Deezer Premium, Duo, Family और Student के साथ मिलते हैं।</value>
   </data>
   <data name="Queue_LeftFormat" xml:space="preserve">
     <value>{0} शेष</value>
@@ -1252,5 +1249,23 @@
   </data>
   <data name="Pin_Full" xml:space="preserve">
     <value>होम भरा है। पहले कुछ अनपिन करें</value>
+  </data>
+  <data name="Track_Unavailable" xml:space="preserve">
+    <value>Deezer पर उपलब्ध नहीं</value>
+  </data>
+  <data name="Menu_GoToAlbum" xml:space="preserve">
+    <value>एल्बम पर जाएं</value>
+  </data>
+  <data name="Charts_AllGenres" xml:space="preserve">
+    <value>सभी शैलियां</value>
+  </data>
+  <data name="Charts_Genre" xml:space="preserve">
+    <value>शैली</value>
+  </data>
+  <data name="Menu_On" xml:space="preserve">
+    <value>चालू</value>
+  </data>
+  <data name="Menu_Off" xml:space="preserve">
+    <value>बंद</value>
   </data>
 </root>

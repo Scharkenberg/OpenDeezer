@@ -1,17 +1,17 @@
 # Obtainium
 
-OpenDeezer can be installed and updated directly from its GitHub releases with
+Purple Disc can be installed and updated directly from its GitHub releases with
 [Obtainium](https://github.com/ImranR98/Obtainium). Choose the configuration for
 the device you are using:
 
-- `opendeezer-mobile.json` installs the phone/tablet app
-  (`fr.cyclooo.opendeezer`).
-- `opendeezer-tv.json` installs the Android TV app
-  (`fr.cyclooo.opendeezer.tv`).
+- `purpledisc-mobile.json` installs the phone/tablet app
+  (`dev.scharkenberg.purpledisc`).
+- `purpledisc-tv.json` installs the Android TV app
+  (`dev.scharkenberg.purpledisc.tv`).
 
 In Obtainium, open **Add App**, choose **Obtainium Import**, and select the
 downloaded JSON file. The configurations accept only the corresponding
-OpenDeezer APK names; phone and TV builds cannot be mixed up.
+Purple Disc APK names; phone and TV builds cannot be mixed up.
 
 Each configuration enables Obtainium's architecture filter. Releases containing
 split APKs therefore select the first ABI supported by the device from:
@@ -21,7 +21,7 @@ split APKs therefore select the first ABI supported by the device from:
 - `x86_64`
 - `x86`
 
-The universal `OpenDeezer-android.apk` or `OpenDeezer-androidtv.apk` remains a
+The universal `PurpleDisc-android.apk` or `PurpleDisc-androidtv.apk` remains a
 fallback for releases that do not contain split APKs.
 
 ## Publishing in the Obtainium app catalog

@@ -1,13 +1,13 @@
 /*
- * OpenDeezer — unified Linux launcher.
+ * Purple Disc — unified Linux launcher.
  *
- * One `opendeezer` command that auto-selects the native toolkit for the running
+ * One `purpledisc` command that auto-selects the native toolkit for the running
  * desktop (LibreOffice-style): Qt/Breeze on KDE-family desktops, GTK4/libadwaita
  * elsewhere. It dlopen()s the matching backend shared library and calls its
- * exported opendeezer_run(); if the preferred toolkit's libraries aren't
+ * exported purpledisc_run(); if the preferred toolkit's libraries aren't
  * installed (dlopen fails), it falls back to the other backend.
  *
- * The backends (libopendeezer-qt.so / libopendeezer-gtk.so) sit next to this
+ * The backends (libpurpledisc-qt.so / libpurpledisc-gtk.so) sit next to this
  * binary; it is linked with rpath $ORIGIN so they resolve without an install.
  */
 #define _GNU_SOURCE
@@ -47,11 +47,11 @@ static int try_backend(const char *lib, int argc, char **argv,
         return -1; /* toolkit libs missing — caller tries the fallback */
     }
     dlerror(); /* clear any stale loader error before dlsym */
-    run_fn run = (run_fn)dlsym(h, "opendeezer_run");
+    run_fn run = (run_fn)dlsym(h, "purpledisc_run");
     const char *symbol_error = dlerror();
     if (!run || symbol_error) {
         snprintf(error, error_size, "%s",
-                 symbol_error ? symbol_error : "opendeezer_run is unavailable");
+                 symbol_error ? symbol_error : "purpledisc_run is unavailable");
         dlclose(h);
         return -1;
     }
@@ -59,8 +59,8 @@ static int try_backend(const char *lib, int argc, char **argv,
 }
 
 int main(int argc, char **argv) {
-    const char *qt = "libopendeezer-qt.so";
-    const char *gtk = "libopendeezer-gtk.so";
+    const char *qt = "libpurpledisc-qt.so";
+    const char *gtk = "libpurpledisc-gtk.so";
     const int qt_first = prefers_qt();
     const char *first = qt_first ? qt : gtk;
     const char *second = qt_first ? gtk : qt;
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
         return rc;
 
     fprintf(stderr,
-            "OpenDeezer: no usable GUI backend found.\n"
+            "Purple Disc: no usable GUI backend found.\n"
             "  %s: %s\n"
             "  %s: %s\n"
             "Install GTK4 + libadwaita (GNOME) or Qt6 (KDE) runtime libraries.\n",

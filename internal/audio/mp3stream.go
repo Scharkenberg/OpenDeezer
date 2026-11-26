@@ -1,25 +1,22 @@
 package audio
 
-import (
-	"io"
+import "io"
 
-	"github.com/hajimehoshi/go-mp3"
-)
+// mp3Decoder decodes MP3 to interleaved s16 stereo (mono duplicated) at the file's own
+// rate, every frame of the stream included: go-mp3 without cgo, minimp3 with it.
+type mp3Decoder interface {
+	io.Reader
+	Seek(offset int64, whence int) (int64, error)
+	SampleRate() int
+}
 
-// readerOnly hides an io.ReadSeeker's Seek so go-mp3 treats the source as a stream
-// and reads only the first frame, instead of scanning the whole stream to build its
-// frame index. Decoding can then start before the download completes.
-type readerOnly struct{ r io.Reader }
-
-func (ro readerOnly) Read(p []byte) (int, error) { return ro.r.Read(p) }
-
-// mp3Stream adapts go-mp3 to pcmStream. It decodes over a non-seeking view so audio
-// starts at once; a forward seek decodes and drops, and only a backward one waits for
-// the full download, builds a seekable decoder and seeks it (later seeks reuse it).
+// mp3Stream adapts an mp3Decoder to pcmStream. It decodes the stream as it arrives so
+// audio starts at once; a forward seek decodes and drops, and only a backward one waits
+// for the full download, builds a seekable decoder and seeks it (later seeks reuse it).
 type mp3Stream struct {
 	sb       *streamFile
 	r        io.ReadSeeker // sb's reader the decoder reads
-	dec      *mp3.Decoder
+	dec      mp3Decoder
 	rate     int
 	upgraded bool // dec was rebuilt seekable (post full-download); Seek works
 	// lead and music trim the stream to its music (lameGapless): the PCM
@@ -32,7 +29,7 @@ func newMP3Stream(sb *streamFile) (*mp3Stream, error) {
 	head := make([]byte, 512)
 	n, _ := io.ReadFull(sb.reader(), head)
 	r := sb.reader()
-	d, err := mp3.NewDecoder(readerOnly{r})
+	d, err := newMP3Decoder(r)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +38,7 @@ func newMP3Stream(sb *streamFile) (*mp3Stream, error) {
 }
 
 // lameGapless reads the LAME tag of an MP3's first frame and returns the PCM bytes
-// go-mp3 decodes before the music (that frame, encoder delay, 529 decoder samples) and
+// the decoder emits before the music (that frame, encoder delay, 529 decoder samples) and
 // the music's length (0 without a frame count). Zeros when no tag has a valid CRC.
 func lameGapless(b []byte) (skip, music int64) {
 	if len(b) < 4 || b[0] != 0xFF || b[1]&0xE0 != 0xE0 || b[1]>>1&3 != 1 {
@@ -129,7 +126,7 @@ func (m *mp3Stream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Seek panics (go-mp3: index out of range) past the last frame; decode()
+// Seek may panic (go-mp3: index out of range) past the last frame; decode()
 // recovers that as a seek error.
 func (m *mp3Stream) Seek(off int64, whence int) (int64, error) {
 	// Forward on the stream as it arrives: decode up to the target and drop it.
@@ -139,12 +136,12 @@ func (m *mp3Stream) Seek(off int64, whence int) (int64, error) {
 		return off, nil
 	}
 	if !m.upgraded {
-		// Building go-mp3's frame index needs the whole stream, so wait for the download.
+		// Building the frame index needs the whole stream, so wait for the download.
 		m.sb.waitDone()
 		if _, err := m.r.Seek(0, io.SeekStart); err != nil {
 			return 0, err
 		}
-		nd, err := mp3.NewDecoder(m.r) // seekable: scans + indexes frames
+		nd, err := newSeekableMP3Decoder(m.r) // seekable: scans + indexes frames
 		if err != nil {
 			return 0, err
 		}

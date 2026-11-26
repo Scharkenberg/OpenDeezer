@@ -3,10 +3,10 @@ package ui
 import (
 	"testing"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
 // cacheModel is an interaction model with its config and cache directories in
@@ -41,14 +41,14 @@ func TestStreamCmdResolvesFromCache(t *testing.T) {
 	}
 }
 
-// C cycles the stream cache budget, saves it and applies it at once.
-func TestCacheKeyCyclesBudget(t *testing.T) {
+// The Stream cache setting cycles the budget, saves it and applies it at once.
+func TestCacheSettingCyclesBudget(t *testing.T) {
 	m := cacheModel(t)
 	want := []int{1 << 10, 2 << 10, 5 << 10, 10 << 10, 20 << 10, 0}
 	for _, mb := range want {
-		keyRunes(m, 'C')
+		changeSetting(t, m, "Stream cache")
 		if got := config.LoadMedia().MediaCacheMB; got != mb {
-			t.Fatalf("budget after C = %d MB, want %d", got, mb)
+			t.Fatalf("budget after enter = %d MB, want %d", got, mb)
 		}
 		if on := m.caches.Current() != nil; on != (mb > 0) {
 			t.Fatalf("cache attached %v with a budget of %d MB", on, mb)

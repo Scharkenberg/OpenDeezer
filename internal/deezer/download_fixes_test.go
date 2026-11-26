@@ -31,8 +31,8 @@ import (
 	"github.com/go-flac/flacvorbis"
 	flac "github.com/go-flac/go-flac"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
 // rtFunc adapts a function to http.RoundTripper so tests can fake the gw
@@ -981,6 +981,65 @@ func TestPrepareStream_RefusedTrackPlaysFallback(t *testing.T) {
 	}
 	if logins != 0 {
 		t.Errorf("%d logins, want 0", logins)
+	}
+}
+
+// A track listed with empty RIGHTS gets no source from get_url ({"data":[{"media":[]}]},
+// seen for 4Minute's "Crazy" in a Free account's favorites); its FALLBACK version plays.
+func TestPrepareStream_SourcelessTrackPlaysFallback(t *testing.T) {
+	logins := 0
+	c := streamTestClient(`{"error":{},"results":{"SNG_ID":"123","SNG_TITLE":"Song","TRACK_TOKEN":"tok","GAIN":"0",`+
+		`"FALLBACK":{"SNG_ID":"456","SNG_TITLE":"Song","TRACK_TOKEN":"fbtok"}}}`, "", &logins)
+	base := c.http.Transport
+	c.http.Transport = rtFunc(func(r *http.Request) (*http.Response, error) {
+		if !strings.Contains(r.URL.Path, "get_url") {
+			return base.RoundTrip(r)
+		}
+		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), `"track_tokens":["fbtok"]`) {
+			return jsonResponse([]byte(`{"data":[{"media":[{"format":"MP3_128","sources":[{"url":"https://cdn/fallback.mp3"}]}]}]}`)), nil
+		}
+		return jsonResponse([]byte(`{"data":[{"media":[]}]}`)), nil
+	})
+	plan, err := c.PrepareStream("123")
+	if err != nil || plan.Preview || plan.CDNURL != "https://cdn/fallback.mp3" || plan.KeyID != "456" {
+		t.Fatalf("plan %+v, err %v; want the fallback's full stream", plan, err)
+	}
+}
+
+// A listed track with empty RIGHTS and no FALLBACK is unavailable; with a fallback, or
+// with rights, or listed without RIGHTS at all, it is not.
+func TestGwTrack_Unavailable(t *testing.T) {
+	var ts []gwTrackDTO
+	if err := json.Unmarshal([]byte(`[{"SNG_ID":"1","RIGHTS":{}},`+
+		`{"SNG_ID":"2","RIGHTS":{},"FALLBACK":{"SNG_ID":"3","TRACK_TOKEN":"fb"}},`+
+		`{"SNG_ID":"4","RIGHTS":{"STREAM_ADS_AVAILABLE":true}},{"SNG_ID":"5"}]`), &ts); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []bool{true, false, false, false} {
+		if got := ts[i].toTrack().Unavailable; got != want {
+			t.Errorf("track %s: unavailable %v, want %v", ts[i].SngID, got, want)
+		}
+	}
+}
+
+// The gateway writes an empty RIGHTS object as []: the page still lists every track,
+// that one unavailable.
+func TestRightsEmptyArray(t *testing.T) {
+	var page struct {
+		Data []gwTrackDTO `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(`{"data":[{"SNG_ID":"1","RIGHTS":{"STREAM_SUB_AVAILABLE":true}},`+
+		`{"SNG_ID":"2","RIGHTS":[]},{"SNG_ID":"3"}]}`), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 3 {
+		t.Fatalf("%d tracks listed, want 3", len(page.Data))
+	}
+	for i, want := range []bool{false, true, false} {
+		if got := page.Data[i].toTrack().Unavailable; got != want {
+			t.Errorf("track %s: unavailable %v, want %v", page.Data[i].SngID, got, want)
+		}
 	}
 }
 

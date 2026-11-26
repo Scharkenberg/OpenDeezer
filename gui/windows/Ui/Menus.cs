@@ -8,12 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // Where a track menu opens. PlaylistId: the own playlist listing the track (adds "Remove from this
 // playlist"); Queue: a queue row, Index its row (adds "Remove from queue"); Bar: the player bar's
-// menu (add to playlist, radio, download); Page: the track's own page (no Like, Radio or details).
-internal sealed record TrackMenu(string PlaylistId = "", bool Queue = false, bool Bar = false, bool Page = false)
+// menu (add to playlist, radio, download); Page: the track's own page (no Like, Radio or details);
+// AlbumId: the album page listing the track (no "Go to album").
+internal sealed record TrackMenu(string PlaylistId = "", bool Queue = false, bool Bar = false, bool Page = false, string AlbumId = "")
 {
     public int Index { get; init; } = -1;
 }
@@ -44,6 +45,7 @@ internal static class Menus
         Group(items,
             context.Page ? null : Net(Item("Menu_TrackDetails", Icons.Info, () => TrackView.Open(t))),
             row && t.ArtistId.Length > 0 ? Net(Item("Menu_GoToArtist", Icons.Person, () => ArtistView.Open(t.ArtistId))) : null,
+            t.AlbumId.Length > 0 && t.AlbumId != context.AlbumId ? Net(Item("Menu_GoToAlbum", Icons.Album, () => GoToAlbum(t))) : null,
             context.Page ? null : Net(Item("Menu_StartRadio", Icons.Flow, () => StartRadio(t))));
         Group(items,
             Pin(new SearchItem { Type = "Track", Id = t.Id, Title = t.Name, Subtitle = t.ArtistLine, Picture = t.ArtworkUrl }),
@@ -54,6 +56,12 @@ internal static class Menus
             Net(Disabled(Item("Menu_Download", Icons.Download, () => Download(t)), !Session.CanDownload, "Menu_DownloadRequiresPremium")),
             OfflineItem(Offline.TrackKind, t.Id, App.Offline.IsPinned(t.Id)));
     }
+
+    private static void GoToAlbum(Track t) => CollectionView.Open(PurpleDisc.Collection.Of(new Album
+    {
+        Id = t.AlbumId, Name = t.AlbumName, ArtworkUrl = t.ArtworkUrl,
+        Artists = t.ArtistId.Length > 0 ? new[] { new ArtistRef { Id = t.ArtistId, Name = t.ArtistLine } } : Array.Empty<ArtistRef>(),
+    }));
 
     // In the web player's order: mark played or not, share, the description.
     private static void Episode(IList<MenuFlyoutItemBase> items, Track t, TrackMenu context)
@@ -246,10 +254,9 @@ internal static class Menus
 
     // "Available offline", ticked while it is (a track also through a pinned album or playlist,
     // which unticking it leaves pinned); the same plans that download may pin.
-    private static ToggleMenuFlyoutItem OfflineItem(string kind, string id, bool pinned)
+    private static MenuFlyoutItem OfflineItem(string kind, string id, bool pinned)
     {
-        var item = new ToggleMenuFlyoutItem { Text = Loc.S("Offline_Available"), Icon = Ui.Icon(Icons.Pinned), IsChecked = pinned };
-        item.Click += (_, _) => SetOffline(kind, id, item.IsChecked);
+        var item = CheckItem("Offline_Available", Icons.Pinned, pinned, on => SetOffline(kind, id, on));
         // Not again while its last pin or unpin is on the way.
         item.IsEnabled = !App.Offline.Busy(kind, id);
         return Disabled(item, !Session.CanDownload, "Menu_DownloadRequiresPremium");
@@ -287,6 +294,16 @@ internal static class Menus
     {
         var item = new MenuFlyoutItem { Text = Loc.S(key), Icon = glyph == null ? null : Ui.Icon(glyph) };
         item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    // An on/off item: a check after its text while on, and the state for screen readers. A
+    // ToggleMenuFlyoutItem would put a check column before the icon of every item in its menu.
+    public static MenuFlyoutItem CheckItem(string key, string glyph, bool on, Action<bool> toggled)
+    {
+        var item = Item(key, glyph, () => toggled(!on));
+        if (on) item.KeyboardAcceleratorTextOverride = "✓";
+        AutomationProperties.SetItemStatus(item, Loc.S(on ? "Menu_On" : "Menu_Off"));
         return item;
     }
 
@@ -374,7 +391,7 @@ internal static class Menus
         PlayRadio(Loc.S("Radio_ArtistHeader"), mix, new("artist_smartradio", artistId));
     }
 
-    // The engine's reason when it gave one, as for a mood.
+    // The engine's reason when it gave one, as for Flow.
     private static void PlayRadio(string title, TracksReply mix, ListenContext listen)
     {
         if (!Session.SignedIn) return;
@@ -384,7 +401,31 @@ internal static class Menus
             Toast.Error(Loc.S("Dialog_RadioFailTitle"), mix.Error.Length > 0 ? mix.Error : Loc.S("Dialog_RadioFailBody"));
             return;
         }
-        CollectionView.Open(OpenDeezer.Collection.Of(title, tracks, listen));
+        CollectionView.Open(PurpleDisc.Collection.Of(title, tracks, listen));
         Player.Play(tracks, 0, listen);
+    }
+
+    private static bool s_flowStarting;
+
+    // Flow, or one mood of it, fetched fresh and played from its first track; the engine keeps it
+    // going. While it is what plays (any Flow for Flow itself, that mood for a mood), a tap pauses
+    // or resumes it.
+    public static async void PlayFlow(string mood = "")
+    {
+        if (!Session.SignedIn || App.Offline.Mode || s_flowStarting) return;
+        var listen = mood.Length > 0 ? new ListenContext("dynamic_page_flow_config", mood) : new ListenContext("dynamic_page_user_radio", Session.Account.UserId);
+        bool playing = Player.Queue.Any(t => Player.ContextOf(t) is var c && (mood.Length > 0 ? c == listen : c.Type is "dynamic_page_user_radio" or "dynamic_page_flow_config"));
+        if (playing && Player.State is PlayState.Playing or PlayState.Paused or PlayState.Loading)
+        {
+            if (Player.State != PlayState.Loading) Player.TogglePlayPause();
+            return;
+        }
+        s_flowStarting = true;
+        TracksReply flow;
+        try { flow = await Task.Run(() => DeezerCore.Flow(mood)); }
+        finally { s_flowStarting = false; }
+        if (!Session.SignedIn) return;
+        if (flow.Tracks.Count > 0) Player.Play(flow.Tracks, 0, listen);
+        else Toast.Error(Loc.S("Dialog_RadioFailTitle"), flow.Error.Length > 0 ? flow.Error : Loc.S("Dialog_RadioFailBody"));
     }
 }

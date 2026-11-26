@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bump-version.sh — bump the OpenDeezer release number EVERYWHERE in one shot.
+# bump-version.sh — bump the Purple Disc release number EVERYWHERE in one shot.
 #
 #   scripts/bump-version.sh            # minor bump: 1.7.0 -> 1.8.0
 #   scripts/bump-version.sh patch      # 1.7.0 -> 1.7.1
@@ -62,34 +62,33 @@ sub gui/gnome/meson.build "s/version: '[0-9.]*'/version: '$NEW'/"
 sub gui/gnome/src/main.c -E -e "s/(adw_about_dialog_set_version\([^,]*, )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/" \
   -e "s/\"version\", \"[0-9]+\.[0-9]+\.[0-9]+\"/\"version\", \"$NEW\"/"
 for f in gui/gnome/po/*.po gui/gnome/po/*.pot; do
-  sub "$f" "s/Project-Id-Version: opendeezer-gnome [0-9.]*/Project-Id-Version: opendeezer-gnome $NEW/"
+  sub "$f" "s/Project-Id-Version: purpledisc-gnome [0-9.]*/Project-Id-Version: purpledisc-gnome $NEW/"
 done
 
 # ---- KDE ----
-sub gui/kde/src/mainwindow.cpp -E "s/OpenDeezer [0-9]+\.[0-9]+\.[0-9]+/OpenDeezer $NEW/g"
+sub gui/kde/src/mainwindow.cpp -E "s/Purple Disc for Deezer [0-9]+\.[0-9]+\.[0-9]+/Purple Disc for Deezer $NEW/g"
 
 # ---- Windows ----
 # <Version> in the csproj is the only source; the build stamps app.manifest from it.
-sub gui/windows/OpenDeezer.csproj "s|<Version>[0-9.]*</Version>|<Version>$NEW</Version>|"
+sub gui/windows/PurpleDisc.csproj "s|<Version>[0-9.]*</Version>|<Version>$NEW</Version>|"
 
 # ---- Android (phone + TV share the module) ----
 sub gui/android/app/build.gradle.kts "s/versionName = \"[0-9.]*\"/versionName = \"$NEW\"/"
 bumpnum gui/android/app/build.gradle.kts '(versionCode = )(\d+)'
 
-# ---- iOS (project.yml + the checked-in pbxproj) ----
+# ---- iOS (project.yml; the Xcode project is generated from it) ----
 sub gui/ios/project.yml "s/MARKETING_VERSION: \"[0-9.]*\"/MARKETING_VERSION: \"$NEW\"/"
 bumpnum gui/ios/project.yml '(CURRENT_PROJECT_VERSION: ")(\d+)'
-sub gui/ios/OpenDeezer.xcodeproj/project.pbxproj "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $NEW;/g"
-perl -0pi -e 's/(CURRENT_PROJECT_VERSION = )(\d+)(;)/$1 . ($2 + 1) . $3/ge' gui/ios/OpenDeezer.xcodeproj/project.pbxproj
-echo "  · gui/ios/OpenDeezer.xcodeproj/project.pbxproj"
 
 # ---- packaging manifests (checksums are filled at release time) ----
 sub packaging/aur/PKGBUILD "s/^pkgver=.*/pkgver=$NEW/"
 # The tag URL ends in "v<ver>.tar.gz" (a dot, not a trailing slash), so the old
 # "/v$CUR/" pattern never matched and the source URL froze a release behind.
 # Match the tag path value-agnostically instead.
-sub packaging/aur/.SRCINFO -e "s/pkgver = .*/pkgver = $NEW/" -e "s|/refs/tags/v[0-9.]*\.tar\.gz|/refs/tags/v$NEW.tar.gz|g" -e "s/opendeezer-[0-9.]*\.tar\.gz/opendeezer-$NEW.tar.gz/g"
-sub packaging/homebrew/opendeezer.rb -E "s/^(  version )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/"
+sub packaging/aur/.SRCINFO -e "s/pkgver = .*/pkgver = $NEW/" -e "s|/refs/tags/v[0-9.]*\.tar\.gz|/refs/tags/v$NEW.tar.gz|g" -e "s/purpledisc-[0-9.]*\.tar\.gz/purpledisc-$NEW.tar.gz/g"
+sub packaging/homebrew/purpledisc.rb -E "s/^(  version )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/"
+sub packaging/scoop/purpledisc.json -E -e "s/^(    \"version\": )\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$NEW\"/" -e "s|/v[0-9]+\.[0-9]+\.[0-9]+/|/v$NEW/|g"
+sub packaging/snap/snapcraft.yaml -E "s/^version: \"[0-9]+\.[0-9]+\.[0-9]+\"/version: \"$NEW\"/"
 for f in packaging/winget/*.yaml; do
   # PackageVersion + tag URLs only — ManifestVersion is the SCHEMA version.
   sub "$f" -e "s/^PackageVersion: .*/PackageVersion: $NEW/" -e "s|/v$CUR/|/v$NEW/|g" -e "s/ReleaseNotesUrl: \(.*\)v$CUR/ReleaseNotesUrl: \1v$NEW/"
@@ -103,7 +102,7 @@ echo
 echo "leftover occurrences of $CUR (excluding CHANGELOG/history — review manually):"
 grep -rn --exclude-dir=.git --exclude=CHANGELOG.md --exclude-dir=scripts -F "$CUR" \
   internal/version gui/macos/Info.plist gui/gnome/meson.build gui/gnome/po gui/kde/src/mainwindow.cpp \
-  gui/windows/OpenDeezer.csproj gui/android/app/build.gradle.kts gui/ios/project.yml \
+  gui/windows/PurpleDisc.csproj gui/android/app/build.gradle.kts gui/ios/project.yml \
   packaging 2>/dev/null || echo "  (none)"
 echo
 echo "done: $NEW — remember to add a CHANGELOG.md entry and run: go build ./..."

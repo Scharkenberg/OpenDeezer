@@ -1,6 +1,6 @@
 // The account's favorites, as Deezer's apps group them: playlists (with New playlist), albums,
 // artists and podcasts, each a tab of tiles with a search and a sort. Playlists also filter by
-// whose they are, when both kinds are there.
+// whose they are, when both kinds are there, and lead to Liked songs and Recently played.
 
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,7 @@ using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class PlaylistsView : View
 {
@@ -32,6 +32,7 @@ internal sealed class PlaylistsView : View
     private readonly Grid _controls = new();
     private readonly Grid _grids = new();
     private readonly Button _newPlaylist;
+    private readonly StackPanel _shortcuts;
     private readonly ScrollViewer _scroller;
     private readonly StateView _state;
 
@@ -57,9 +58,12 @@ internal sealed class PlaylistsView : View
         _artistControls.Changed += Render;
         _podcastControls.Changed += Render;
         _newPlaylist = Ui.Button(Loc.S("Btn_NewPlaylist"), Menus.NewPlaylist, Icons.Add);
+        _shortcuts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.S };
+        _shortcuts.Children.Add(Ui.Button(Loc.S("Nav_LikedSongs"), () => App.Navigator.Go<CollectionView>(Collection.Liked), Icons.Heart));
+        _shortcuts.Children.Add(Ui.Button(Loc.S("Nav_Recent"), () => App.Navigator.Go<RecentView>(), Icons.Recent));
         _state = new StateView(_grids, SkeletonShape.Tiles, inset: false);
         _tabs.Margin = Pad.Header;
-        _scroller = Ui.Page(Ui.PageTitle(Loc.S("Nav_Favorites"), _newPlaylist), _tabs, Ui.Stack(Space.S, _controls, _owners), _state.Root);
+        _scroller = Ui.Page(Ui.PageTitle(Loc.S("Nav_Favorites"), _newPlaylist), _tabs, Ui.Stack(Space.S, _shortcuts, _controls, _owners), _state.Root);
     }
 
     private Tab Selected => (Tab)Math.Max(0, _tabs.Items.IndexOf(_tabs.SelectedItem));
@@ -134,6 +138,7 @@ internal sealed class PlaylistsView : View
                 break;
         }
         if (tab != Tab.Playlists) _owners.Visibility = Visibility.Collapsed;
+        _shortcuts.Visibility = Ui.Show(tab == Tab.Playlists);
         _newPlaylist.IsEnabled = !App.Offline.Mode;
         if (shown > 0) _state.ShowContent();
         else if (tab == Tab.Playlists && Library.Playlists.Count == 0)

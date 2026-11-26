@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenDeezer</string>
+    <string name="app_name">Purple Disc</string>
 
     <string name="action_back">رجوع</string>
     <string name="action_close">إغلاق</string>
@@ -11,7 +11,6 @@
     <string name="action_ok">موافق</string>
     <string name="action_sign_out">تسجيل الخروج</string>
     <string name="action_play">تشغيل</string>
-    <string name="action_pause">إيقاف مؤقت</string>
     <string name="action_next">التالي</string>
     <string name="action_previous">السابق</string>
     <string name="action_play_all">تشغيل الكل</string>
@@ -19,6 +18,8 @@
     <string name="common_enable">تفعيل</string>
     <string name="common_off">إيقاف</string>
     <string name="unknown_title">غير معروف</string>
+    <string name="playing_elsewhere">قيد التشغيل في مشغّل آخر</string>
+    <string name="action_play_here">التشغيل هنا</string>
 
     <string name="cd_connect">اتصال</string>
     <string name="cd_like">إعجاب</string>
@@ -33,13 +34,12 @@
     <string name="cd_qr_code">رمز QR</string>
     <string name="cd_remote_qr">رمز QR للتحكم عن بُعد</string>
 
-    <string name="notif_channel_playback">التشغيل</string>
 
     <string name="login_error_empty_arl">ARL فارغ</string>
     <string name="login_error_failed">فشل تسجيل الدخول — تحقق من ARL والاتصال.</string>
     <string name="login_error_account">تعذّر تحميل الحساب.</string>
     <string name="login_error_secure_storage">تعذّر حفظ تسجيل دخولك بأمان. تحقّق من إعدادات أمان الجهاز وحاول مرة أخرى.</string>
-    <string name="login_error_secure_clear">تعذّر حذف بيانات تسجيل الدخول المحفوظة. لمنع تسجيل الدخول تلقائيًا بعد إعادة التشغيل، امسح بيانات تخزين OpenDeezer من إعدادات Android.</string>
+    <string name="login_error_secure_clear">تعذّر حذف بيانات تسجيل الدخول المحفوظة. لمنع تسجيل الدخول تلقائيًا بعد إعادة التشغيل، امسح بيانات تخزين Purple Disc من إعدادات Android.</string>
 
     <!-- No internet (retry reuses action_retry) -->
     <string name="no_internet_title">لا يوجد اتصال بالإنترنت</string>
@@ -53,7 +53,6 @@
     <string name="lyrics_title">كلمات الأغنية</string>
     <string name="charts_title">الأكثر رواجًا</string>
     <string name="search_title">البحث</string>
-    <string name="now_playing_title">قيد التشغيل</string>
     <string name="playlists_title">قوائم التشغيل الخاصة بي</string>
     <string name="podcasts_title">البودكاست</string>
     <string name="equalizer_title">موازن الصوت</string>
@@ -61,12 +60,10 @@
     <string name="greeting_morning">صباح الخير</string>
     <string name="greeting_afternoon">طاب يومك</string>
     <string name="greeting_evening">مساء الخير</string>
-    <string name="greeting_named">%1$s، %2$s</string>
     <string name="home_liked">الأغاني المفضلة</string>
     <string name="section_top_tracks">أبرز الأغاني</string>
     <string name="section_your_playlists">قوائم التشغيل الخاصة بك</string>
 
-    <string name="settings_audio_quality">جودة الصوت</string>
     <string name="quality_normal">عادية</string>
     <string name="quality_high">عالية</string>
     <string name="quality_desc_flac">FLAC · بلا فقدان</string>
@@ -83,22 +80,22 @@
     <string name="sleep_desc_off">لن يتوقف التشغيل تلقائيًا</string>
     <string name="sleep_desc_end">يتوقف عند انتهاء الأغنية الحالية</string>
     <string name="connect_reachable_title">اجعل هذا الجهاز قابلاً للوصول</string>
-    <string name="connect_reachable_sub">اسمح لتطبيقات OpenDeezer الأخرى بالعثور على هذا الجهاز والتحكم فيه</string>
+    <string name="connect_reachable_sub">اسمح لتطبيقات Purple Disc الأخرى بالعثور على هذا الجهاز والتحكم فيه</string>
     <string name="reachable_at">يمكن الوصول عبر %1$s</string>
     <string name="settings_phone_remote">تحكم عبر الهاتف</string>
     <string name="phone_remote_sub">تقديم صفحة تحكم عن بُعد على شبكة Wi-Fi المحلية</string>
     <string name="phone_remote_scan">امسح بهاتفك (نفس Wi-Fi)، ثم أدخل الرمز.</string>
     <string name="settings_about">حول</string>
+    <string name="about_credits">بواسطة Scharkenberg، مبني على OpenDeezer من Cycl0o0. مرخّص بموجب AGPL-3.0.</string>
     <string name="update_check_title">التحقق من التحديثات</string>
     <string name="update_checking">جارٍ التحقق…</string>
     <string name="update_check_sub">يتحقق من GitHub بحثًا عن إصدار أحدث</string>
     <string name="settings_account">الحساب</string>
     <string name="plan_label">الخطة: %1$s</string>
-    <string name="plan_free">مجاني</string>
     <string name="update_uptodate_title">أنت على أحدث إصدار</string>
     <string name="update_latest_generic">هذا هو أحدث إصدار.</string>
-    <string name="update_latest_named">OpenDeezer v%1$s هو أحدث إصدار.</string>
-    <string name="update_available_title">يتوفر OpenDeezer %1$s</string>
+    <string name="update_latest_named">Purple Disc v%1$s هو أحدث إصدار.</string>
+    <string name="update_available_title">يتوفر Purple Disc %1$s</string>
     <string name="update_available_generic">يتوفر إصدار جديد على GitHub.</string>
     <string name="update_failed_title">تعذّر التحقق من التحديثات</string>
     <string name="update_failed_body">تحقق من اتصالك وحاول مرة أخرى.</string>
@@ -130,13 +127,8 @@
 
     <string name="playlists_empty">ليس لديك قوائم تشغيل بعد.</string>
 
-    <string name="podcasts_search_hint">ابحث عن البرامج</string>
-    <string name="podcasts_empty_prompt">ابحث في بودكاست Deezer.</string>
     <string name="podcasts_no_results">لم يُعثر على برامج.</string>
 
-    <string name="premium_required">يلزم Premium</string>
-    <string name="premium_body_named">يتطلب البث عند الطلب خطة Deezer مدفوعة. حسابك (%1$s) على «%2$s».</string>
-    <string name="premium_body_anon">يتطلب البث عند الطلب خطة Deezer مدفوعة. حسابك على «%1$s».</string>
 
     <string name="search_hint">أغانٍ، ألبومات، فنانون، قوائم تشغيل</string>
     <string name="search_empty_prompt">ابحث في كتالوج Deezer.</string>
@@ -149,7 +141,7 @@
 
     <string name="tracklist_empty">لا شيء هنا بعد.</string>
 
-    <string name="section_related_artists">Related Artists</string>
+    <string name="section_related_artists">فنانون مشابهون</string>
     <string name="artist_load_error">Couldn\'t load this artist — check your connection.</string>
 
     <string name="update_release_notes">ملاحظات الإصدار</string>
@@ -157,8 +149,6 @@
     <string name="connect_this_device">هذا الجهاز</string>
     <string name="connect_no_devices">لم يُعثر على أجهزة في شبكتك.</string>
 
-    <string name="tv_premium_body">يتطلب بث OpenDeezer حساب Deezer Premium.</string>
-    <string name="tv_use_another_account">استخدم حسابًا آخر</string>
     <string name="nav_home">الرئيسية</string>
     <string name="nav_library">المكتبة</string>
 
@@ -185,7 +175,7 @@
     <string name="tv_high_hifi_needs_plan">يتطلب High/HiFi خطة Deezer HQ أو HiFi.</string>
     <string name="eq_custom_edited">مخصص — تم تعديل النطاقات يدويًا</string>
     <string name="eq_adjust_hint">اليسار/اليمين على نطاق بالأسفل يضبطه بمقدار 1 dB</string>
-    <string name="tv_connect_reachable_sub">اسمح لتطبيقات OpenDeezer الأخرى بالتحكم في هذا التلفزيون</string>
+    <string name="tv_connect_reachable_sub">اسمح لتطبيقات Purple Disc الأخرى بالتحكم في هذا التلفزيون</string>
     <string name="tv_phone_remote">تحكم عبر الهاتف</string>
     <string name="tv_phone_remote_sub">تقديم تحكم عبر المتصفح على شبكة Wi-Fi (امسح رمز QR)</string>
     <string name="tv_remote_scan">امسح بهاتفك (نفس Wi-Fi)، ثم أدخل الرمز:</string>
@@ -236,10 +226,8 @@
         <item quantity="other">يتوقف بعد %1$d دقيقة</item>
     </plurals>
     <!-- Downloads / preview / free account / ads -->
-    <string name="settings_downloads">التنزيلات</string>
     <string name="download_folder_title">مجلد التنزيل</string>
     <string name="download_folder_default">المجلد الافتراضي</string>
-    <string name="download_requires_premium">يتطلب خطة Deezer مدفوعة</string>
     <string name="download_started">جارٍ تنزيل %1$s…</string>
     <string name="download_saved">تم الحفظ في %1$s</string>
     <string name="download_saved_generic">تم تنزيل %1$s</string>
@@ -248,9 +236,8 @@
     <string name="favorite_update_failed">تعذّر تحديث الإعجاب — تحقّق من اتصالك.</string>
     <string name="preview_chip">معاينة</string>
     <string name="account_free_hint">حساب مجاني · جودة قياسية (128 kbps)</string>
-    <string name="settings_ads">الإبلاغ عن الاستماع</string>
     <string name="setting_disable_ads_title">لا تبلّغ عن استماعي</string>
-    <string name="setting_disable_ads_disclaimer">لا يعرض OpenDeezer أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك.</string>
+    <string name="setting_disable_ads_disclaimer">لا يعرض Purple Disc أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك.</string>
 
     <!-- v2.2 features (English placeholders) -->
     <string name="action_start_radio">Start radio</string>
@@ -264,13 +251,12 @@
     <string name="history_title">Recently played</string>
     <string name="history_empty">No listening history yet.</string>
     <string name="history_stats_section">Last 30 days</string>
-    <string name="history_top_artists">Top Artists</string>
+    <string name="history_top_artists">أكثر الفنانين استماعًا</string>
     <string name="history_total">%1$s listened</string>
     <string name="dur_hm">%1$dh %2$dm</string>
     <string name="dur_m">%1$dm</string>
     <string name="settings_stream_cache">Stream cache</string>
     <string name="stream_cache_mb">%1$d MB</string>
-    <string name="stream_cache_hint">Applies at next launch. 0 = off.</string>
     <plurals name="n_plays">
         <item quantity="zero">%1$d مرة تشغيل</item>
         <item quantity="one">%1$d مرة تشغيل</item>
@@ -283,15 +269,83 @@
     <string name="action_play_next">تشغيل التالي</string>
     <string name="action_add_to_queue">إضافة إلى قائمة الانتظار</string>
     <string name="action_clear_queue">مسح قائمة الانتظار</string>
-    <string name="action_download_offline">تنزيل للاستماع دون اتصال</string>
     <string name="action_remove">إزالة</string>
     <string name="cd_downloaded">تم التنزيل</string>
     <string name="cd_reorder">إعادة الترتيب</string>
-    <string name="offline_ready">%1$s متاح دون اتصال</string>
-    <string name="device_self_phone">OpenDeezer (Android)</string>
-    <string name="device_self_tv">OpenDeezer (Android TV)</string>
-    <string name="settings_connect">OpenDeezer Connect</string>
-    <string name="update_notes_title">OpenDeezer %1$s</string>
     <string name="settings_material_you">Material You</string>
     <string name="settings_material_you_hint">طابق ألوان نظامك</string>
+    <string name="load_failed">تعذّر تحميل هذه الصفحة.</string>
+    <string name="lyrics_translation">الترجمة</string>
+    <string name="playback_failed">تعذّر تشغيل هذا المقطع.</string>
+    <string name="playback_skipping">جارٍ الانتقال إلى المقطع التالي</string>
+    <string name="playback_stopped">تعذّر تشغيل عدة أغانٍ متتالية. توقف التشغيل</string>
+    <string name="radio_failed">لا يتوفر لدى Deezer راديو لهذا. جرّب أغنية أو فنانًا آخر</string>
+    <string name="connect_failed">تعذّر الاتصال</string>
+    <string name="session_expired">انتهت صلاحية جلستك. سجّل الدخول مرة أخرى.</string>
+    <string name="queue_next_up">التالي</string>
+    <string name="menu_like">إعجاب</string>
+    <string name="menu_unlike">إلغاء الإعجاب</string>
+    <string name="menu_add_to_playlist">إضافة إلى قائمة تشغيل</string>
+    <string name="menu_new_playlist">قائمة تشغيل جديدة</string>
+    <string name="menu_remove_from_playlist">إزالة من قائمة التشغيل هذه</string>
+    <string name="menu_go_to_artist">الانتقال إلى الفنان</string>
+    <string name="ban_track">عدم اقتراح هذا المقطع</string>
+    <string name="ban_artist">عدم اقتراح هذا الفنان</string>
+    <string name="ban_done">حسنًا. لن نقترح هذا المقطع مرة أخرى</string>
+    <string name="offline_keep">متاح بلا اتصال</string>
+    <string name="offline_remove">إزالة من وضع عدم الاتصال</string>
+    <string name="queue_remove">إزالة من قائمة الانتظار</string>
+    <string name="queue_move_up">نقل لأعلى</string>
+    <string name="queue_move_down">نقل لأسفل</string>
+    <string name="queue_left">متبقٍ %1$s</string>
+    <string name="menu_add_favorite">إضافة إلى المفضلة</string>
+    <string name="menu_remove_favorite">إزالة من المفضلة</string>
+    <string name="btn_shuffle">تشغيل عشوائي</string>
+    <string name="dialog_new_playlist">قائمة تشغيل جديدة</string>
+    <string name="playlist_title_label">العنوان</string>
+    <string name="dialog_delete_playlist">حذف قائمة التشغيل</string>
+    <string name="dialog_delete_playlist_body">هل تريد حذف ‏«%1$s»؟ لا يمكن التراجع عن ذلك.</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_save">حفظ</string>
+    <string name="episode_mark_played">وضع علامة: تم التشغيل</string>
+    <string name="episode_mark_unplayed">وضع علامة: لم يُشغَّل</string>
+    <string name="section_recently_played">تم تشغيلها مؤخرًا</string>
+    <string name="action_show_all">عرض الكل</string>
+    <string name="menu_share">مشاركة</string>
+    <string name="action_rename">إعادة التسمية</string>
+    <string name="library_downloaded">تم التنزيل</string>
+    <string name="action_create">إنشاء</string>
+    <string name="filter_all">الكل</string>
+    <string name="search_top_result">أفضل نتيجة</string>
+    <string name="search_clear_recent">مسح عمليات البحث الأخيرة</string>
+    <string name="settings_explicit">المحتوى الصريح</string>
+    <string name="explicit_display">إظهار المحتوى الصريح</string>
+    <string name="explicit_no_recommendation">عدم اقتراح المحتوى الصريح</string>
+    <string name="explicit_hide">إخفاء المحتوى الصريح</string>
+    <string name="settings_clear_cache">مسح ذاكرة التخزين المؤقت</string>
+    <string name="cache_used">المستخدم %1$s</string>
+    <string name="cache_used_offline">المستخدم %1$s، دون اتصال %2$s</string>
+    <string name="settings_single_device">مشغّل واحد في كل مرة</string>
+    <string name="single_device_on">يتوقف مؤقتًا عندما يبدأ مشغّل آخر على حسابك؛ والتشغيل هنا يوقف المشغّلات الأخرى مؤقتًا</string>
+    <string name="single_device_off">يعمل بالتزامن مع المشغّلات الأخرى على حسابك</string>
+    <string name="offline_mode">وضع عدم الاتصال</string>
+    <string name="offline_mode_hint">شغّل ما هو محفوظ على هذا الجهاز فقط، دون اتصال بالشبكة.</string>
+    <string name="offline_empty">تظهر هنا الألبومات وقوائم التشغيل والمقاطع التي تجعلها متاحة بلا اتصال.</string>
+    <string name="offline_progress">%1$s من %2$s</string>
+    <string name="cd_speed">سرعة التشغيل</string>
+    <string name="sleep_turn_off">إيقاف</string>
+    <string name="settings_group_playback">التشغيل</string>
+    <string name="settings_group_app">التطبيق</string>
+    <string name="settings_group_storage">التخزين</string>
+    <string name="quality_hifi">HiFi (FLAC)</string>
+    <string name="track_unavailable">غير متاح على Deezer</string>
+    <string name="filter_by_you">من إنشائك</string>
+    <string name="filter_by_others">من آخرين</string>
+    <string name="sort_added">المضافة مؤخرًا</string>
+    <string name="sort_title_az">العنوان أ–ي</string>
+    <string name="list_search">البحث في هذه القائمة</string>
+    <string name="list_no_match">لا شيء يطابق بحثك.</string>
+    <string name="menu_go_to_album">الانتقال إلى الألبوم</string>
+    <string name="charts_all_genres">كل الأنواع</string>
 </resources>

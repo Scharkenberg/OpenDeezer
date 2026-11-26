@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -211,29 +211,18 @@ func clamp01(v float64) float64 {
 // remoteEntryView is the connect screen (address input).
 func (m *Model) remoteEntryView(rows int) string {
 	lines := []string{
-		"📡 " + i18n.T("Remote control") + " — " + i18n.T("drive another OpenDeezer client"),
+		" " + i18n.T("Peer address (host or host:port, default port 7654):"),
+		"   " + m.search.View(),
 		"",
-		i18n.T("Peer address (host or host:port, default port 7654):"),
-		"  " + m.search.View(),
-		"",
-		i18n.T("The peer must have its control API enabled (OPENDEEZER_CONTROL=:7654),"),
-		i18n.T("and be on the same Deezer account (or share a token)."),
-		"",
-		i18n.T("enter connect · esc cancel"),
-	}
-	if m.status != "" {
-		lines = append(lines, "", m.status)
+		" " + i18n.T("The peer must have its control API enabled (PURPLEDISC_CONTROL=:7654),"),
+		" " + i18n.T("and be on the same Deezer account (or share a token)."),
 	}
 	return padTo(lines, rows)
 }
 
-// remoteCtlView shows the connected peer's playback + remote key hints.
+// remoteCtlView shows the connected peer's playback.
 func (m *Model) remoteCtlView(rows int) string {
 	st := m.remoteState
-	name := m.remoteName
-	if name == "" {
-		name = m.remoteAddr
-	}
 	track := "—"
 	if st.Track != nil {
 		track = st.Track.Title
@@ -251,25 +240,17 @@ func (m *Model) remoteCtlView(rows int) string {
 	}
 	device := deviceTypeLabel(m.remoteClient)
 	if m.remoteVersion != "" {
-		device += " · OpenDeezer v" + m.remoteVersion
+		device += " · Purple Disc v" + m.remoteVersion
 	}
-	lines := []string{
-		"📡 " + i18n.Tf("Connected to %s", name) + "  (" + m.remoteAddr + ")",
-		i18n.T("Device") + ": " + device,
-		"",
-		i18n.T("State") + ":  " + i18n.T(state),
-		i18n.T("Track") + ":  " + track,
-		i18n.T("Time") + ":   " + fmtMS(st.PositionMS) + " / " + fmtMS(st.DurationMS),
-		i18n.T("Volume") + ": " + strconv.Itoa(int(st.Volume*100+0.5)) + "%" +
-			"   " + i18n.T("Repeat") + ": " + i18n.T(repeat) + "   " + i18n.T("Shuffle") + ": " + boolLabel(st.Shuffle),
-		"",
-		i18n.T("space play/pause · n next · p prev · s stop · ←/→ seek ±10s · +/- volume"),
-		i18n.T("r repeat · z shuffle · esc disconnect (peer keeps playing) · S stop & disconnect"),
-	}
-	if m.status != "" {
-		lines = append(lines, "", m.status)
-	}
-	return padTo(lines, rows)
+	return padTo(pairs([][2]string{
+		{i18n.T("Device"), device + " · " + m.remoteAddr},
+		{i18n.T("State"), i18n.T(state)},
+		{i18n.T("Track"), track},
+		{i18n.T("Time"), fmtMS(st.PositionMS) + " / " + fmtMS(st.DurationMS)},
+		{i18n.T("Volume"), strconv.Itoa(int(st.Volume*100+0.5)) + "%"},
+		{i18n.T("Repeat"), i18n.T(repeat)},
+		{i18n.T("Shuffle"), boolLabel(st.Shuffle)},
+	}), rows)
 }
 
 func boolLabel(b bool) string {

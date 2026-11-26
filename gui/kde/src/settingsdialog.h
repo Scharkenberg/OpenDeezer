@@ -1,7 +1,7 @@
-// OpenDeezer — Settings dialog.
+// Purple Disc — Settings dialog.
 //
 // A small modal QDialog persisting to the app config dir alongside arl.txt
-// (~/.config/opendeezer/settings.ini) via QSettings(IniFormat). Two settings:
+// (~/.config/purpledisc/settings.ini) via QSettings(IniFormat). Two settings:
 //   * audio quality — Normal (MP3_128) / High (MP3_320) -> DZSetQuality
 //   * close-to-tray  — keep the engine playing in the background on window close
 // The dialog only edits + persists values; it emits the two signals below on
@@ -45,7 +45,7 @@ struct AudioDevice {
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
-    // iniPath  = absolute path to ~/.config/opendeezer/settings.ini.
+    // iniPath  = absolute path to ~/.config/purpledisc/settings.ini.
     // devices  = current output devices (from DZAudioDevicesJSON).
     // currentDeviceId = the engine's selected device (DZCurrentAudioDevice).
     // premium  = MainWindow's m_premium; the "Disable ads" row is shown only when

@@ -1,4 +1,4 @@
-// Package discovery finds OpenDeezer instances on the LAN (Connect): each instance with
+// Package discovery finds Purple Disc instances on the LAN (Connect): each instance with
 // the control API answers a UDP probe (multicast 239.255.42.99:7655, broadcast fallback)
 // with its name, client and version, only to private sources, never the user id.
 package discovery
@@ -20,20 +20,20 @@ const (
 	// Port is the UDP port the responder listens on.
 	Port = 7655
 
-	probeMagic = "OPENDEEZER_DISCOVER_v1"
-	replyMagic = "OPENDEEZER_DEVICE_v1"
+	probeMagic = "PURPLEDISC_DISCOVER_v1"
+	replyMagic = "PURPLEDISC_DEVICE_v1"
 	maxPacket  = 512
 )
 
 // groupIP is the admin-scoped IPv4 multicast group used for probes.
 var groupIP = net.IPv4(239, 255, 42, 99)
 
-// Device is a discovered OpenDeezer instance.
+// Device is a discovered Purple Disc instance.
 type Device struct {
 	Name    string `json:"name"`    // account display name (not the user id)
 	Addr    string `json:"addr"`    // control API host:port
 	Client  string `json:"client"`  // client/platform id (tui, macos, …)
-	Version string `json:"version"` // OpenDeezer version
+	Version string `json:"version"` // PurpleDisc version
 }
 
 // Info is the advertised identity (read per request, so re-login is reflected).
@@ -69,7 +69,7 @@ type Responder struct {
 var bindHost = ""
 
 // listenPort is the UDP port the responder binds: Port. Tests use a free
-// port the OS picked, so a running OpenDeezer does not answer them.
+// port the OS picked, so a running Purple Disc does not answer them.
 var listenPort = Port
 
 // Advertise starts the discovery responder on UDP :Port (reuse-port, so several
@@ -219,7 +219,11 @@ func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Dev
 		}
 	}()
 
-	locals := localIPs()
+	// Our own addresses matter only for skipping our own responder.
+	var locals map[string]bool
+	if selfPort != 0 {
+		locals = localIPs()
+	}
 	seen := map[string]bool{}
 	var out []Device
 	buf := make([]byte, maxPacket)
@@ -255,6 +259,19 @@ func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Dev
 }
 
 func sendProbes(conn *net.UDPConn, probe []byte, group *net.UDPAddr, staticPeers []string) {
+	// Static peers first: listing the interfaces below can take most of a short timeout on
+	// a machine with many virtual adapters.
+	for _, peer := range staticPeers {
+		host, _, err := net.SplitHostPort(peer)
+		if err != nil {
+			host = peer
+		}
+		addrStr := net.JoinHostPort(host, strconv.Itoa(Port))
+		if udpAddr, err := net.ResolveUDPAddr("udp4", addrStr); err == nil {
+			_, _ = conn.WriteToUDP(probe, udpAddr)
+		}
+	}
+
 	p := ipv4.NewPacketConn(conn)
 	_ = p.SetMulticastTTL(4)
 
@@ -274,18 +291,6 @@ func sendProbes(conn *net.UDPConn, probe []byte, group *net.UDPAddr, staticPeers
 		_, _ = conn.WriteToUDP(probe, &net.UDPAddr{IP: bc, Port: Port})
 	}
 	_, _ = conn.WriteToUDP(probe, &net.UDPAddr{IP: net.IPv4bcast, Port: Port})
-
-	// Unicast static peers in parallel
-	for _, peer := range staticPeers {
-		host, _, err := net.SplitHostPort(peer)
-		if err != nil {
-			host = peer
-		}
-		addrStr := net.JoinHostPort(host, strconv.Itoa(Port))
-		if udpAddr, err := net.ResolveUDPAddr("udp4", addrStr); err == nil {
-			_, _ = conn.WriteToUDP(probe, udpAddr)
-		}
-	}
 }
 
 var getLocalIPsList = func() []string {

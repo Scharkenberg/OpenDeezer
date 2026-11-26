@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache/mctest"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache/mctest"
 )
 
 // fakeDeezer answers the gateway, the REST API, get_url, the CDN and the
@@ -52,6 +52,7 @@ type fakeDeezer struct {
 	listErr  atomic.Bool  // playlist.getSongs answers a gateway error
 	unlisted atomic.Int32 // tracks a listing declares in its total but leaves out
 	delay    time.Duration
+	onTrack  func() // runs as song.getData is answered, under no lock; nil for none
 }
 
 func bodyOf(id string) []byte { return []byte(strings.Repeat("body of "+id+";", 300)) }
@@ -142,7 +143,11 @@ func newFakeDeezer(t *testing.T) *fakeDeezer {
 				fd.mu.Lock()
 				gone := fd.gone[id.String()]
 				fb := fd.fallback[id.String()]
+				onTrack := fd.onTrack
 				fd.mu.Unlock()
+				if onTrack != nil {
+					onTrack()
+				}
 				if gone {
 					write(w, map[string]any{"error": map[string]any{"DATA_ERROR": "song not found"}, "results": map[string]any{}})
 					return
@@ -572,6 +577,41 @@ func countSaves(t *testing.T, failAfter int32) *atomic.Int32 {
 	}
 	t.Cleanup(func() { writeOffline = orig })
 	return &n
+}
+
+// A full clear waits for the fetches it stops: one whose track request was under way
+// when the clear began records no track after the wipe.
+func TestClearCacheWaitsForStoppedFetches(t *testing.T) {
+	fd := offlineEngine(t, "1001")
+	fd.setPlaylist("9", "101")
+	var once sync.Once
+	entered, release := make(chan struct{}), make(chan struct{})
+	fd.mu.Lock()
+	fd.onTrack = func() {
+		once.Do(func() { close(entered) })
+		<-release
+	}
+	fd.mu.Unlock()
+	pinned := make(chan error, 1)
+	go func() { pinned <- PinOffline("playlist", "9") }()
+	<-entered
+	cleared := make(chan error, 1)
+	go func() { cleared <- ClearCache(true) }()
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	if err := <-pinned; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-cleared; err != nil {
+		t.Fatal(err)
+	}
+	waitJobsDone(t)
+	offMu.Lock()
+	n := len(offlineLocked().Tracks)
+	offMu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d tracks recorded after a full clear, want 0", n)
+	}
 }
 
 // A 50-track playlist pin writes offline.json twice: at the pin and at the

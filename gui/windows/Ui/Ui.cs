@@ -12,7 +12,7 @@ using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal enum TextKind { PageTitle, HeroTitle, SectionTitle, Strong, Body, Caption, SecondaryBody, SecondaryCaption, TertiaryCaption }
 
@@ -103,16 +103,31 @@ internal static class Ui
         return e;
     }
 
-    public static Button IconButton(string glyph, string nameKey, Action? onClick, IconSize size = IconSize.Normal, double side = Size.IconButton)
+    // `turn`: the glyph turns once around on a click (the settings gear); `nudge`: pixels it moves
+    // toward its direction and back (next, previous).
+    public static Button IconButton(string glyph, string nameKey, Action? onClick, IconSize size = IconSize.Normal, double side = Size.IconButton,
+        bool turn = false, float nudge = 0)
     {
         var b = Square(new Button { Content = Icon(glyph, size), Style = Styles.IconButton }, side);
         Name(b, Loc.S(nameKey));
+        Motion.Press(b);
+        if (turn) b.Click += (_, _) => Motion.Turn((UIElement)b.Content);
+        if (nudge != 0) b.Click += (_, _) => Motion.Nudge((UIElement)b.Content, nudge);
         if (onClick != null) b.Click += (_, _) => onClick();
         return b;
     }
 
-    // A track's heart; ShowLiked fills it in the accent color.
-    public static Button LikeButton(double size, Action onClick) => IconButton(Icons.Heart, "Menu_Like", onClick, side: size);
+    // A track's heart; ShowLiked fills it in the accent color. A like (not an unlike) pops it.
+    public static Button LikeButton(double size, Action onClick)
+    {
+        Button? like = null;
+        like = IconButton(Icons.Heart, "Menu_Like", () =>
+        {
+            if (((FontIcon)like!.Content).Glyph == Icons.Heart) Motion.Like(like);
+            onClick();
+        }, side: size);
+        return like;
+    }
 
     public static void ShowLiked(Button like, bool liked)
     {
@@ -127,22 +142,29 @@ internal static class Ui
     {
         var b = Square(new Button { Content = content, Style = Styles.Play }, Size.PlayButton);
         b.CornerRadius = new CornerRadius(Size.PlayButton / 2);
+        Motion.Press(b);
         return b;
     }
 
-    public static ToggleButton IconToggle(string glyph, string nameKey, Action<bool>? onToggle)
+    // `turn`: the glyph turns once around when the user toggles it (not when the app sets it quietly).
+    public static ToggleButton IconToggle(string glyph, string nameKey, Action<bool>? onToggle, bool turn = false)
     {
         var b = Square(new ToggleButton { Content = Icon(glyph), Style = Styles.IconToggle }, Size.IconButton);
         Name(b, Loc.S(nameKey));
+        Motion.Press(b);
         // Checked and Unchecked also fire for screen readers' Toggle, which raises no Click.
         if (onToggle == null) return b;
         b.Checked += (_, _) =>
         {
-            if (!s_quiet.Contains(b)) onToggle(true);
+            if (s_quiet.Contains(b)) return;
+            if (turn) Motion.Turn((UIElement)b.Content);
+            onToggle(true);
         };
         b.Unchecked += (_, _) =>
         {
-            if (!s_quiet.Contains(b)) onToggle(false);
+            if (s_quiet.Contains(b)) return;
+            if (turn) Motion.Turn((UIElement)b.Content);
+            onToggle(false);
         };
         return b;
     }
@@ -387,7 +409,11 @@ internal static class Ui
         double floor = c.MinWidth;
         void Fit()
         {
-            var probe = new TextBlock { FontSize = c.FontSize, FontFamily = c.FontFamily };
+            // The combo draws in the app's font once it is in the tree; its own FontFamily is the
+            // system default until then.
+            // Not a cast: the Native AOT build does not hand the resource back as a FontFamily
+            // (InvalidCastException at startup); the combo's own font stands in.
+            var probe = new TextBlock { FontSize = c.FontSize, FontFamily = Application.Current.Resources["ContentControlThemeFontFamily"] as FontFamily ?? c.FontFamily };
             double widest = 0;
             foreach (var item in c.Items)
             {
@@ -483,16 +509,8 @@ internal static class Ui
         root.Changed += (r, _) => Scale = r.RasterizationScale;
     }
 
-    // The app's logo, decoded from the large PNG at the size shown.
-    public static Image Logo(double size) => Square(new Image
-    {
-        Source = new BitmapImage
-        {
-            DecodePixelType = DecodePixelType.Physical,
-            DecodePixelWidth = Pixels(size),
-            UriSource = new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "opendeezer.png")),
-        },
-    }, size);
+    // The app's mark, drawn at the size shown.
+    public static LogoMark Logo(double size) => new(size);
 
     // Decoded in physical pixels at the shown size: a picture drawn through a brush (art tiles,
     // PersonPicture) gets no display scale at decode time, so a logical size would blur above 100 %.
@@ -546,15 +564,28 @@ internal static class Ui
     private static int Pixels(double size) => (int)Math.Ceiling(size * Scale);
 
     // Deezer's CDN serves an image at any of its sizes ("/250x250-"): ask for the smallest that
-    // covers the decode size, up or down from the size in the URL.
-    private static readonly System.Text.RegularExpressions.Regex s_cdnSize = new(@"/\d+x\d+-", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    private static string SizedArt(string url, int pixels)
+    // covers the decode size, up or down from the size in the URL (its first "/<digits>x<digits>-").
+    internal static string SizedArt(string url, int pixels)
     {
         if (!url.Contains("dzcdn.net/images/", StringComparison.Ordinal)) return url;
         int side = Array.Find(Size.CdnArt, s => s >= pixels);
         if (side == 0) side = Size.CdnArt[^1];
-        return s_cdnSize.Replace(url, $"/{side}x{side}-", 1);
+        for (int slash = url.IndexOf('/'); slash >= 0; slash = url.IndexOf('/', slash + 1))
+        {
+            int w = Digits(url, slash + 1), x = slash + 1 + w;
+            if (w == 0 || x >= url.Length || url[x] != 'x') continue;
+            int h = Digits(url, x + 1), dash = x + 1 + h;
+            if (h == 0 || dash >= url.Length || url[dash] != '-') continue;
+            return string.Concat(url.AsSpan(0, slash), $"/{side}x{side}", url.AsSpan(dash));
+        }
+        return url;
+    }
+
+    private static int Digits(string s, int from)
+    {
+        int n = 0;
+        while (from + n < s.Length && char.IsAsciiDigit(s[from + n])) n++;
+        return n;
     }
 
     public static void Fades(UIElement e, int ms) => e.OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(ms) };
@@ -617,27 +648,44 @@ internal enum ArtShape { Small, Large, Circle }
 // pictures Ui.Bitmap keeps.
 internal sealed class Art
 {
+    // Art that grows while it shows a picture keeps it; the sharper ones load once no art has
+    // changed size for Timing.ArtRestMs (a window, pane or grip being dragged), each over the one
+    // shown until it is decoded.
+    private static readonly HashSet<Art> s_grown = new();
+    private static Microsoft.UI.Dispatching.DispatcherQueueTimer? s_rest;
+
     private readonly ImageBrush _brush = new() { Stretch = Stretch.UniformToFill };
     private readonly PersonPicture? _person;
     private readonly Grid _box;
     private readonly bool _reuse;
-    private double _decode;
-    private string _key = "", _url = "", _name = "";
+    private readonly string _style = "";
+    private double _decode, _wanted;
+    private string _key = "", _url = "";
 
     public FrameworkElement Root { get; }
 
     public Art(ArtShape shape, double size = double.NaN, bool reuse = false)
     {
         _reuse = reuse;
-        _decode = double.IsNaN(size) ? Size.Tile : size;
+        _decode = _wanted = double.IsNaN(size) ? Size.Tile : size;
         _box = new Grid { Width = size, Height = size };
         if (double.IsNaN(size))
             _box.SizeChanged += (_, e) =>
             {
                 double widest = Math.Ceiling(e.NewSize.Width / Size.TileDecodeStep) * Size.TileDecodeStep;
-                if (widest <= _decode) return;
-                _decode = widest;
-                Set(_url, _name);
+                if (widest > _wanted)
+                {
+                    _wanted = widest;
+                    // Art that shows no picture yet (laid out for the first time) gets its size at once.
+                    if (!Showing)
+                    {
+                        Sharpen();
+                        return;
+                    }
+                    s_grown.Add(this);
+                }
+                // While any art still changes size, the grown ones wait on.
+                if (s_grown.Count > 0) Rest();
             };
         if (shape == ArtShape.Circle)
         {
@@ -647,11 +695,72 @@ internal sealed class Art
         }
         else
         {
-            string style = shape == ArtShape.Small ? "SmallArtBorder" : "ArtBorder";
-            _box.Children.Add(new Border { Style = Ui.Styles.Get(style) });
-            _box.Children.Add(new Border { Style = Ui.Styles.Get(style), Background = _brush });
+            _style = shape == ArtShape.Small ? "SmallArtBorder" : "ArtBorder";
+            _box.Children.Add(new Border { Style = Ui.Styles.Get(_style) });
+            _box.Children.Add(new Border { Style = Ui.Styles.Get(_style), Background = _brush });
         }
         Root = double.IsNaN(size) ? new ConstrainedBox { AspectRatio = 1.0, Content = _box } : _box;
+    }
+
+    private static void Rest()
+    {
+        if (s_rest == null)
+        {
+            s_rest = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
+            s_rest.Interval = TimeSpan.FromMilliseconds(Timing.ArtRestMs);
+            s_rest.IsRepeating = false;
+            s_rest.Tick += (_, _) =>
+            {
+                var grown = new List<Art>(s_grown);
+                s_grown.Clear();
+                foreach (var a in grown) a.Sharpen();
+            };
+        }
+        s_rest.Stop();
+        s_rest.Start();
+    }
+
+    // The picture again at the decode size the art has grown to; a new one decodes over the one shown.
+    private void Sharpen()
+    {
+        if (_wanted <= _decode) return;
+        _decode = _wanted;
+        string key = Ui.ArtKey(_url, _decode);
+        if (_url.Length == 0 || key == _key) return;
+        _key = key;
+        var image = Ui.Bitmap(_url, _decode, _reuse);
+        if (image == null) return;
+        // Straight in when it is decoded already, or when nothing decoded is shown to keep.
+        if (_person != null || image.PixelWidth > 0 || !Showing)
+        {
+            Show(image);
+            return;
+        }
+        var layer = new Border { Style = Ui.Styles.Get(_style), Background = new ImageBrush { Stretch = Stretch.UniformToFill, ImageSource = image } };
+        _box.Children.Add(layer);
+        RoutedEventHandler? opened = null;
+        ExceptionRoutedEventHandler? failed = null;
+        void Done(bool ok)
+        {
+            image.ImageOpened -= opened;
+            image.ImageFailed -= failed;
+            _box.Children.Remove(layer);
+            // Not when the art shows another item by now.
+            if (ok && _key == key) _brush.ImageSource = image;
+        }
+        opened = (_, _) => Done(true);
+        failed = (_, _) => Done(false);
+        image.ImageOpened += opened;
+        image.ImageFailed += failed;
+    }
+
+    // A decoded picture is on screen.
+    private bool Showing => (_person != null ? _person.ProfilePicture : _brush.ImageSource) is BitmapImage { PixelWidth: > 0 };
+
+    private void Show(BitmapImage? image)
+    {
+        if (_person != null) _person.ProfilePicture = image;
+        else _brush.ImageSource = image;
     }
 
     public void Resize(double size)
@@ -664,13 +773,13 @@ internal sealed class Art
     {
         if (_person != null && _person.DisplayName != name) _person.DisplayName = name;
         _url = url;
-        _name = name;
+        // A new item decodes at the size the art has: no smaller picture first.
+        _decode = Math.Max(_decode, _wanted);
+        s_grown.Remove(this);
         // Two URLs that ask the CDN for the same picture at the same size load it once.
         string key = Ui.ArtKey(url, _decode);
         if (key == _key) return;
         _key = key;
-        var image = url.Length == 0 ? null : Ui.Bitmap(url, _decode, _reuse);
-        if (_person != null) _person.ProfilePicture = image;
-        else _brush.ImageSource = image;
+        Show(url.Length == 0 ? null : Ui.Bitmap(url, _decode, _reuse));
     }
 }

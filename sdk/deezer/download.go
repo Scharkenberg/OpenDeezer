@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	internaldeezer "github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	internaldeezer "github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // ---- download errors ----

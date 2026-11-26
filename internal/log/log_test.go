@@ -64,7 +64,7 @@ func TestLevelOffSilencesAll(t *testing.T) {
 	}
 }
 
-// The log file moves to opendeezer.log.old once it passes 512 KB.
+// The log file moves to purpledisc.log.old once it passes 512 KB.
 func TestLogFileRolls(t *testing.T) {
 	dir := t.TempDir()
 	if err := OpenFile(dir); err != nil {
@@ -80,11 +80,11 @@ func TestLogFileRolls(t *testing.T) {
 	for range 600 { // ~600 KB
 		Info("%s", line)
 	}
-	old, err := os.Stat(filepath.Join(dir, "opendeezer.log.old"))
+	old, err := os.Stat(filepath.Join(dir, "purpledisc.log.old"))
 	if err != nil {
 		t.Fatalf("no rolled log: %v", err)
 	}
-	cur, err := os.Stat(filepath.Join(dir, "opendeezer.log"))
+	cur, err := os.Stat(filepath.Join(dir, "purpledisc.log"))
 	if err != nil {
 		t.Fatal(err)
 	}

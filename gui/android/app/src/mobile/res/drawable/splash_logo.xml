@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The purple circle of assets/icon.svg, alone: the system splash (Android 12+) shows it, and the
+     app's first screen draws the mark in on it (LogoMark, the same size and place). The system
+     starts an animated splash icon while it still opens the window, so a draw-in here is over
+     before it can be seen. The circle is drawn here, not by the system (some vendors draw the
+     splash icon background unclipped, as a square). The 120-unit mark sits in a 180-unit box: the
+     circle stays inside the safe circle (two thirds) of a splash icon without background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="180"
+    android:viewportHeight="180">
+    <path
+        android:pathData="M36,90a54,54 0,1 0,108 0a54,54 0,1 0,-108 0"
+        android:fillColor="@color/mark" />
+</vector>

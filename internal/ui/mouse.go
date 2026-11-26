@@ -1,26 +1,15 @@
 package ui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-)
-
-// Fixed geometry of the bubbles list as configured in newBrowseList: the title
-// bar renders one title line plus one padding row (default TitleBar style), and
-// the default delegate draws two lines per item with one blank spacing row.
-const (
-	listHeaderRows = 2
-	listItemHeight = 2
-	listItemStride = listItemHeight + 1 // item + spacing
 )
 
 // handleMouse: the wheel scrolls the current screen, a left click selects the row (a
-// click on the selected row activates it), a click on the progress bar seeks. Other
-// clicks are ignored.
+// click on the selected row activates it), a click on a header view opens it, a click
+// in the side panel opens Now Playing, a click on the progress bar seeks. Other clicks
+// are ignored.
 func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.screen == screenNoInternet { // full-screen view, no footer/list geometry
+	if m.screen == screenNoInternet || m.screen == screenLoading { // splash, no frame
 		return m, nil
 	}
 	m.plConfirm = false // a pending delete is canceled by any mouse action
@@ -67,60 +56,68 @@ func (m *Model) handleWheel(up bool) (tea.Model, tea.Cmd) {
 			} else {
 				m.list.CursorDown()
 			}
+			m.skipSections(!up)
 		}
 	}
 	return m, nil
 }
 
-// handleClick dispatches a left click: progress-bar seek first, then row
-// selection on list-like screens.
+// handleClick dispatches a left click by the frame's layout: the header's views, the
+// progress bar, the side panel, then the body's rows under the column header.
 func (m *Model) handleClick(x, y int) (tea.Model, tea.Cmd) {
-	if y == m.barY {
-		return m, m.clickSeek(x)
+	l := m.layout()
+	switch {
+	case y == 0:
+		return m.clickView(l, x)
+	case y == l.bar:
+		if ms, ok := l.seekAt(x, m.player.DurationMS()); ok {
+			return m, m.seekCmd(ms)
+		}
+		return m, nil
+	case y < l.top || y >= l.top+l.rows:
+		return m, nil
+	case l.panel > 0 && x > l.main:
+		m.toggleScreen(screenNowPlaying)
+		return m, nil
 	}
-	if m.onListScreen() {
-		return m.clickList(y)
-	}
-	if m.screen == screenQueue {
-		return m.clickQueue(y)
+	r := y - l.top - l.head
+	switch {
+	case r < 0:
+		return m, nil
+	case m.onListScreen():
+		return m.clickList(r)
+	case m.screen == screenQueue:
+		return m.clickQueue(r, l.rows-l.head)
 	}
 	return m, nil
 }
 
-// clickSeek maps an x position on the progress bar to a proportional seek.
-func (m *Model) clickSeek(x int) tea.Cmd {
-	dur := m.player.DurationMS()
-	if dur <= 0 {
-		return nil
+// clickView opens the header view under x, as its key does; Browse leaves a view for
+// the screen under it.
+func (m *Model) clickView(l layout, x int) (tea.Model, tea.Cmd) {
+	for i, t := range l.tabs {
+		if x < t[0] || x >= t[1] {
+			continue
+		}
+		v := views[i]
+		switch {
+		case m.screen == v.s || (i == 0 && m.onListScreen()):
+			return m, nil
+		case i == 0:
+			m.screen = m.prevScreen
+			return m, nil
+		}
+		return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(v.key)})
 	}
-	// Mirror progressBar's layout: the bar spans the row up to the time display.
-	times := fmt.Sprintf("%s / %s", fmtMS(m.player.PositionMS()), fmtMS(dur))
-	barWidth := max(1, m.width) - lipgloss.Width(times) - 1
-	if barWidth <= 0 || x < 0 || x >= barWidth {
-		return nil // click on the times text or off the bar: ignore
-	}
-	return m.seekCmd(dur * int64(x) / int64(barWidth))
+	return m, nil
 }
 
-// clickList selects the list row under the cursor; a click on the selected row
-// activates it (same as enter). Clicks on the title bar, spacing rows or below
-// the last item are ignored.
-func (m *Model) clickList(y int) (tea.Model, tea.Cmd) {
-	// The list body occupies the rows above the footer; m.list is sized to that
-	// area on every render, so its height is the body bound.
-	if y >= m.list.Height() {
-		return m, nil
-	}
-	rel := y - listHeaderRows
-	if rel < 0 || rel%listItemStride >= listItemHeight {
-		return m, nil // title bar or the blank spacing row between items
-	}
-	offset := rel / listItemStride
-	if offset >= m.list.Paginator.PerPage {
-		return m, nil
-	}
-	idx := m.list.Paginator.Page*m.list.Paginator.PerPage + offset
-	if idx >= len(m.list.VisibleItems()) {
+// clickList selects list row r; a click on the selected row activates it (same as
+// enter). Clicks on a section or below the last item are ignored.
+func (m *Model) clickList(r int) (tea.Model, tea.Cmd) {
+	idx := m.list.Paginator.Page*m.list.Paginator.PerPage + r
+	items := m.list.VisibleItems()
+	if r >= m.list.Paginator.PerPage || idx >= len(items) || items[idx].(row).kind == rowSection {
 		return m, nil
 	}
 	if idx == m.list.Index() {
@@ -130,23 +127,12 @@ func (m *Model) clickList(y int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clickQueue selects the queue entry under the cursor; a click on the selected
-// entry jumps playback to it (same as enter on the queue screen).
-func (m *Model) clickQueue(y int) (tea.Model, tea.Cmd) {
+// clickQueue selects the queue entry on row r of the rows entries shown; a click on
+// the selected entry jumps playback to it (same as enter on the queue screen).
+func (m *Model) clickQueue(r, rows int) (tea.Model, tea.Cmd) {
 	n := m.q.Len()
-	if n == 0 {
-		return m, nil
-	}
-	bodyRows := availableBodyHeight(m.height, m.footer())
-	if y >= bodyRows {
-		return m, nil
-	}
-	start, visible := m.queueWindow(bodyRows, n)
-	rel := y - 2 // title + hint header lines
-	if rel < 0 || rel >= visible {
-		return m, nil
-	}
-	idx := start + rel
+	start, _ := m.queueWindow(rows, n)
+	idx := start + r
 	if idx >= n {
 		return m, nil
 	}
@@ -155,4 +141,24 @@ func (m *Model) clickQueue(y int) (tea.Model, tea.Cmd) {
 	}
 	m.queueSel = idx
 	return m, nil
+}
+
+// skipSections moves the list cursor off a section row: on in the direction it went,
+// back the other way at the end of the list.
+func (m *Model) skipSections(down bool) {
+	items := m.list.VisibleItems()
+	for _, d := range []bool{down, !down} {
+		i := m.list.Index()
+		for i >= 0 && i < len(items) && items[i].(row).kind == rowSection {
+			if d {
+				i++
+			} else {
+				i--
+			}
+		}
+		if i >= 0 && i < len(items) {
+			m.list.Select(i)
+			return
+		}
+	}
 }

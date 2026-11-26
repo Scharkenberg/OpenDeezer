@@ -5,7 +5,7 @@ using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 public partial class App : Application
 {

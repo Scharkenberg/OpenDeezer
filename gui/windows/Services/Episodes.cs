@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Episodes
 {

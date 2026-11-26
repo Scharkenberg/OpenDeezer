@@ -1,6 +1,6 @@
 package main
 
-// OpenDeezer Connect exports: discover other OpenDeezer instances on the LAN
+// Purple Disc Connect exports: discover other Purple Disc instances on the LAN
 // and route this client's playback to a chosen one. While a device is
 // connected the playback exports forward to it.
 
@@ -12,11 +12,11 @@ import "C"
 import (
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/engine"
 )
 
 // DZSetClientInfo overrides the client id and device label this instance reports over
-// discovery and /whoami (e.g. "macos", "OpenDeezer for macOS"). Call it before DZInit.
+// discovery and /whoami (e.g. "macos", "Purple Disc for macOS"). Call it before DZInit.
 //
 //export DZSetClientInfo
 func DZSetClientInfo(client, device *C.char) {
@@ -49,7 +49,7 @@ func DZElsewhereJSON() *C.char { return C.CString(engine.ElsewhereJSON()) }
 //export DZElsewhereVersion
 func DZElsewhereVersion() C.longlong { return C.longlong(engine.ElsewhereVersion()) }
 
-// DZDiscoverDevices probes the LAN and the configured peers and returns the OpenDeezer
+// DZDiscoverDevices probes the LAN and the configured peers and returns the Purple Disc
 // devices found as a JSON array of {name, addr}. timeoutMS bounds the wait (~600ms).
 //
 //export DZDiscoverDevices
@@ -66,6 +66,16 @@ func DZDiscoverDevices(timeoutMS C.int) *C.char {
 //
 //export DZConnectDevice
 func DZConnectDevice(addr *C.char) C.int { return cBool(engine.ConnectDevice(C.GoString(addr))) }
+
+// DZTakeOverJSON finds the Purple Disc host of the account on the LAN that plays trackID and
+// returns its queue ({"tracks","index","positionMs","shuffle","repeat"}), for playing it on
+// here; "" when no host plays it. Blocks for discovery (under a second) and up to 2 s for each
+// host found that does not answer. Free with DZFree.
+//
+//export DZTakeOverJSON
+func DZTakeOverJSON(trackID *C.char) *C.char {
+	return C.CString(engine.TakeOverJSON(C.GoString(trackID)))
+}
 
 // DZDisconnectDevice returns control to local playback. It stops the remote
 // device (so it doesn't keep playing unattended) before clearing the connection.

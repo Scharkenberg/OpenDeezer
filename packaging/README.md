@@ -1,6 +1,6 @@
 # Distribution packaging
 
-These files prepare OpenDeezer for several distribution providers. They do not
+These files prepare Purple Disc for several distribution providers. They do not
 mean the application is already listed: public catalogs still require their
 maintainers' accounts, reviews, and policy decisions.
 
@@ -9,7 +9,7 @@ maintainers' accounts, reviews, and policy decisions.
 | F-Droid | Four ABI source-build recipes, reproducible binaries, and Fastlane text | Under fdroiddata review; publish all four immutable binaries before updating its metadata |
 | Obtainium | Phone and TV import configurations | Ready for direct GitHub Releases use; catalog entry optional |
 | Snap Store | Strictly confined GNOME recipe | `amd64` pack validated; register the name, test on Ubuntu, then upload |
-| Homebrew | macOS/Linux TUI formula | Checksum-pinned; publish it to `Cycl0o0/homebrew-tap` |
+| Homebrew | macOS/Linux TUI formula | Checksum-pinned; publish it to `Scharkenberg/homebrew-tap` |
 | WinGet | Windows TUI manifests, schema 1.12 | Checksum-pinned; submit to `microsoft/winget-pkgs` |
 | AUR | Source-building `PKGBUILD` and `.SRCINFO` | Checksum-pinned; publish through the AUR account |
 | Scoop | Windows TUI manifest | Direct manifest install supported; a bucket makes it discoverable |
@@ -28,8 +28,8 @@ still fail the job.
 
 After merging that PR, the remaining external actions are:
 
-- copy the formula to `Cycl0o0/homebrew-tap`;
-- push the AUR files to the `opendeezer` AUR repository;
+- copy the formula to `Scharkenberg/homebrew-tap`;
+- push the AUR files to the `purpledisc` AUR repository;
 - submit the WinGet directory with `wingetcreate` or a pull request;
 - publish the Scoop manifest in a maintained bucket;
 - build, test, register, and upload the Snap;
@@ -67,14 +67,14 @@ obtain policy and naming clearance before replacing and submitting the stale
 
 ## Terminal package managers
 
-- [`homebrew/opendeezer.rb`](homebrew/opendeezer.rb) installs the appropriate
+- [`homebrew/purpledisc.rb`](homebrew/purpledisc.rb) installs the appropriate
   macOS or Linux TUI release binary. After tap publication:
-  `brew install Cycl0o0/tap/opendeezer`.
+  `brew install Scharkenberg/tap/purpledisc`.
 - [`winget/`](winget/) installs the portable 64-bit Windows TUI. After community
-  repository acceptance: `winget install Cycl0o0.OpenDeezer`.
+  repository acceptance: `winget install Scharkenberg.PurpleDisc`.
 - [`aur/`](aur/) builds the TUI from tagged source. After AUR publication:
-  `yay -S opendeezer`.
-- [`scoop/opendeezer.json`](scoop/opendeezer.json) installs the 64-bit Windows
+  `yay -S purpledisc`.
+- [`scoop/purpledisc.json`](scoop/purpledisc.json) installs the 64-bit Windows
   TUI and carries a checksum-aware autoupdate template. See its README for the
   direct-manifest command and bucket publication.
 

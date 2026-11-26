@@ -3,16 +3,16 @@ package connect
 import (
 	"time"
 
-	internalcontrol "github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	internaldiscovery "github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	sdkcontrol "github.com/Cycl0o0/OpenDeezer/v3/sdk/control"
+	internalcontrol "github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	internaldiscovery "github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	sdkcontrol "github.com/Scharkenberg/PurpleDisc/v4/sdk/control"
 )
 
 // ---- discovery ----
 
-// Device is a discovered OpenDeezer instance: Name is the account's display name, Addr
+// Device is a discovered Purple Disc instance: Name is the account's display name, Addr
 // the control API address (host:port) for [NewRemoteClient], Client the platform id
-// (e.g. "tui", "macos", "gnome") and Version the OpenDeezer version.
+// (e.g. "tui", "macos", "gnome") and Version the Purple Disc version.
 type Device = internaldiscovery.Device
 
 // AdvertiseInfo is the identity advertised to probers. The function you pass
@@ -20,18 +20,18 @@ type Device = internaldiscovery.Device
 // re-login updating the display name) are reflected immediately.
 type AdvertiseInfo = internaldiscovery.Info
 
-// Responder is a running OpenDeezer Connect discovery responder. Stop it with
+// Responder is a running Purple Disc Connect discovery responder. Stop it with
 // Close.
 type Responder = internaldiscovery.Responder
 
-// Discover multicasts a probe and returns the OpenDeezer devices that reply within
+// Discover multicasts a probe and returns the Purple Disc devices that reply within
 // timeout, minus local replies from selfPort (0 without a control server). staticPeers
 // ("host" or "host:port") are also probed by unicast, for networks without multicast.
 func Discover(timeout time.Duration, selfPort int, staticPeers ...string) ([]Device, error) {
 	return internaldiscovery.Discover(timeout, selfPort, staticPeers...)
 }
 
-// Advertise starts an OpenDeezer Connect responder on UDP port 7655. info gives the
+// Advertise starts an Purple Disc Connect responder on UDP port 7655. info gives the
 // current name and version per probe; controlPort is the local control server's TCP
 // port. Close the returned Responder to stop advertising.
 func Advertise(info func() AdvertiseInfo, controlPort int) (*Responder, error) {
@@ -76,7 +76,7 @@ type Event = internalcontrol.Event
 // the same type as control.EQ.
 type EQ = internalcontrol.EQ
 
-// RemoteClient drives a discovered OpenDeezer device via its HTTP/JSON control API.
+// RemoteClient drives a discovered Purple Disc device via its HTTP/JSON control API.
 // Mutation methods return the device's playback snapshot after the command. Safe for
 // concurrent use. It is the same type as control.Client.
 type RemoteClient = sdkcontrol.Client

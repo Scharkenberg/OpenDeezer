@@ -197,7 +197,7 @@
     <value>В вашей сети не найдено других устройств.</value>
   </data>
   <data name="Connect_VersionFormat" xml:space="preserve">
-    <value>{0} · OpenDeezer {1}</value>
+    <value>{0} · Purple Disc {1}</value>
   </data>
   <data name="Connect_PlayingOnFormat" xml:space="preserve">
     <value>Воспроизведение на {0}</value>
@@ -215,7 +215,7 @@
     <value>Текст песни недоступен.</value>
   </data>
   <data name="Dialog_SignInTitle" xml:space="preserve">
-    <value>Вход в OpenDeezer</value>
+    <value>Вход в Purple Disc</value>
   </data>
   <data name="Dialog_PasteArlPlaceholder" xml:space="preserve">
     <value>Вставьте ваш Deezer ARL</value>
@@ -266,7 +266,7 @@
     <value>Повторить</value>
   </data>
   <data name="Tray_Open" xml:space="preserve">
-    <value>Показать OpenDeezer</value>
+    <value>Показать Purple Disc</value>
   </data>
   <data name="Tray_Quit" xml:space="preserve">
     <value>Выход</value>
@@ -344,7 +344,7 @@
     <value>При закрытии окна воспроизведение продолжается в трее</value>
   </data>
   <data name="Settings_TrayOff" xml:space="preserve">
-    <value>При закрытии окна OpenDeezer завершается</value>
+    <value>При закрытии окна Purple Disc завершается</value>
   </data>
   <data name="Settings_RemoteControl" xml:space="preserve">
     <value>Удалённое управление</value>
@@ -383,7 +383,7 @@
     <value>Как в системе</value>
   </data>
   <data name="Settings_LanguageRestart" xml:space="preserve">
-    <value>Перезапустите OpenDeezer, чтобы применить новый язык</value>
+    <value>Перезапустите Purple Disc, чтобы применить новый язык</value>
   </data>
   <data name="EQ_Preset" xml:space="preserve">
     <value>Пресет</value>
@@ -401,13 +401,13 @@
     <value>Отсканируйте телефоном (та же сеть Wi-Fi) и введите код.</value>
   </data>
   <data name="About_Title" xml:space="preserve">
-    <value>О программе OpenDeezer</value>
+    <value>О программе Purple Disc</value>
   </data>
   <data name="About_Tagline" xml:space="preserve">
     <value>Неофициальный клиент Deezer с открытым исходным кодом.</value>
   </data>
   <data name="About_Credits" xml:space="preserve">
-    <value>Автор: Cycl0o0; приложение для Windows: Scharkenberg. Лицензия AGPL-3.0.</value>
+    <value>Автор Scharkenberg, на основе OpenDeezer от Cycl0o0. Лицензия AGPL-3.0.</value>
   </data>
   <data name="Tracks_One" xml:space="preserve">
     <value>{0} трек</value>
@@ -500,7 +500,7 @@
     <value>Не сообщать о моих прослушиваниях</value>
   </data>
   <data name="Settings_DisableAdsDisclaimer" xml:space="preserve">
-    <value>Перестаёт сообщать Deezer о ваших прослушиваниях. Исполнители не получают их в зачёт, и это нарушает условия использования Deezer. OpenDeezer в любом случае не показывает рекламу.</value>
+    <value>Перестаёт сообщать Deezer о ваших прослушиваниях. Исполнители не получают их в зачёт, и это нарушает условия использования Deezer. Purple Disc в любом случае не показывает рекламу.</value>
   </data>
   <data name="Nav_Recent" xml:space="preserve">
     <value>Недавние</value>
@@ -587,7 +587,7 @@
     <value>Для входа через веб нужен Microsoft Edge WebView2 Runtime. Установите его или используйте токен ARL.</value>
   </data>
   <data name="Error_EngineMissing" xml:space="preserve">
-    <value>Не удалось загрузить libdeezercore.dll. Переустановите OpenDeezer.</value>
+    <value>Не удалось загрузить libdeezercore.dll. Переустановите Purple Disc.</value>
   </data>
   <data name="Error_NoAudio" xml:space="preserve">
     <value>Не найден аудиовыход. Подключите колонки или наушники и повторите попытку.</value>
@@ -656,10 +656,10 @@
     <value>Без токена воспроизведением может управлять любое устройство, где выполнен вход в ваш аккаунт Deezer.</value>
   </data>
   <data name="Tray_HintTitle" xml:space="preserve">
-    <value>OpenDeezer всё ещё работает</value>
+    <value>Purple Disc всё ещё работает</value>
   </data>
   <data name="Tray_HintBody" xml:space="preserve">
-    <value>Музыка продолжает играть. Открыть или закрыть OpenDeezer можно через значок в трее.</value>
+    <value>Музыка продолжает играть. Открыть или закрыть Purple Disc можно через значок в трее.</value>
   </data>
   <data name="Sleep_RemainingFormat" xml:space="preserve">
     <value>Пауза через {0}</value>
@@ -801,9 +801,6 @@
   </data>
   <data name="Plays_Many" xml:space="preserve">
     <value>{0} прослушиваний</value>
-  </data>
-  <data name="Lyrics_PaidOnly" xml:space="preserve">
-    <value>Тексты песен доступны в Deezer Premium, Duo, Family и Student.</value>
   </data>
   <data name="Queue_LeftFormat" xml:space="preserve">
     <value>осталось {0}</value>
@@ -1294,5 +1291,23 @@
   </data>
   <data name="Pin_Full" xml:space="preserve">
     <value>Главная заполнена. Сначала открепите что-нибудь</value>
+  </data>
+  <data name="Track_Unavailable" xml:space="preserve">
+    <value>Недоступно в Deezer</value>
+  </data>
+  <data name="Menu_GoToAlbum" xml:space="preserve">
+    <value>Перейти к альбому</value>
+  </data>
+  <data name="Charts_AllGenres" xml:space="preserve">
+    <value>Все жанры</value>
+  </data>
+  <data name="Charts_Genre" xml:space="preserve">
+    <value>Жанр</value>
+  </data>
+  <data name="Menu_On" xml:space="preserve">
+    <value>Вкл.</value>
+  </data>
+  <data name="Menu_Off" xml:space="preserve">
+    <value>Выкл.</value>
   </data>
 </root>

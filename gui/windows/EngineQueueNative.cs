@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class NativeEngineQueue : IEngineQueue
 {

@@ -1,6 +1,6 @@
 // One collection as a page: a hero over its track list. The list has a search and a sort, and a
 // playlist of one's own reorders by drag while it shows in its own order. The hero follows the
-// collection (heart, More) and, for Flow, offers its moods.
+// collection (heart, More).
 
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class CollectionView : View
 {
@@ -24,7 +24,6 @@ internal sealed class CollectionView : View
     internal readonly StackPanel _offlineRow;
     private readonly ListControls<Track> _controls = new("tracks", t => t.Name + " " + t.ArtistLine + " " + t.AlbumName,
         new("Sort_Default", null), new("Sort_TitleAz", t => t.Name), new("Sort_ArtistAz", t => t.ArtistLine), new("Sort_AlbumAz", t => t.AlbumName));
-    private readonly StackPanel _moods = Ui.Row(Space.S);
     private readonly StateView _state;
     private Collection _c = Collection.Liked;
     // The collection's tracks as they came; the list shows them through the search and sort.
@@ -52,8 +51,7 @@ internal sealed class CollectionView : View
                 Ui.Button(Loc.S("Btn_Play"), () => Play(false), Icons.Play, accent: true),
                 Ui.Button(Loc.S("Btn_ShufflePlay"), () => Play(true), Icons.Shuffle),
                 _favorite.Root, _download, _more),
-            _offlineRow,
-            _moods));
+            _offlineRow));
         _controls.Changed += () => ShowTracks();
         _controls.Root.Margin = Pad.Header;
         _list.Header = Ui.Stack(0, _hero.Root, _controls.Root, _list.ColumnHeader());
@@ -75,7 +73,7 @@ internal sealed class CollectionView : View
 
     private string OfflineKind => _c.Kind == CollectionKind.Album ? "album" : "playlist";
 
-    // The favorite kind of what the page shows ("" for none: liked songs, Flow, a mix, one's own playlist).
+    // The favorite kind of what the page shows ("" for none: liked songs, a mix, one's own playlist).
     private string FavoriteKind => _c.Kind switch
     {
         CollectionKind.Album => "album",
@@ -94,7 +92,6 @@ internal sealed class CollectionView : View
         // one runs.
         _download.IsEnabled = Session.CanDownload && !App.Offline.Mode && !_downloading;
         Ui.Name(_download, Loc.S(Session.CanDownload ? "Menu_Download" : "Menu_DownloadRequiresPremium"));
-        foreach (var mood in _moods.Children.OfType<Control>()) mood.IsEnabled = !App.Offline.Mode;
         bool pinnable = _c.Kind is CollectionKind.Album or CollectionKind.Playlist;
         _offlineRow.Visibility = Ui.Show(pinnable);
         if (!pinnable) return;
@@ -115,17 +112,16 @@ internal sealed class CollectionView : View
         Session.AccountChanged += OnAccountChanged;
         _list.Context = _c.Listen;
         _own = _c.Kind == CollectionKind.Playlist && Library.IsOwn(_c.OwnerId);
-        _list.MenuContext = new TrackMenu(PlaylistId: _own ? _c.Id : "");
+        _list.MenuContext = new TrackMenu(PlaylistId: _own ? _c.Id : "", AlbumId: _c.Kind == CollectionKind.Album ? _c.Id : "");
         _list.ShowAlbum = _c.Kind != CollectionKind.Album;
         _download.Visibility = Ui.Show(_c.Kind is CollectionKind.Album or CollectionKind.Playlist);
         // Liked and Pinned songs have nothing for it to offer.
         _more.Visibility = Ui.Show(_c.Kind is not (CollectionKind.Liked or CollectionKind.Pinned));
-        // Flow and a mix play as they come: no search or sort.
-        _controls.Root.Visibility = Ui.Show(_c.Kind is not (CollectionKind.Flow or CollectionKind.Tracks));
+        // A mix plays as it comes: no search or sort.
+        _controls.Root.Visibility = Ui.Show(_c.Kind != CollectionKind.Tracks);
         if (_c != previous) _controls.Use("tracks:" + _c.Kind);
         RenderOffline();
         _favorite.Bind(FavoriteKind, _c.Id);
-        RenderMoods();
         // An episode row shows where the account stopped in it.
         if (_c.Kind == CollectionKind.Podcast) _ = Episodes.RefreshAsync();
         if (_c.Tracks != null)
@@ -204,7 +200,7 @@ internal sealed class CollectionView : View
         if (tracks.Count > 0) meta.Add(Loc.Plural(_c.Kind == CollectionKind.Podcast ? "Episodes" : "Tracks", tracks.Count));
         else meta.Add(Loc.S(_c.Kind switch { CollectionKind.Liked => "Empty_Liked", CollectionKind.Playlist => "Empty_Playlist", _ => "Empty_Tracks" }));
         if (ms > 0) meta.Add(Fmt.Duration(ms));
-        string? generated = _c.Kind switch { CollectionKind.Liked => Icons.HeartFill, CollectionKind.Flow => Icons.Flow, _ => null };
+        string? generated = _c.Kind == CollectionKind.Liked ? Icons.HeartFill : null;
         _hero.Set(_c.KindLabel, _c.Title, string.Join(" · ", meta), _c.ArtUrl, generated,
             _c.Kind == CollectionKind.Album && _c.ArtistId.Length > 0 && _c.Owner.Length > 0 && !App.Offline.Mode ? () => ArtistView.Open(_c.ArtistId) : null);
         _hero.Actions.Visibility = Ui.Show(tracks.Count > 0);
@@ -220,42 +216,14 @@ internal sealed class CollectionView : View
         if (_c.Kind == CollectionKind.Playlist && Library.IsOwn(_c.OwnerId) != _own) Show(_c, true);
     }
 
-    // The kind's menu, as on its tile; Flow and a mix offer Save as playlist.
+    // The kind's menu, as on its tile; a mix offers Save as playlist.
     private void FillMore(IList<MenuFlyoutItemBase> items)
     {
         Menus.Collection(items, _c, _tracks.Count);
-        bool savable = _c.Kind is CollectionKind.Flow or CollectionKind.Tracks && _tracks.Count > 0;
+        bool savable = _c.Kind == CollectionKind.Tracks && _tracks.Count > 0;
         var save = savable ? Menus.Item("Menu_SaveAsPlaylist", Icons.Add, () => Menus.SaveAsPlaylist(_c.Title, _tracks)) : null;
         if (save != null) save.IsEnabled = !App.Offline.Mode;
         Menus.Group(items, save);
-    }
-
-    // Flow's moods under its hero, each playing its own Flow.
-    private async void RenderMoods()
-    {
-        _moods.Visibility = Ui.Show(_c.Kind == CollectionKind.Flow);
-        if (_c.Kind != CollectionKind.Flow || _moods.Children.Count > 0) return;
-        var (moods, _) = await Task.Run(DeezerCore.FlowMoods);
-        if (_moods.Children.Count > 0) return;
-        foreach (var m in moods)
-        {
-            var b = Ui.Button(m.Title, () => PlayMood(m));
-            b.IsEnabled = !App.Offline.Mode;
-            _moods.Children.Add(b);
-        }
-    }
-
-    private static async void PlayMood(FlowMood m)
-    {
-        var reply = await Task.Run(() => DeezerCore.Flow(m.Id));
-        if (reply.Tracks.Count == 0)
-        {
-            Toast.Error(Loc.S("Dialog_RadioFailTitle"), reply.Error.Length > 0 ? reply.Error : Loc.S("Dialog_RadioFailBody"));
-            return;
-        }
-        var listen = new ListenContext("dynamic_page_flow_config", m.Id);
-        Open(Collection.Of(m.Title, reply.Tracks, listen));
-        Player.Play(reply.Tracks, 0, listen);
     }
 
     // A row dragged in one's own playlist: the new order goes to Deezer, and back on a refusal.

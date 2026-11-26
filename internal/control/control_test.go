@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,10 +84,10 @@ func TestTokenAuth(t *testing.T) {
 	if code := getWith(t, base+"/status", nil); code != http.StatusUnauthorized {
 		t.Fatalf("no-token status = %d, want 401", code)
 	}
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Token": "wrong"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Token": "wrong"}); code != http.StatusUnauthorized {
 		t.Fatalf("wrong-token status = %d, want 401", code)
 	}
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Token": "secret"}); code != http.StatusOK {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Token": "secret"}); code != http.StatusOK {
 		t.Fatalf("token status = %d, want 200", code)
 	}
 	// Query-string token is NOT accepted (header-only).
@@ -100,7 +101,7 @@ func TestSameAccountRejectsWhenUnknown(t *testing.T) {
 	_, base := newTestServer(t, Config{SameAccountOnly: true},
 		func() State { return State{} }, Commands{})
 
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Account": "12345"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Account": "12345"}); code != http.StatusUnauthorized {
 		t.Fatalf("same-account (unknown) status = %d, want 401", code)
 	}
 }
@@ -116,10 +117,10 @@ func TestSameAccountMatch(t *testing.T) {
 	t.Cleanup(s.Close)
 	base := "http://" + s.Addr()
 
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Account": "999"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Account": "999"}); code != http.StatusUnauthorized {
 		t.Fatalf("wrong account = %d, want 401", code)
 	}
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Account": "42"}); code != http.StatusOK {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Account": "42"}); code != http.StatusOK {
 		t.Fatalf("matching account = %d, want 200", code)
 	}
 }
@@ -687,11 +688,11 @@ func TestClientEventsReceivesStatesAndUsesAuth(t *testing.T) {
 			requestErr <- fmt.Errorf("path = %q, want /events", r.URL.Path)
 			return
 		}
-		if got := r.Header.Get("X-OpenDeezer-Token"); got != "token" {
+		if got := r.Header.Get("X-PurpleDisc-Token"); got != "token" {
 			requestErr <- fmt.Errorf("token header = %q, want token", got)
 			return
 		}
-		if got := r.Header.Get("X-OpenDeezer-Account"); got != "account" {
+		if got := r.Header.Get("X-PurpleDisc-Account"); got != "account" {
 			requestErr <- fmt.Errorf("account header = %q, want account", got)
 			return
 		}
@@ -723,7 +724,7 @@ func TestClientEventsReceivesStatesAndUsesAuth(t *testing.T) {
 	client := NewClient(server.URL, "token", "account")
 	// A regular request would expire at this deadline. Events must be governed
 	// only by ctx because the server's keepalive interval can be longer.
-	client.http.Timeout = 20 * time.Millisecond
+	client.HTTP.Timeout = 20 * time.Millisecond
 	states, err := client.Events(ctx)
 	if err != nil {
 		cancel()
@@ -1454,7 +1455,7 @@ func TestExtendedControlClientRoundTrips(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				seen <- observedRequest{
 					method: r.Method, uri: r.URL.RequestURI(),
-					token: r.Header.Get("X-OpenDeezer-Token"), account: r.Header.Get("X-OpenDeezer-Account"),
+					token: r.Header.Get("X-PurpleDisc-Token"), account: r.Header.Get("X-PurpleDisc-Account"),
 				}
 				w.Header().Set("Content-Type", "application/json")
 				if tt.name == "recent history" {
@@ -1486,8 +1487,8 @@ func TestClientSetQueue(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		seen <- observed{
-			method: r.Method, path: r.URL.RequestURI(), token: r.Header.Get("X-OpenDeezer-Token"),
-			account: r.Header.Get("X-OpenDeezer-Account"), contentType: r.Header.Get("Content-Type"), body: body,
+			method: r.Method, path: r.URL.RequestURI(), token: r.Header.Get("X-PurpleDisc-Token"),
+			account: r.Header.Get("X-PurpleDisc-Account"), contentType: r.Header.Get("Content-Type"), body: body,
 		}
 		writeJSON(w, State{State: "playing", PositionMS: 55})
 	}))
@@ -1548,6 +1549,17 @@ func TestWebRemoteQueueCapabilityGating(t *testing.T) {
 		if !strings.Contains(html, required) {
 			t.Fatalf("web remote queue capability logic missing %q", required)
 		}
+	}
+}
+
+// The page carries its icon inline (no extra route) and uses only the two embedded Inter weights.
+func TestWebRemotePage(t *testing.T) {
+	html := string(remoteHTML)
+	if !strings.Contains(html, `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,`) {
+		t.Fatal("web remote has no inline favicon")
+	}
+	if m := regexp.MustCompile(`font-weight:\s*(bold|[7-9]00)`).FindString(html); m != "" {
+		t.Fatalf("web remote asks for %q; only 400 and 600 are embedded", m)
 	}
 }
 
@@ -2125,6 +2137,17 @@ func TestDisablePairingKeepsLANServerClosed(t *testing.T) {
 	}
 }
 
+func TestWebRemoteServesInter(t *testing.T) {
+	s := New(Config{Addr: "0.0.0.0:0", WebRemote: true},
+		func() State { return State{} }, nil, Commands{}, nil)
+	for _, name := range []string{"Inter-Regular", "Inter-SemiBold"} {
+		rr := serveLAN(s, http.MethodGet, "/remote/"+name+".woff2", nil, nil)
+		if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "font/woff2" || rr.Body.Len() == 0 {
+			t.Fatalf("%s: %d %q, %d bytes; want 200 font/woff2", name, rr.Code, rr.Header().Get("Content-Type"), rr.Body.Len())
+		}
+	}
+}
+
 // TestPairingFlow covers the complete web-remote pairing lifecycle.
 func TestPairingFlow(t *testing.T) {
 	var played int
@@ -2152,7 +2175,7 @@ func TestPairingFlow(t *testing.T) {
 	}
 
 	// 2. No session accepted when pairing is off.
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "deadbeef"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": "deadbeef"}); code != http.StatusUnauthorized {
 		t.Fatalf("invalid session (pairing off) = %d, want 401", code)
 	}
 
@@ -2226,8 +2249,8 @@ func TestPairingFlow(t *testing.T) {
 		t.Fatalf("/remote after successful pair = %d, want 200 (SPA must remain available while web remote enabled)", resp.StatusCode)
 	}
 
-	// 7. Session token in X-OpenDeezer-Session authorizes GET /status.
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": sessToken}); code != http.StatusOK {
+	// 7. Session token in X-PurpleDisc-Session authorizes GET /status.
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": sessToken}); code != http.StatusOK {
 		t.Fatalf("valid session on /status = %d, want 200", code)
 	}
 
@@ -2244,7 +2267,7 @@ func TestPairingFlow(t *testing.T) {
 	// 8. Origin + valid session → POST mutation is allowed (SPA's CSRF-safe path).
 	code8 := postWith(t, base+"/playpause", map[string]string{
 		"Origin":               "http://192.168.1.42:7654",
-		"X-OpenDeezer-Session": sessToken,
+		"X-PurpleDisc-Session": sessToken,
 	})
 	if code8 != http.StatusOK {
 		t.Fatalf("Origin + valid session on /playpause = %d, want 200", code8)
@@ -2264,7 +2287,7 @@ func TestPairingFlow(t *testing.T) {
 	// 10. Origin + invalid session → 403 (from noBrowser before auth).
 	code10 := postWith(t, base+"/playpause", map[string]string{
 		"Origin":               "http://192.168.1.42:7654",
-		"X-OpenDeezer-Session": "notavalidtoken",
+		"X-PurpleDisc-Session": "notavalidtoken",
 	})
 	if code10 != http.StatusForbidden {
 		t.Fatalf("Origin + invalid session = %d, want 403", code10)
@@ -2272,7 +2295,7 @@ func TestPairingFlow(t *testing.T) {
 
 	// 11. Expired session → 401.
 	s.injectSession("expiredtok0123456789abcdef", time.Now().Add(-time.Hour))
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "expiredtok0123456789abcdef"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": "expiredtok0123456789abcdef"}); code != http.StatusUnauthorized {
 		t.Fatalf("expired session = %d, want 401", code)
 	}
 
@@ -2288,7 +2311,7 @@ func TestPairingFlow(t *testing.T) {
 		t.Fatalf("/remote after DisablePairing = %d, want 404", resp3.StatusCode)
 	}
 	// Sessions are revoked on DisablePairing.
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": sessToken}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": sessToken}); code != http.StatusUnauthorized {
 		t.Fatalf("session after DisablePairing = %d, want 401 (sessions now revoked on disable)", code)
 	}
 
@@ -2312,7 +2335,7 @@ func TestPairingFlow(t *testing.T) {
 	}
 }
 
-// TestSameAccountAcceptsAccountIdOnNonLoopback: a matching X-OpenDeezer-Account is
+// TestSameAccountAcceptsAccountIdOnNonLoopback: a matching X-PurpleDisc-Account is
 // accepted on a non-loopback bind (LAN trust), a wrong id is rejected, and pairing
 // stays available.
 func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
@@ -2323,11 +2346,11 @@ func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
 		Commands{}, nil)
 
 	// Correct account id is accepted on non-loopback (for LAN Connect peers).
-	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Account": "42"}, nil).Code; code != http.StatusOK {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-PurpleDisc-Account": "42"}, nil).Code; code != http.StatusOK {
 		t.Fatalf("matching account id on non-loopback = %d, want 200", code)
 	}
 	// Wrong account id is rejected.
-	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Account": "999"}, nil).Code; code != http.StatusUnauthorized {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-PurpleDisc-Account": "999"}, nil).Code; code != http.StatusUnauthorized {
 		t.Fatalf("wrong account id on non-loopback = %d, want 401", code)
 	}
 
@@ -2348,7 +2371,7 @@ func TestSameAccountAcceptsAccountIdOnNonLoopback(t *testing.T) {
 	}
 
 	// Valid session grants access (no need for account header).
-	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-OpenDeezer-Session": sessTok}, nil).Code; code != http.StatusOK {
+	if code := serveLAN(s, http.MethodGet, "/status", map[string]string{"X-PurpleDisc-Session": sessTok}, nil).Code; code != http.StatusOK {
 		t.Fatalf("session on nonloop sameacct = %d, want 200", code)
 	}
 }
@@ -2463,18 +2486,18 @@ func TestSessionRevocation(t *testing.T) {
 	s.injectSession("revoketok1234567890abcdef", time.Now().Add(1*time.Hour))
 	// manually set an id for it (tests can reach private via other? use Revoke by token too)
 	s.RevokeSession("revoketok1234567890abcdef")
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "revoketok1234567890abcdef"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": "revoketok1234567890abcdef"}); code != http.StatusUnauthorized {
 		t.Fatalf("revoke by token = %d, want 401", code)
 	}
 
 	// Account switch revokes: first Enable to record pairedAccount, then inject.
 	_ = s.EnablePairing() // records pairedAccount="42"
 	s.injectSession("switchtok1234567890abcdef", time.Now().Add(1*time.Hour))
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "switchtok1234567890abcdef"}); code != http.StatusOK {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": "switchtok1234567890abcdef"}); code != http.StatusOK {
 		t.Fatalf("pre-switch session = %d, want 200", code)
 	}
 	uid = "99" // switch account
-	if code := getWith(t, base+"/status", map[string]string{"X-OpenDeezer-Session": "switchtok1234567890abcdef"}); code != http.StatusUnauthorized {
+	if code := getWith(t, base+"/status", map[string]string{"X-PurpleDisc-Session": "switchtok1234567890abcdef"}); code != http.StatusUnauthorized {
 		t.Fatalf("post-switch session = %d, want 401 (account switch revokes)", code)
 	}
 }

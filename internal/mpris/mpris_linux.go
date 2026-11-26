@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	busName = "org.mpris.MediaPlayer2.opendeezer"
+	busName = "org.mpris.MediaPlayer2.purpledisc"
 	objPath = "/org/mpris/MediaPlayer2"
 	rootIff = "org.mpris.MediaPlayer2"
 	playIff = "org.mpris.MediaPlayer2.Player"
@@ -73,8 +73,8 @@ func (c *linuxController) spec() map[string]map[string]*prop.Prop {
 			"CanQuit":             ro(false),
 			"CanRaise":            ro(false),
 			"HasTrackList":        ro(false),
-			"Identity":            ro("OpenDeezer"),
-			"DesktopEntry":        ro("opendeezer"),
+			"Identity":            ro("Purple Disc"),
+			"DesktopEntry":        ro("purpledisc"),
 			"SupportedUriSchemes": ro([]string{}),
 			"SupportedMimeTypes":  ro([]string{}),
 		},

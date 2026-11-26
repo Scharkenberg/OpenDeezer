@@ -3,10 +3,10 @@
     <!-- Contains only the Android-Keystore encrypted ARL. Keystore keys are not
          portable, so restoring this file would produce an unusable credential.
          Ordinary settings remain eligible for backup. -->
-    <exclude domain="sharedpref" path="opendeezer_secrets.xml" />
+    <exclude domain="sharedpref" path="purpledisc_secrets.xml" />
     <!-- Older releases mixed a plaintext ARL with settings in this file. The app
-         migrates the settings to opendeezer_settings.xml on first launch. -->
-    <exclude domain="sharedpref" path="opendeezer.xml" />
+         migrates the settings to purpledisc_settings.xml on first launch. -->
+    <exclude domain="sharedpref" path="purpledisc.xml" />
     <!-- WebView's cookie database also contains the ARL during browser login. -->
     <exclude domain="root" path="app_webview/" />
 </full-backup-content>

@@ -1,4 +1,4 @@
-# golangci-lint v2 configuration for OpenDeezer.
+# golangci-lint v2 configuration for Purple Disc.
 version: "2"
 
 run:

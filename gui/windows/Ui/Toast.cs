@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal static class Toast
 {

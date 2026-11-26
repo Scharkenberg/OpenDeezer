@@ -1,4 +1,4 @@
-// Package ui is the Bubble Tea TUI for OpenDeezer: a menu/list browser with an
+// Package ui is the Bubble Tea TUI for Purple Disc: a menu/list browser with an
 // always-visible now-playing footer. Network calls run as tea.Cmds.
 package ui
 
@@ -12,27 +12,28 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/audio"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discord"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/history"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/i18n"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/listens"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mediacache"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/mpris"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/preload"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/queue"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/update"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discord"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/history"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/listens"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mediacache"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/mpris"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/preload"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/queue"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // screen is the current top-level view.
@@ -56,6 +57,7 @@ const (
 	screenNoInternet     // transport-level connectivity loss: offer retry, don't log out
 	screenPlaylistPick   // add-to-playlist picker (borrows m.list like the device picker)
 	screenPlaylistPrompt // playlist title input (create / rename)
+	screenSettings       // the settings list (see settings.go)
 )
 
 // plPromptKind says what the playlist-title prompt (screenPlaylistPrompt) is for.
@@ -85,6 +87,8 @@ type Model struct {
 	search     textinput.Model
 	spinner    spinner.Model
 	status     string // transient status / error line
+	statusSeq  int    // counts status changes; an expiry for an older one does nothing
+	theme      int    // index in palettes
 	helpOffset int    // first keybinding shown on the scrollable help screen
 	loading    bool   // a network request is in flight
 	ready      bool
@@ -94,7 +98,8 @@ type Model struct {
 	// artwork for the current track
 	curImg      image.Image
 	curImgTrack string
-	curCover    string // rendered half-block cover
+	covers      map[[2]int]string // the cover rendered per size (see coverAt)
+	tint        lipgloss.Color    // the cover's lifted mean color, "" before a render
 
 	// playback queue (shared model, see internal/queue)
 	q       *queue.Queue
@@ -145,7 +150,6 @@ type Model struct {
 
 	nav      int  // navigation generation; results of older requests are dropped (navCmd)
 	navReq   int  // generation of the latest navCmd request
-	barY     int  // screen row of the progress bar in the last frame, -1 when not shown
 	spinning bool // a spinner tick is scheduled
 	ticking  bool // a UI tick is scheduled
 
@@ -178,10 +182,9 @@ type Model struct {
 	// GitHub release check (see updatecheck.go / internal/update). The
 	// startup check is silent unless a newer version is found; a manual
 	// re-check (About screen) surfaces feedback via m.status.
-	updateInfo      update.Info
-	updateChecking  bool // manual re-check in flight
-	updateChecked   bool // at least one check (startup or manual) has completed
-	updateDismissed bool // user closed the footer notice for this session
+	updateInfo     update.Info
+	updateChecking bool // manual re-check in flight
+	updateChecked  bool // at least one check (startup or manual) has completed
 
 	media   mpris.Controller // OS media controls (MPRIS on Linux, no-op elsewhere)
 	discord discord.Presence // Discord Rich Presence (no-op if no app id)
@@ -202,13 +205,13 @@ type Model struct {
 	ctrlEditToken   bool           // Web Remote screen: editing the control-API token
 	webCtrlCfg      config.Control // control config shown on the Web Remote screen
 
-	// remote control: drive another OpenDeezer client over its control API.
+	// remote control: drive another Purple Disc client over its control API.
 	remote        *control.Client
 	remoteState   control.State
 	remoteName    string               // peer's account name (from /whoami)
 	remoteAddr    string               // peer host:port currently connected/connecting
 	remoteClient  string               // peer device type/client (from /whoami)
-	remoteVersion string               // peer OpenDeezer version (from /whoami)
+	remoteVersion string               // peer PurpleDisc version (from /whoami)
 	remotePolling bool                 // a status poll of the peer is in flight
 	advertiser    *discovery.Responder // LAN advertisement (when our control API is LAN-bound)
 
@@ -375,7 +378,7 @@ func (m *Model) controlServerFunc() func(control.Config) *control.Server {
 		}
 		s := control.New(cfg, status, account, cmds, client)
 		s.SetVersion(Version)
-		s.SetClientInfo("tui", "OpenDeezer TUI")
+		s.SetClientInfo("tui", "Purple Disc TUI")
 		s.SetEQ(control.PlayerEQ(func() control.EQController {
 			if pl != nil {
 				return pl
@@ -396,15 +399,15 @@ func (m *Model) StartControl(send func(tea.Msg)) error {
 		return nil
 	}
 	if cfg.SameAccount && cfg.Token == "" {
-		odlog.Warn("control api: LAN-exposed with same-account auth only; the Deezer user id " +
-			"is not a strong secret. Set OPENDEEZER_CONTROL_TOKEN for a real credential.")
+		pdlog.Warn("control api: LAN-exposed with same-account auth only; the Deezer user id " +
+			"is not a strong secret. Set PURPLEDISC_CONTROL_TOKEN for a real credential.")
 	}
 	m.ctrl = m.controlServerFunc()(control.Config{Addr: cfg.Addr, Token: cfg.Token, SameAccountOnly: cfg.SameAccount})
 	if err := m.ctrl.Start(); err != nil {
 		m.ctrl = nil
 		return err
 	}
-	// Advertise on the LAN (OpenDeezer Connect) when reachable (non-loopback).
+	// Advertise on the LAN (Purple Disc Connect) when reachable (non-loopback).
 	if !config.IsLoopbackAddr(cfg.Addr) {
 		if _, port, err := net.SplitHostPort(m.ctrl.Addr()); err == nil {
 			if p, e := strconv.Atoi(port); e == nil {
@@ -525,8 +528,8 @@ func (m *Model) ctrlQueueSnapshot() []control.Track {
 }
 
 // sleepMinutes maps the sleep-timer cycle step to a duration (0 = off, -1 slot
-// used for end-of-track). Steps: off → 15 → 30 → 45 → 60 → end-of-track → off.
-var sleepMinutes = []int{0, 15, 30, 45, 60, -1}
+// used for end-of-track). Steps: off → 5 → 10 → 20 → 30 → 45 → 60 → end-of-track → off.
+var sleepMinutes = []int{0, 5, 10, 20, 30, 45, 60, -1}
 
 // cycleSleepTimer advances the sleep-timer selection and applies it to the player.
 func (m *Model) cycleSleepTimer() {
@@ -594,12 +597,17 @@ func remoteTrack(t *control.Track) deezer.Track {
 	}
 }
 
-// newBrowseList builds the shared browse list. Filtering is enabled but moved
-// off the default "/" (which is Deezer search everywhere in the app) onto
+// newBrowseList builds the shared browse list: one line per row and nothing else, its
+// title, position and filter input being drawn in the header. Filtering is enabled but
+// moved off the default "/" (which is Deezer search everywhere in the app) onto
 // ctrl+f; handleKey forwards ctrl+f to the list only on list screens.
-func newBrowseList() list.Model {
-	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
+func newBrowseList(m *Model) list.Model {
+	l := list.New(nil, rowDelegate{m}, 0, 0)
+	l.SetShowTitle(false)
+	l.SetShowFilter(false)
 	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
+	l.SetShowHelp(false)
 	l.SetFilteringEnabled(true)
 	l.KeyMap.Filter = key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "filter"))
 	l.DisableQuitKeybindings() // handleKey quits, so main can save state
@@ -612,19 +620,16 @@ const searchCharLimit = 120
 // New builds the root model.
 func New(client *deezer.Client, player *audio.Player) *Model {
 	ti := textinput.New()
-	ti.Placeholder = i18n.T("Search Deezer…")
+	ti.Prompt = ""
 	ti.CharLimit = searchCharLimit
 
-	l := newBrowseList()
-
 	sp := spinner.New()
-	sp.Spinner = spinner.Dot
+	sp.Spinner = spinner.Line
 
 	m := &Model{
 		client:   client,
 		player:   player,
 		screen:   screenLoading,
-		list:     l,
 		search:   ti,
 		spinner:  sp,
 		status:   "Logging in…",
@@ -632,6 +637,7 @@ func New(client *deezer.Client, player *audio.Player) *Model {
 		q:        queue.New(),
 		finished: make(chan bool, 1),
 	}
+	m.list = newBrowseList(m)
 	// Local listening history (stats screen + control /history/recent). Without a config
 	// dir, recording is disabled.
 	m.hist, _ = history.Default()
@@ -673,7 +679,7 @@ func New(client *deezer.Client, player *audio.Player) *Model {
 		}
 	}}
 	if err := m.caches.Open(); err != nil {
-		odlog.Warn("mediacache: %v (continuing without cache)", err)
+		pdlog.Warn("mediacache: %v (continuing without cache)", err)
 	}
 	m.preloads = preload.New(func() *audio.Player { return player }, m.resolvePreload)
 	m.preloads.Attach(player)
@@ -729,9 +735,12 @@ type playlistOpMsg struct {
 	err     error
 }
 type searchMsg struct {
+	title   string // "" for search results
 	results *deezer.SearchResults
 	ctx     listens.Context
 }
+type flowMoodsMsg struct{ moods []deezer.FlowMood }
+type genresMsg struct{ genres []deezer.Genre }
 type podcastsMsg struct {
 	title    string
 	podcasts []deezer.Podcast
@@ -761,6 +770,9 @@ type playStartedMsg struct {
 }
 type errMsg struct{ err error }
 type statusMsg struct{ text string }
+
+// statusExpiredMsg clears the status set at change n, if no newer one replaced it.
+type statusExpiredMsg int
 type devicesMsg struct{ devices []audio.Device }
 type tickMsg time.Time
 
@@ -788,8 +800,23 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.loginCmd(), m.waitFinish(), m.spinner.Tick, m.updateCheckCmd())
 }
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
+func tickCmd(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+// tickDelay is a second, or on the lyrics screen the time to the next synced line
+// when that is sooner (at least 50 ms), so the highlight moves on time.
+func (m *Model) tickDelay() time.Duration {
+	if m.screen != screenLyrics || m.lyrics == nil || !m.lyrics.IsSynced() {
+		return time.Second
+	}
+	pos := m.player.PositionMS()
+	for _, ln := range m.lyrics.Synced {
+		if ln.TimeMS > pos {
+			return min(time.Second, max(50*time.Millisecond, time.Duration(ln.TimeMS-pos)*time.Millisecond))
+		}
+	}
+	return time.Second
 }
 
 // waitFinish blocks on the player's finish channel.
@@ -813,7 +840,7 @@ func (m *Model) favoritesCmd() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return tracksMsg{title: "❤  " + i18n.T("Liked Songs"), tracks: ts, favorites: true,
+		return tracksMsg{title: i18n.T("Liked Songs"), tracks: ts, favorites: true,
 			ctx: listens.Context{Type: "profile_loved", ID: m.client.UserID()}}
 	}
 }
@@ -849,7 +876,7 @@ func (m *Model) playlistsCmd() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return playlistsMsg{title: "≡  " + i18n.T("My Playlists"), playlists: ps}
+		return playlistsMsg{title: i18n.T("My Playlists"), playlists: ps}
 	}
 }
 
@@ -883,15 +910,30 @@ func (m *Model) searchCmd(q string) tea.Cmd {
 	}
 }
 
-func (m *Model) chartsCmd() tea.Cmd {
+// chartsCmd loads the charts of genre g (ID "0" for all genres).
+func (m *Model) chartsCmd(g deezer.Genre) tea.Cmd {
 	return func() tea.Msg {
-		ch, err := m.client.Charts("0")
+		ch, err := m.client.Charts(g.ID)
 		if err != nil {
 			return errMsg{err}
 		}
-		return searchMsg{results: &deezer.SearchResults{
+		title := i18n.T("Charts")
+		if g.ID != "0" {
+			title += " · " + g.Name
+		}
+		return searchMsg{title: title, results: &deezer.SearchResults{
 			Tracks: ch.Tracks, Albums: ch.Albums, Artists: ch.Artists, Playlists: ch.Playlists,
-		}, ctx: listens.Context{Type: "tops_track", ID: "0"}}
+		}, ctx: listens.Context{Type: "tops_track", ID: g.ID}}
+	}
+}
+
+func (m *Model) genresCmd() tea.Cmd {
+	return func() tea.Msg {
+		gs, err := m.client.Genres()
+		if err != nil {
+			return errMsg{err}
+		}
+		return genresMsg{genres: gs}
 	}
 }
 
@@ -915,13 +957,32 @@ func (m *Model) lyricsCmd(t deezer.Track) tea.Cmd {
 	}
 }
 
-func (m *Model) flowCmd() tea.Cmd {
+// flowCmd starts a fresh stream of Flow, or of one of its moods ("" for Flow
+// itself), playing from its first track.
+func (m *Model) flowCmd(mood string) tea.Cmd {
 	return func() tea.Msg {
-		ts, err := m.client.Flow("")
+		ts, err := m.client.Flow(mood)
 		if err != nil {
 			return errMsg{err}
 		}
-		return tracksMsg{title: "⚡ Flow", tracks: ts, ctx: listens.Context{Type: "dynamic_page_user_radio", ID: m.client.UserID()}}
+		if len(ts) == 0 {
+			return statusMsg{text: i18n.T("No mix available")}
+		}
+		ctx := listens.Context{Type: "dynamic_page_flow_config", ID: mood}
+		if mood == "" {
+			ctx = listens.Context{Type: "dynamic_page_user_radio", ID: m.client.UserID()}
+		}
+		return playNowMsg{tracks: ts, ctx: ctx}
+	}
+}
+
+func (m *Model) flowMoodsCmd() tea.Cmd {
+	return func() tea.Msg {
+		ms, err := m.client.FlowMoods()
+		if err != nil {
+			return errMsg{err}
+		}
+		return flowMoodsMsg{moods: ms}
 	}
 }
 
@@ -960,7 +1021,7 @@ func (m *Model) podcastSearchCmd(q string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return podcastsMsg{title: "🎙 " + i18n.T("Podcasts"), podcasts: ps}
+		return podcastsMsg{title: i18n.T("Podcasts"), podcasts: ps}
 	}
 }
 

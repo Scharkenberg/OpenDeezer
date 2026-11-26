@@ -1,18 +1,18 @@
-name: opendeezer
-title: OpenDeezer
-version: "3.1.4"
+name: purpledisc
+title: Purple Disc for Deezer
+version: "4.0.0"
 summary: Open-source desktop client for Deezer
 description: |
-  OpenDeezer is an unofficial, open-source client for browsing and streaming
+  PurpleDisc is an unofficial, open-source client for browsing and streaming
   music from a Deezer account. This package uses the native GTK4/libadwaita
   desktop interface and stores its credentials in the snap's private data
   directory.
 
-  OpenDeezer is not affiliated with or endorsed by Deezer.
+  PurpleDisc is not affiliated with or endorsed by Deezer.
 license: AGPL-3.0-only
-website: https://github.com/Cycl0o0/OpenDeezer
-source-code: https://github.com/Cycl0o0/OpenDeezer
-issues: https://github.com/Cycl0o0/OpenDeezer/issues
+website: https://github.com/Scharkenberg/PurpleDisc
+source-code: https://github.com/Scharkenberg/PurpleDisc
+issues: https://github.com/Scharkenberg/PurpleDisc/issues
 icon: assets/icon.png
 
 base: core24
@@ -32,13 +32,13 @@ layout:
 slots:
   mpris:
     interface: mpris
-    name: opendeezer
+    name: purpledisc
 
 apps:
-  opendeezer:
-    command: usr/bin/opendeezer-gnome
-    common-id: org.opendeezer.OpenDeezer
-    desktop: usr/share/applications/org.opendeezer.OpenDeezer.desktop
+  purpledisc:
+    command: usr/bin/purpledisc-gnome
+    common-id: dev.scharkenberg.PurpleDisc
+    desktop: usr/share/applications/dev.scharkenberg.PurpleDisc.desktop
     extensions:
       - gnome
     environment:
@@ -65,10 +65,10 @@ parts:
       set -eux
       case "$CRAFT_ARCH_BUILD_FOR" in
         amd64)
-          GO_SHA256=234828b7a89e0e303d2556310ee549fbcf253d28de937bac3da13d6294262ac1
+          GO_SHA256=7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840
           ;;
         arm64)
-          GO_SHA256=8b5884aef89600aef5b0b051fb971f11f49bb996521e911f30f02a66884f7bd2
+          GO_SHA256=3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92
           ;;
         *)
           echo "unsupported Snap build architecture: $CRAFT_ARCH_BUILD_FOR" >&2
@@ -77,7 +77,7 @@ parts:
       esac
       mkdir -p "$CRAFT_PART_SRC"
       curl --fail --location --retry 3 \
-        "https://go.dev/dl/go1.25.12.linux-${CRAFT_ARCH_BUILD_FOR}.tar.gz" \
+        "https://go.dev/dl/go1.27.4.linux-${CRAFT_ARCH_BUILD_FOR}.tar.gz" \
         --output "$CRAFT_PART_SRC/go.tar.gz"
       echo "$GO_SHA256  $CRAFT_PART_SRC/go.tar.gz" | sha256sum --check --strict
     override-build: |
@@ -86,7 +86,7 @@ parts:
     prime:
       - "-*"
 
-  opendeezer:
+  purpledisc:
     plugin: nil
     source: .
     after:
@@ -117,7 +117,7 @@ parts:
       set -eux
       cd "$CRAFT_PART_SRC"
       export PATH="$CRAFT_STAGE/go/bin:$PATH"
-      test "$(go env GOVERSION)" = go1.25.12
+      test "$(go env GOVERSION)" = go1.27.4
 
       mkdir -p gui/gnome/lib
       CGO_ENABLED=1 go build \

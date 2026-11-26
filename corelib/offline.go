@@ -9,7 +9,7 @@ package main
 */
 import "C"
 
-import "github.com/Cycl0o0/OpenDeezer/v3/internal/engine"
+import "github.com/Scharkenberg/PurpleDisc/v4/internal/engine"
 
 // DZPinOffline pins kind ("track", "album", "playlist") and id for the account and
 // returns {"error":""} or {"error":"reason"}. The pin is recorded at once and its
@@ -37,11 +37,6 @@ func DZOfflineProgressJSON() *C.char {
 	active, jobs := engine.OfflineProgress()
 	return jsonStr(map[string]any{"active": active, "jobs": jobs, "error": ""}, nil)
 }
-
-// DZCancelOffline stops the account's fetches.
-//
-//export DZCancelOffline
-func DZCancelOffline() { engine.CancelOffline() }
 
 // DZOfflineCollectionsJSON returns the account's pins newest first as {"collections":
 // [{"kind","id","title","cover","trackCount","fetched","pinnedAt"}]}. Single-track

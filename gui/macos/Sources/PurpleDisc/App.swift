@@ -1,0 +1,950 @@
+import SwiftUI
+import AppKit
+import CoreText
+
+@main
+struct PurpleDiscApp: App {
+    @StateObject private var app = AppState()
+
+    init() {
+        // Inter, the UI font, bundled with its license (SIL OFL 1.1) under Resources/Fonts.
+        for name in ["InterVariable"] {
+            // .process may flatten the folder, so the top level is looked at too.
+            if let url = Bundle.module.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts")
+                ?? Bundle.module.url(forResource: name, withExtension: "ttf") {
+                CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            }
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup("Purple Disc") {
+            RootView()
+                .environmentObject(app)
+                .font(.custom("Inter Variable", size: NSFont.systemFontSize, relativeTo: .body))
+                .frame(minWidth: 940, minHeight: 600)
+                .tint(DZ.accent)
+                .preferredColorScheme(.dark)
+                .onAppear { app.start() }
+        }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
+        .commands {
+            // Replace the default "About Purple Disc" panel with our credits.
+            CommandGroup(replacing: .appInfo) {
+                Button(L("About Purple Disc")) { app.showCredits = true }
+            }
+            // Standard ⌘, opens our Settings sheet.
+            CommandGroup(replacing: .appSettings) {
+                Button(L("Settings…")) { app.showSettings = true }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+            // Re-open the existing Deezer login flow on demand so an already
+            // signed-in user can re-authenticate or switch accounts. Reuses the
+            // web-login + manual-ARL sheet (beginWebLogin → DeezerLoginSheet),
+            // which runs DZInit and refreshes the session on success.
+            CommandGroup(after: .appSettings) {
+                Button(L("Log in / Switch account…")) { app.beginWebLogin() }
+            }
+            // Match the platform-standard Find command: reveal Search and move
+            // keyboard focus into its field even when Search is already open.
+            CommandGroup(after: .textEditing) {
+                Button(L("Search")) {
+                    app.section = .search
+                    app.searchFocusRequest &+= 1
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(!app.loggedIn)
+            }
+            // Open the Up-Next editor (the play-queue sheet). Also reachable from
+            // the player bar's queue button.
+            CommandGroup(after: .toolbar) {
+                Button(L("Up Next")) { app.showQueue = true }
+                    .keyboardShortcut("u", modifiers: [.command, .option])
+                    .disabled(!app.loggedIn)
+            }
+        }
+    }
+}
+
+struct RootView: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        Group {
+            if app.loggedIn {
+                NavigationSplitView {
+                    Sidebar()
+                } detail: {
+                    DetailView()
+                }
+            } else if app.noInternet {
+                // Launch login failed because the network is down (not a bad ARL):
+                // offer a retry instead of the login gate's "expired ARL" message.
+                NoInternetView()
+            } else {
+                LoginGate()
+            }
+        }
+        .background(DZ.windowBG)
+        // Update-available notice: small, dismissible, never blocks the UI
+        // underneath it. Shown only when checkForUpdates() found a newer release.
+        .overlay(alignment: .top) {
+            if app.showUpdateBanner, let info = app.updateInfo {
+                UpdateBanner(info: info)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: app.showUpdateBanner)
+        // Download status toast, above the floating player bar. Auto-dismisses;
+        // tap to dismiss early.
+        .overlay(alignment: .bottom) {
+            if let msg = app.downloadStatus {
+                DownloadToast(message: msg)
+                    .padding(.bottom, 96)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: app.downloadStatus)
+        .sheet(isPresented: $app.showLoginWeb) { DeezerLoginSheet() }
+        .sheet(isPresented: $app.showCredits) { CreditsView() }
+        .sheet(isPresented: $app.showSettings) { SettingsView() }
+        .sheet(isPresented: $app.showLyrics) { LyricsView() }
+        .sheet(isPresented: $app.showArtist) { ArtistView() }
+        .sheet(isPresented: $app.showAddToPlaylist) { AddToPlaylistSheet() }
+        .sheet(isPresented: $app.showDevicePicker) { DevicePickerView() }
+        .sheet(isPresented: $app.showQueue) { UpNextView() }
+    }
+}
+
+// UpdateBanner — the non-intrusive "new version available" notice surfaced by
+// AppState.checkForUpdates() on launch. "Later" just dismisses it for this
+// session; "Download" opens the GitHub release page (no auto-download/install).
+struct UpdateBanner: View {
+    @EnvironmentObject var app: AppState
+    let info: UpdateInfo
+    @State private var showNotes = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.inter(size: 15)).foregroundStyle(DZ.accent)
+                Text(Lf("Purple Disc %@ is available", info.latest))
+                    .font(.inter(size: 13, weight: .semibold)).foregroundStyle(DZ.textPri)
+                Spacer()
+                if !info.notes.isEmpty {
+                    Button(showNotes ? L("Hide notes") : L("Release notes")) {
+                        withAnimation { showNotes.toggle() }
+                    }
+                    .buttonStyle(.plain).font(.inter(.caption)).foregroundStyle(DZ.textSec)
+                }
+                Button(L("Download")) { app.openUpdateURL() }
+                    .buttonStyle(.glassProminent).tint(DZ.accent).controlSize(.small)
+                Button(L("Later")) { app.dismissUpdateBanner() }
+                    .buttonStyle(.plain).font(.inter(.caption)).foregroundStyle(DZ.textSec)
+            }
+            if showNotes {
+                ScrollView {
+                    Text(info.notes).font(.inter(.caption)).foregroundStyle(DZ.textSec)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 120)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 520)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(radius: 12, y: 4)
+        .padding(.top, 8)
+    }
+}
+
+// DownloadToast — the transient status shown while a track downloads and when
+// it finishes (or fails), surfaced by AppState.download(). Tap to dismiss.
+struct DownloadToast: View {
+    @EnvironmentObject var app: AppState
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.inter(size: 14)).foregroundStyle(DZ.accent)
+            Text(message)
+                .font(.inter(size: 12, weight: .medium)).foregroundStyle(DZ.textPri)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: 420)
+        .glassEffect(.regular, in: Capsule())
+        .shadow(radius: 10, y: 3)
+        .contentShape(Capsule())
+        .onTapGesture { app.dismissDownloadStatus() }
+    }
+}
+
+struct LoginGate: View {
+    @EnvironmentObject var app: AppState
+    @State private var showManual = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "heart.fill")
+                .font(.inter(size: 56)).foregroundStyle(DZ.accent)
+            Text("Purple Disc").font(.inter(size: 34, weight: .bold)).foregroundStyle(DZ.textPri)
+
+            if app.busy {
+                ProgressView(L("Logging in…")).tint(DZ.accent)
+            } else {
+                // Primary: open the embedded Deezer login webview. The arl cookie
+                // is captured automatically once the user signs in.
+                Button { app.beginWebLogin() } label: {
+                    Label(L("Log in with Deezer"), systemImage: "person.crop.circle")
+                        .frame(maxWidth: 260)
+                }
+                .buttonStyle(.glassProminent).tint(DZ.accent).controlSize(.large)
+
+                // Fallback: paste an ARL by hand.
+                Button(showManual ? L("Hide manual ARL") : L("Enter ARL manually")) {
+                    withAnimation { showManual.toggle() }
+                }
+                .buttonStyle(.plain).font(.inter(.callout)).foregroundStyle(DZ.textSec)
+
+                if showManual {
+                    VStack(spacing: 8) {
+                        SecureField(L("Paste your ARL cookie"), text: $app.manualARL)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                            .onSubmit { app.loginWithManualARL() }
+                        Button(L("Sign in")) { app.loginWithManualARL() }
+                            .buttonStyle(.glass).tint(DZ.accent)
+                            .disabled(app.manualARL.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    .transition(.opacity)
+                }
+
+                if let e = app.loginError {
+                    Text(e).foregroundStyle(.red)
+                        .multilineTextAlignment(.center).frame(maxWidth: 400)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DZ.windowBG)
+    }
+}
+
+// NoInternetView — shown when the launch login fails because the network is
+// unreachable (DZLoginErrorKind == 2), not because the ARL is bad. It offers a
+// Retry that re-runs the launch login: a successful login opens the app, a
+// repeat network failure keeps this screen, and a genuine auth failure drops to
+// the login gate.
+struct NoInternetView: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "wifi.slash")
+                .font(.inter(size: 52)).foregroundStyle(DZ.accent)
+            Text("Purple Disc").font(.inter(size: 22, weight: .bold)).foregroundStyle(DZ.textPri)
+
+            Text(L("No Internet Connection"))
+                .font(.inter(size: 26, weight: .bold)).foregroundStyle(DZ.textPri)
+                .multilineTextAlignment(.center)
+
+            Text(L("Check your connection and try again."))
+                .font(.inter(.title3)).foregroundStyle(DZ.textSec)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 460)
+
+            // Retry re-runs the launch login (app.busy reflects the in-flight
+            // attempt, so the button shows a spinner and disables meanwhile).
+            Button { app.retryLogin() } label: {
+                if app.busy {
+                    ProgressView().controlSize(.small).tint(.white)
+                } else {
+                    Label(L("Retry"), systemImage: "arrow.clockwise").frame(minWidth: 140)
+                }
+            }
+            .buttonStyle(.glassProminent).tint(DZ.accent).controlSize(.large)
+            .disabled(app.busy)
+            .padding(.top, 6)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DZ.windowBG)
+    }
+}
+
+// ExplicitBadge — a small boxed "E" tag drawn before a track title when the
+// track carries explicit content (Track.explicit).
+struct ExplicitBadge: View {
+    var body: some View {
+        Text("E")
+            .font(.inter(size: 9, weight: .bold))
+            .foregroundStyle(DZ.textSec)
+            .frame(width: 14, height: 14)
+            .background(DZ.textSec.opacity(0.22), in: RoundedRectangle(cornerRadius: 3))
+            .accessibilityLabel(L("Explicit"))
+    }
+}
+
+// MARK: - Sidebar
+
+struct Sidebar: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            List(selection: Binding(
+                get: { app.section },
+                set: { sel in
+                    app.section = sel
+                    switch sel {
+                    case .home: app.loadHome()
+                    case .liked: app.loadFavorites()
+                    case .playlists: app.loadPlaylists()
+                    case .charts: app.loadCharts()
+                    case .flow: app.loadFlow()
+                    case .history: app.loadHistory()
+                    case .search, .podcasts: break
+                    }
+                })) {
+                SidebarLabel(L("Home"), "house.fill", .home)
+                SidebarLabel(L("Search"), "magnifyingglass", .search)
+
+                SwiftUI.Section {
+                    SidebarLabel("Flow", "infinity", .flow)
+                    SidebarLabel(L("Liked Songs"), "heart.fill", .liked)
+                    SidebarLabel(L("Playlists"), "music.note.list", .playlists)
+                    SidebarLabel(L("Charts"), "chart.bar.fill", .charts)
+                    SidebarLabel(L("Recently played"), "clock.arrow.circlepath", .history)
+                    SidebarLabel(L("Podcasts"), "mic.fill", .podcasts)
+                } header: {
+                    Text(L("Library"))
+                        .font(.inter(size: 11, weight: .bold)).textCase(.uppercase)
+                        .foregroundStyle(DZ.textSec)
+                }
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(DZ.sidebarBG)
+
+            AccountRow(userID: app.userID)
+        }
+        .background(DZ.sidebarBG)
+        .navigationSplitViewColumnWidth(min: 210, ideal: 234, max: 280)
+    }
+}
+
+struct SidebarLabel: View {
+    let title: String
+    let symbol: String
+    let tag: Section
+    init(_ t: String, _ s: String, _ tag: Section) { title = t; symbol = s; self.tag = tag }
+
+    var body: some View {
+        Label {
+            Text(title).font(.inter(size: 13)).foregroundStyle(DZ.textPri)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(DZ.accent)
+        }
+        .tag(tag)
+    }
+}
+
+struct AccountRow: View {
+    @EnvironmentObject var app: AppState
+    let userID: String
+
+    private var accountName: String {
+        if let a = app.account, !a.name.isEmpty { return a.name }
+        return "PurpleDisc"
+    }
+    private var accountSubtitle: String {
+        if let a = app.account, !a.offer.isEmpty { return a.offer }
+        return userID.isEmpty ? "—" : Lf("user %@", userID)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.inter(size: 26)).foregroundStyle(DZ.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(accountName).font(.inter(size: 13, weight: .medium))
+                    .foregroundStyle(DZ.textPri).lineLimit(1)
+                Text(accountSubtitle)
+                    .font(.inter(size: 11)).foregroundStyle(DZ.textSec).lineLimit(1)
+                // Free accounts stream full-length at standard quality (128 kbps);
+                // a subtle note explains the quality cap (HiFi/HQ need Premium).
+                if app.loggedIn && !app.isPremium {
+                    Text(L("Free account · standard quality (128 kbps)"))
+                        .font(.inter(size: 10)).foregroundStyle(DZ.accentMag).lineLimit(1)
+                }
+            }
+            Spacer()
+            // Re-open the existing Deezer login sheet to re-authenticate or
+            // switch accounts (same path used at first launch).
+            Button { app.beginWebLogin() } label: {
+                Image(systemName: "person.crop.circle.badge.plus").foregroundStyle(DZ.textSec)
+            }
+            .buttonStyle(.plain).help(L("Log in / Switch account…"))
+            Button { app.showSettings = true } label: {
+                Image(systemName: "gearshape").foregroundStyle(DZ.textSec)
+            }
+            .buttonStyle(.plain).help(L("Settings"))
+            Button { app.showCredits = true } label: {
+                Image(systemName: "info.circle").foregroundStyle(DZ.textSec)
+            }
+            .buttonStyle(.plain).help(L("About Purple Disc"))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .overlay(Divider().overlay(DZ.hairline), alignment: .top)
+    }
+}
+
+// CreditsView — the About sheet, crediting the author like the TUI.
+struct CreditsView: View {
+    @EnvironmentObject var app: AppState
+
+    private var version: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0.0"
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "heart.fill")
+                .font(.inter(size: 52)).foregroundStyle(DZ.accent)
+            Text("Purple Disc for Deezer").font(.inter(size: 26, weight: .bold)).foregroundStyle(DZ.textPri)
+            Text(Lf("v%@ · Unofficial open-source client for Deezer", version))
+                .font(.inter(.callout)).foregroundStyle(DZ.textSec)
+            Text(L("by Scharkenberg, based on OpenDeezer by Cycl0o0")).font(.inter(.body)).foregroundStyle(DZ.accent)
+
+            if app.loggedIn {
+                Text(Lf("Signed in as %@", app.accountLabel))
+                    .font(.inter(.caption)).foregroundStyle(DZ.textSec)
+            }
+
+            Divider().frame(width: 240)
+
+            VStack(spacing: 4) {
+                Text(L("Built with SwiftUI + a Go engine")).foregroundStyle(DZ.textPri)
+                Text("minimp3 · dr_flac · go-mp3 + oto · x/crypto/blowfish").foregroundStyle(DZ.textSec)
+                Text(L("Audio is decrypted and decoded on this device. Your ARL goes only to Deezer."))
+                    .foregroundStyle(DZ.textSec).multilineTextAlignment(.center)
+                Text(L("AGPL-3.0 · Not affiliated with Deezer.")).foregroundStyle(DZ.textSec)
+            }
+            .font(.inter(.caption)).frame(maxWidth: 320)
+
+            // Manual update check — same engine call as the silent launch check,
+            // but always reports a result here (including "up to date").
+            VStack(spacing: 6) {
+                Button {
+                    app.checkForUpdates(manual: true)
+                } label: {
+                    Label(app.checkingUpdate ? L("Checking…") : L("Check for Updates"),
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.glass).tint(DZ.accent)
+                .disabled(app.checkingUpdate)
+
+                if let status = app.updateCheckStatus {
+                    Text(status).font(.inter(.caption)).foregroundStyle(DZ.textSec)
+                }
+                if let info = app.updateInfo, info.hasUpdate {
+                    Button(Lf("Download v%@", info.latest)) { app.openUpdateURL() }
+                        .buttonStyle(.plain).font(.inter(.caption)).foregroundStyle(DZ.accent)
+                }
+            }
+            .padding(.top, 2)
+
+            Button(L("Done")) { app.showCredits = false }
+                .buttonStyle(.glassProminent).tint(DZ.accent).controlSize(.large)
+                .padding(.top, 4)
+        }
+        .padding(28)
+        .frame(width: 420)
+        .background(DZ.windowBG)
+    }
+}
+
+// MARK: - Detail routing
+
+struct DetailView: View {
+    @EnvironmentObject var app: AppState
+    var body: some View {
+        Group {
+            switch app.section {
+            case .home:
+                HomeView()
+            case .liked, .flow:
+                TrackListScreen()
+            case .charts:
+                ChartsView()
+            case .playlists:
+                if app.tracks.isEmpty {
+                    PlaylistGrid(playlists: app.playlists) { app.openPlaylist($0) }
+                } else {
+                    TrackListScreen()
+                }
+            case .search:
+                SearchView()
+            case .podcasts:
+                PodcastsView()
+            case .history:
+                RecentlyPlayedView()
+            }
+        }
+        .background(DZ.windowBG)
+        .overlay { if app.busy { ProgressView().controlSize(.large).tint(DZ.accent) } }
+        // Floating player bar, confined to the detail column (not the sidebar).
+        .overlay(alignment: .bottom) {
+            PlayerBar().padding(.horizontal, 12).padding(.bottom, 12)
+        }
+    }
+}
+
+// MARK: - Hero + track list
+
+struct TrackListScreen: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                HeroHeader()
+                TrackTable(tracks: app.tracks)
+                    .padding(.bottom, 96) // clear the floating player bar
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(DZ.windowBG)
+    }
+}
+
+struct HeroHeader: View {
+    @EnvironmentObject var app: AppState
+
+    private var subtitle: String {
+        app.listIsLiked ? Lp("%d songs", app.tracks.count) : app.listSubtitle
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            // Ambient backdrop: blurred artwork (playlist/album) or brand gradient (liked).
+            Group {
+                if app.listIsLiked || app.listArtwork.isEmpty {
+                    LinearGradient(colors: [DZ.accentMag, DZ.accent, DZ.windowBG],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                } else {
+                    AsyncImage(url: URL(string: app.listArtwork)) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: { DZ.accent }
+                    .blur(radius: 60)
+                    .overlay(LinearGradient(
+                        colors: [DZ.accentMag.opacity(0.30), .clear, DZ.windowBG],
+                        startPoint: .top, endPoint: .bottom))
+                }
+            }
+            .frame(height: 280).clipped()
+            // Let the ambient artwork bleed up under the Liquid Glass toolbar.
+            .backgroundExtensionEffect()
+
+            HStack(alignment: .bottom, spacing: 22) {
+                heroArt
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(app.listTitle)
+                        .font(.inter(size: 34, weight: .bold)).foregroundStyle(DZ.textPri)
+                        .lineLimit(2)
+                    Text(subtitle)
+                        .font(.inter(.title3)).foregroundStyle(DZ.textPri.opacity(0.9))
+                    HStack(spacing: 12) {
+                        Button { app.playAll() } label: {
+                            Label(L("Play"), systemImage: "play.fill")
+                        }
+                        .buttonStyle(.glassProminent).tint(DZ.accent)
+                        Button { app.shuffleAll() } label: {
+                            Label(L("Shuffle"), systemImage: "shuffle")
+                        }
+                        .buttonStyle(.glass)
+                        // Download the whole album / playlist (premium-only, gated
+                        // like the single-track download). Shown only on a
+                        // downloadable list (album / playlist), not Liked / Flow.
+                        if let kind = app.listDownloadKind {
+                            Button { app.downloadCurrentList() } label: {
+                                Label(kind == .album ? L("Download album") : L("Download playlist"),
+                                      systemImage: "arrow.down.circle")
+                            }
+                            .buttonStyle(.glass)
+                            .disabled(!app.isPremium)
+                            .help(app.isPremium ? L("Download")
+                                                : L("Requires a paid Deezer plan"))
+                        }
+                    }
+                    .controlSize(.large)
+                    .padding(.top, 4)
+                }
+                Spacer()
+            }
+            .padding(24)
+        }
+    }
+
+    @ViewBuilder private var heroArt: some View {
+        if app.listIsLiked || app.listArtwork.isEmpty {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(LinearGradient(colors: [DZ.accent, DZ.accentMag],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: 168, height: 168)
+                .overlay(Image(systemName: app.listHeroSymbol).font(.inter(size: 56)).foregroundStyle(.white))
+                .shadow(radius: 18, y: 8)
+        } else {
+            Artwork(url: app.listArtwork, size: 168, radius: 10)
+                .shadow(radius: 18, y: 8)
+        }
+    }
+}
+
+struct TrackTable: View {
+    @EnvironmentObject var app: AppState
+    let tracks: [Track]
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            // column header
+            HStack(spacing: 12) {
+                Text("#").frame(width: 28, alignment: .center)
+                Text(L("Title")).frame(maxWidth: .infinity, alignment: .leading)
+                Text(L("Album")).frame(maxWidth: .infinity, alignment: .leading)
+                Text(L("Time")).frame(width: 56, alignment: .trailing)
+            }
+            .font(.inter(size: 11, weight: .semibold)).textCase(.uppercase)
+            .foregroundStyle(DZ.textSec)
+            .padding(.horizontal, 24).padding(.vertical, 6)
+            Divider().overlay(DZ.hairline)
+
+            ForEach(Array(tracks.enumerated()), id: \.element.id) { idx, t in
+                TrackRowView(index: idx, track: t,
+                             isCurrent: app.current?.id == t.id) {
+                    app.play(t, in: tracks, at: idx)
+                }
+                Divider().overlay(DZ.hairline).padding(.leading, 24)
+            }
+        }
+    }
+}
+
+struct TrackRowView: View {
+    @EnvironmentObject var app: AppState
+    let index: Int
+    let track: Track
+    let isCurrent: Bool
+    let onPlay: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                if isCurrent {
+                    Image(systemName: "waveform").foregroundStyle(DZ.accent)
+                } else if hover {
+                    Image(systemName: "play.fill").foregroundStyle(DZ.textPri)
+                } else {
+                    Text("\(index + 1)").foregroundStyle(DZ.textSec).monospacedDigit()
+                }
+            }
+            .frame(width: 28)
+
+            Artwork(url: track.artworkUrl, size: 36, radius: 4)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 5) {
+                    if track.explicit { ExplicitBadge() }
+                    Text(track.name).lineLimit(1)
+                        .foregroundStyle(isCurrent ? DZ.accent : DZ.textPri)
+                        .fontWeight(isCurrent ? .semibold : .regular)
+                    if app.isOffline(track) { OfflineBadge() }
+                }
+                Text(track.artistLine).font(.inter(.caption)).foregroundStyle(DZ.textSec).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(track.albumName).foregroundStyle(DZ.textSec).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(track.durationText).foregroundStyle(DZ.textSec).monospacedDigit()
+                .frame(width: 56, alignment: .trailing)
+        }
+        .font(.inter(size: 13))
+        .padding(.horizontal, 24).padding(.vertical, 7)
+        .background(isCurrent ? DZ.nowTint : (hover ? Color.white.opacity(0.05) : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onPlay)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hover = h } }
+        .contextMenu {
+            Button { onPlay() } label: { Label(L("Play"), systemImage: "play.fill") }
+            // Up-Next edits: splice after the playing row, or append to the end.
+            Button { app.playNext(track) } label: {
+                Label(L("Play next"), systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            Button { app.addToQueue(track) } label: {
+                Label(L("Add to queue"), systemImage: "text.append")
+            }
+            // Start a "song radio" mix seeded from this track (loads + plays it
+            // through the same code path Flow uses).
+            Button { app.startTrackRadio(track) } label: {
+                Label(L("Start radio"), systemImage: "dot.radiowaves.left.and.right")
+            }
+            Divider()
+            Button { app.toggleLike(track) } label: {
+                Label(app.isLiked(track) ? L("Unlike") : L("Like"),
+                      systemImage: app.isLiked(track) ? "heart.fill" : "heart")
+            }
+            Button { app.beginAddToPlaylist(track) } label: {
+                Label(L("Add to Playlist…"), systemImage: "text.badge.plus")
+            }
+            // Downloads are premium-only. Disabled (not hidden) so free-plan
+            // users see why via the help tooltip.
+            Button { app.download(track) } label: {
+                Label(L("Download"), systemImage: "arrow.down.circle")
+            }
+            .disabled(!app.isPremium)
+            .help(app.isPremium ? L("Download") : L("Requires a paid Deezer plan"))
+            // Cache the track for zero-network playback (premium-only, same gate).
+            Button { app.downloadForOffline(track) } label: {
+                Label(L("Download for offline"), systemImage: "arrow.down.circle.dotted")
+            }
+            .disabled(!app.isPremium)
+            .help(app.isPremium ? L("Download for offline") : L("Requires a paid Deezer plan"))
+            if let aid = track.artists.first?.id {
+                Button { app.openArtist(aid) } label: {
+                    Label(L("Go to Artist"), systemImage: "music.mic")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Library grid
+
+struct PlaylistGrid: View {
+    @EnvironmentObject var app: AppState
+    let playlists: [Playlist]
+    let onOpen: (Playlist) -> Void
+    private let cols = [GridItem(.adaptive(minimum: 170, maximum: 200), spacing: 20)]
+
+    // Text buffers for the create / rename prompts.
+    @State private var createText = ""
+    @State private var renameText = ""
+
+    var body: some View {
+        ScrollView {
+            HStack {
+                Text(L("Playlists")).font(.inter(size: 26, weight: .bold))
+                    .foregroundStyle(DZ.textPri)
+                Spacer()
+                Button { createText = ""; app.showCreatePlaylist = true } label: {
+                    Label(L("New Playlist"), systemImage: "plus")
+                }
+                .buttonStyle(.glass).tint(DZ.accent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24).padding(.top, 20)
+
+            LazyVGrid(columns: cols, spacing: 24) {
+                ForEach(playlists) { p in
+                    PlaylistCard(playlist: p) { onOpen(p) }
+                }
+            }
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 96)
+        }
+        .scrollContentBackground(.hidden)
+        .background(DZ.windowBG)
+        // Create
+        .alert(L("New Playlist"), isPresented: $app.showCreatePlaylist) {
+            TextField(L("Playlist name"), text: $createText)
+            Button(L("Create")) { app.createPlaylist(title: createText) }
+                .disabled(createText.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button(L("Cancel"), role: .cancel) {}
+        } message: { Text(L("Name your new playlist.")) }
+        // Rename
+        .alert(L("Rename Playlist"),
+               isPresented: Binding(get: { app.renameTarget != nil },
+                                    set: { if !$0 { app.renameTarget = nil } })) {
+            TextField(L("Playlist name"), text: $renameText)
+            Button(L("Save")) {
+                if let p = app.renameTarget { app.renamePlaylist(p, to: renameText) }
+                app.renameTarget = nil
+            }
+            .disabled(renameText.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button(L("Cancel"), role: .cancel) { app.renameTarget = nil }
+        } message: { Text(L("Enter a new name.")) }
+        .onChange(of: app.renameTarget) { _, p in renameText = p?.name ?? "" }
+        // Delete (confirm)
+        .confirmationDialog(
+            Lf("Delete “%@”?", app.deleteTarget?.name ?? ""),
+            isPresented: Binding(get: { app.deleteTarget != nil },
+                                 set: { if !$0 { app.deleteTarget = nil } }),
+            titleVisibility: .visible) {
+            Button(L("Delete"), role: .destructive) {
+                if let p = app.deleteTarget { app.deletePlaylist(p) }
+                app.deleteTarget = nil
+            }
+            Button(L("Cancel"), role: .cancel) { app.deleteTarget = nil }
+        } message: { Text(L("This can't be undone.")) }
+    }
+}
+
+struct PlaylistCard: View {
+    @EnvironmentObject var app: AppState
+    let playlist: Playlist
+    let onOpen: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .bottomTrailing) {
+                    Artwork(url: playlist.artworkUrl, size: 170, radius: 8)
+                        .shadow(radius: 6, y: 4)
+                    if hover {
+                        Circle().fill(DZ.accent).frame(width: 40, height: 40)
+                            .overlay(Image(systemName: "play.fill").foregroundStyle(.white))
+                            .shadow(radius: 4).padding(10)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                Text(playlist.name).font(.inter(size: 13, weight: .medium))
+                    .foregroundStyle(DZ.textPri).lineLimit(1)
+                Text(Lp("%d tracks", playlist.trackCount)).font(.inter(.caption)).foregroundStyle(DZ.textSec)
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(hover ? 1.03 : 1)
+        .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hover = h } }
+        .contextMenu {
+            Button { onOpen() } label: { Label(L("Open"), systemImage: "play.fill") }
+            Button { app.beginRename(playlist) } label: { Label(L("Rename…"), systemImage: "pencil") }
+            Button(role: .destructive) { app.deleteTarget = playlist } label: {
+                Label(L("Delete…"), systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Search
+
+struct SearchView: View {
+    @EnvironmentObject var app: AppState
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundStyle(DZ.textSec)
+                TextField(L("Search tracks, albums, playlists"), text: $app.query)
+                    .textFieldStyle(.plain).foregroundStyle(DZ.textPri)
+                    .focused($searchFocused)
+                    .onSubmit { app.runSearch() }
+            }
+            .padding(12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 24).padding(.top, 18).padding(.bottom, 10)
+
+            List {
+                if !app.searchTracks.isEmpty {
+                    searchSection(L("Tracks")) {
+                        ForEach(Array(app.searchTracks.enumerated()), id: \.element.id) { i, t in
+                            TrackRowView(index: i, track: t,
+                                         isCurrent: app.current?.id == t.id) {
+                                app.play(t, in: app.searchTracks, at: i)
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+                }
+                if !app.searchArtists.isEmpty {
+                    searchSection(L("Artists")) {
+                        ForEach(app.searchArtists) { ar in
+                            CompactRow(url: ar.artworkUrl, title: ar.name,
+                                       sub: ar.nbFans > 0 ? Lp("%d fans", ar.nbFans) : L("Artist")) {
+                                app.openArtist(ar.id)
+                            }
+                        }
+                    }
+                }
+                if !app.searchAlbums.isEmpty {
+                    searchSection(L("Albums")) {
+                        ForEach(app.searchAlbums) { a in
+                            CompactRow(url: a.artworkUrl, title: a.name, sub: a.artistLine) {
+                                app.openAlbum(a)
+                            }
+                        }
+                    }
+                }
+                if !app.searchPlaylists.isEmpty {
+                    searchSection(L("Playlists")) {
+                        ForEach(app.searchPlaylists) { p in
+                            CompactRow(url: p.artworkUrl, title: p.name, sub: Lp("%d tracks", p.trackCount)) {
+                                app.openPlaylist(p)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+        }
+        .background(DZ.windowBG)
+        .onAppear { searchFocused = true }
+        .onChange(of: app.searchFocusRequest) { searchFocused = true }
+    }
+
+    private func searchSection<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+        SwiftUI.Section {
+            content()
+        } header: {
+            Text(title).font(.inter(size: 12, weight: .bold)).foregroundStyle(DZ.textSec)
+        }
+    }
+}
+
+struct CompactRow: View {
+    let url: String
+    let title: String
+    let sub: String
+    let onTap: () -> Void
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Artwork(url: url, size: 36, radius: 4)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).foregroundStyle(DZ.textPri).lineLimit(1)
+                    Text(sub).font(.inter(.caption)).foregroundStyle(DZ.textSec).lineLimit(1)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+    }
+}
+
+// MARK: - Artwork
+
+struct Artwork: View {
+    let url: String
+    let size: CGFloat
+    var radius: CGFloat = 4
+    var body: some View {
+        AsyncImage(url: URL(string: url)) { phase in
+            switch phase {
+            case .success(let img): img.resizable().scaledToFill()
+            default:
+                Rectangle().fill(DZ.panelBG)
+                    .overlay(Image(systemName: "music.note").foregroundStyle(DZ.textSec))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+    }
+}

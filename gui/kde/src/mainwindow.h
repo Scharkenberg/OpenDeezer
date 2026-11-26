@@ -1,4 +1,4 @@
-// OpenDeezer — native KDE / Qt6 Widgets front-end.
+// Purple Disc — native KDE / Qt6 Widgets front-end.
 //
 // The whole engine (login, browse, Blowfish decrypt, MP3 decode, ALSA playback)
 // is the Go core compiled to a C static archive (lib/libdeezercore.a) and linked
@@ -80,7 +80,7 @@ struct LyricsData {
     QString             plain;
     QVector<LyricsLine> lines;   // populated only when isSynced
 };
-// One OpenDeezer Connect device from DZDiscoverDevices ({name,addr,client,version}).
+// One Purple Disc Connect device from DZDiscoverDevices ({name,addr,client,version}).
 // addr is the control-API host:port; client maps to a friendly device type.
 struct ConnectDevice {
     QString name, addr, client, version;
@@ -246,7 +246,7 @@ private:
     void preloadNext();
     bool autoTransitionEnabled() const { return m_gapless || m_crossfadeMs > 0; }
 
-    // ---- OpenDeezer Connect (LAN device picker) ----
+    // ---- Purple Disc Connect (LAN device picker) ----
     void openConnectPicker();                                   // discover, then show
     void showConnectPicker(const QVector<ConnectDevice> &devices,
                            const QString &connectedAddr);
@@ -342,7 +342,7 @@ private:
 
     QToolButton *m_prevBtn = nullptr, *m_playBtn = nullptr, *m_nextBtn = nullptr;
     QToolButton *m_likeBtn = nullptr;
-    QToolButton *m_connectBtn = nullptr;        // OpenDeezer Connect device picker
+    QToolButton *m_connectBtn = nullptr;        // PurpleDisc Connect device picker
     QToolButton *m_shuffleBtn = nullptr, *m_repeatBtn = nullptr;
     QSlider     *m_seek = nullptr, *m_vol = nullptr;
     QLabel      *m_nowPlaying = nullptr, *m_cover = nullptr,

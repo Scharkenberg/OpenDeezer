@@ -9,7 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class Hero
 {
@@ -59,7 +59,7 @@ internal sealed class Hero
         });
     }
 
-    // `generated` is a glyph shown on an accent tile instead of artwork (Liked songs, Flow);
+    // `generated` is a glyph shown on an accent tile instead of artwork (Liked songs);
     // `openFirst` makes the meta line's first part (an album's artist) a link.
     public void Set(string kind, string title, string meta, string artUrl, string? generated = null, Action? openFirst = null)
     {

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // The requests both native shells answer the same way. Each takes the
@@ -75,7 +75,7 @@ func SetPinned(c *deezer.Client, typ, id string, on bool) int {
 	case errors.Is(err, deezer.ErrPinLimit):
 		return 2
 	default:
-		odlog.Warn("pin: %v", err)
+		pdlog.Warn("pin: %v", err)
 		return 0
 	}
 }

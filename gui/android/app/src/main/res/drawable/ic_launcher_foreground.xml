@@ -1,11 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The mark from assets/icon.svg (120-unit box), scaled into the adaptive icon's safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- White play triangle centered in the adaptive safe zone. -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M44,38 L44,70 L72,54 Z" />
+    <group
+        android:scaleX="0.66"
+        android:scaleY="0.66"
+        android:translateX="14.4"
+        android:translateY="14.4">
+        <path
+            android:pathData="M100.57,49.13A42,42 0,1 1,77.75 21.94"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="9" />
+        <path
+            android:pathData="M65.12,89.05A29.5,29.5 0,0 1,35.84 43.08"
+            android:strokeAlpha="0.65"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="5" />
+        <path
+            android:fillAlpha="0.65"
+            android:fillColor="#FFFFFF"
+            android:pathData="M92.17,33m-5,0a5,5 0,1 0,10 0a5,5 0,1 0,-10 0" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M60,39A21,21 0,1 0,60 81A21,21 0,1 0,60 39ZM57.43,50.06L70.57,57.94Q74,60 70.57,62.06L57.43,69.94Q54,72 54,68L54,52Q54,48 57.43,50.06Z" />
+    </group>
 </vector>

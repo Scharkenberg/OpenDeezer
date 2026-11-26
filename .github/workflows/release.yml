@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - name: Install ALSA (linux)
         if: matrix.goos == 'linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
@@ -65,7 +65,7 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
           EXT=""; [ "$GOOS" = windows ] && EXT=".exe"
-          OUT="opendeezer-tui-${GOOS}-${GOARCH}${EXT}"
+          OUT="purpledisc-tui-${GOOS}-${GOARCH}${EXT}"
           LDFLAGS="-s -w -X main.version=${GITHUB_REF_NAME}"
           if [ "$GOOS" = darwin ] && [ "$GOARCH" = amd64 ]; then
             export CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
@@ -75,7 +75,8 @@ jobs:
             export CC=x86_64-w64-mingw32-gcc
             LDFLAGS="$LDFLAGS -extldflags=-static"
           fi
-          go build -trimpath -ldflags "$LDFLAGS" -o "$OUT" ./cmd/opendeezer
+          cp corelib/default.pgo cmd/purpledisc/default.pgo
+          go build -trimpath -ldflags "$LDFLAGS" -o "$OUT" ./cmd/purpledisc
           echo "ARTIFACT=$OUT" >> "$GITHUB_ENV"
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
@@ -114,7 +115,7 @@ jobs:
           xcode-version: "26.0"
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - name: Build universal app bundle (arm64 + x86_64)
         run: cd gui/macos && make app
 
@@ -149,13 +150,13 @@ jobs:
           # Sign inside-out: the nested Mach-O executable first, then seal the
           # bundle. Hardened runtime (--options runtime) is required to notarize.
           codesign --force --timestamp --options runtime \
-            --sign "$SIGN_IDENTITY" OpenDeezer.app/Contents/MacOS/OpenDeezer
+            --sign "$SIGN_IDENTITY" PurpleDisc.app/Contents/MacOS/PurpleDisc
           codesign --force --timestamp --options runtime \
-            --sign "$SIGN_IDENTITY" OpenDeezer.app
-          codesign --verify --strict --verbose=2 OpenDeezer.app
+            --sign "$SIGN_IDENTITY" PurpleDisc.app
+          codesign --verify --strict --verbose=2 PurpleDisc.app
 
       - name: Zip
-        run: cd gui/macos && ditto -c -k --keepParent OpenDeezer.app ../../OpenDeezer-macos-universal.zip
+        run: cd gui/macos && ditto -c -k --keepParent PurpleDisc.app ../../PurpleDisc-macos-universal.zip
 
       - name: Notarize and staple
         if: env.SIGN == 'true'
@@ -168,21 +169,21 @@ jobs:
           # --wait blocks until Apple returns Accepted/Invalid; a non-Accepted
           # status exits non-zero and fails the (non-blocking) job, so a broken
           # build never uploads.
-          xcrun notarytool submit OpenDeezer-macos-universal.zip \
+          xcrun notarytool submit PurpleDisc-macos-universal.zip \
             --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
             --wait
           # Staple the ticket into the .app, then re-zip so the offline ticket ships.
-          xcrun stapler staple gui/macos/OpenDeezer.app
-          xcrun stapler validate gui/macos/OpenDeezer.app
-          rm -f OpenDeezer-macos-universal.zip
-          cd gui/macos && ditto -c -k --keepParent OpenDeezer.app ../../OpenDeezer-macos-universal.zip
+          xcrun stapler staple gui/macos/PurpleDisc.app
+          xcrun stapler validate gui/macos/PurpleDisc.app
+          rm -f PurpleDisc-macos-universal.zip
+          cd gui/macos && ditto -c -k --keepParent PurpleDisc.app ../../PurpleDisc-macos-universal.zip
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-macos-universal.zip
+          files: PurpleDisc-macos-universal.zip
 
   # ---- GNOME GUI (GTK4 / libadwaita) — needs ubuntu-24.04 (libadwaita >= 1.5) ----
   gnome:
@@ -199,18 +200,23 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libjson-glib-dev libwebkitgtk-6.0-dev libsoup-3.0-dev libasound2-dev meson ninja-build gettext
       - name: Build
         run: cd gui/gnome && chmod +x build.sh && ./build.sh
       - name: Stage artifact
-        run: cp gui/gnome/opendeezer-gnome OpenDeezer-gnome-${{ matrix.arch }}
+        # The app reads Inter from fonts/ beside the executable.
+        run: |
+          mkdir -p stage/fonts
+          cp gui/gnome/purpledisc-gnome stage/
+          cp assets/fonts/InterVariable.ttf assets/fonts/Inter-OFL.txt stage/fonts/
+          tar -czf PurpleDisc-gnome-${{ matrix.arch }}.tar.gz -C stage .
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-gnome-${{ matrix.arch }}
+          files: PurpleDisc-gnome-${{ matrix.arch }}.tar.gz
 
   # ---- KDE GUI (Qt6 Widgets) ----
   kde:
@@ -227,18 +233,18 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y qt6-base-dev qt6-webengine-dev qt6-l10n-tools qt6-tools-dev cmake libasound2-dev
       - name: Build
         run: cd gui/kde && chmod +x build.sh && ./build.sh
       - name: Stage artifact
-        run: cp gui/kde/opendeezer-kde OpenDeezer-kde-${{ matrix.arch }}
+        run: cp gui/kde/purpledisc-kde PurpleDisc-kde-${{ matrix.arch }}
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-kde-${{ matrix.arch }}
+          files: PurpleDisc-kde-${{ matrix.arch }}
 
   # ---- Unified Linux client (GTK + Qt backends behind a dlopen launcher) ----
   linux-unified:
@@ -255,18 +261,18 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libjson-glib-dev libwebkitgtk-6.0-dev libsoup-3.0-dev qt6-base-dev qt6-webengine-dev qt6-l10n-tools qt6-tools-dev libasound2-dev meson ninja-build cmake gettext
       - name: Build unified bundle
         run: cd gui/linux && chmod +x build.sh && ./build.sh
       - name: Package
-        run: tar -C gui/linux/dist -czf OpenDeezer-linux-${{ matrix.arch }}.tar.gz .
+        run: tar -C gui/linux/dist -czf PurpleDisc-linux-${{ matrix.arch }}.tar.gz .
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-linux-${{ matrix.arch }}.tar.gz
+          files: PurpleDisc-linux-${{ matrix.arch }}.tar.gz
 
   # ---- Windows GUI (C# WinUI 3 / .NET 11): needs the .NET SDK + MinGW (Go DLL) ----
   windows-gui:
@@ -275,7 +281,7 @@ jobs:
     runs-on: windows-latest
     # SIGN is 'true' only when the Azure Trusted Signing secrets are present, so
     # forks / secret-less runs still zip an unsigned build exactly as before. When
-    # true, OpenDeezer.exe is Authenticode-signed so SmartScreen stops flagging an
+    # true, PurpleDisc.exe is Authenticode-signed so SmartScreen stops flagging an
     # "unknown publisher". See docs/WINDOWS_SIGNING.md.
     env:
       SIGN: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.TRUSTED_SIGNING_ACCOUNT_NAME != '' }}
@@ -283,7 +289,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "11.0.x"
@@ -296,11 +302,11 @@ jobs:
         # build.ps1 publishes a self-contained win-x64 build (exe + WinAppSDK DLLs +
         # libdeezercore.dll) under bin\...\win-x64\publish. Resolve that dir robustly.
         run: |
-          $exe = Get-ChildItem -Path gui/windows/bin -Filter OpenDeezer.exe -Recurse -File |
+          $exe = Get-ChildItem -Path gui/windows/bin -Filter PurpleDisc.exe -Recurse -File |
                  Where-Object { $_.FullName -match '\\publish\\' } | Select-Object -First 1
           if (-not $exe) { throw 'publish dir not found' }
           "dir=$($exe.Directory.FullName)" >> $env:GITHUB_OUTPUT
-      - name: Sign OpenDeezer.exe (Azure Trusted Signing)
+      - name: Sign PurpleDisc.exe (Azure Trusted Signing)
         if: env.SIGN == 'true'
         # Signs only the launcher exe (SmartScreen assesses the exe the user runs;
         # the WinAppSDK DLLs are already Microsoft-signed and libdeezercore.dll is
@@ -321,12 +327,12 @@ jobs:
           timestamp-digest: SHA256
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path (Join-Path '${{ steps.pub.outputs.dir }}' '*') -DestinationPath OpenDeezer-windows-x64.zip
+        run: Compress-Archive -Path (Join-Path '${{ steps.pub.outputs.dir }}' '*') -DestinationPath PurpleDisc-windows-x64.zip
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-windows-x64.zip
+          files: PurpleDisc-windows-x64.zip
 
   # ---- Android app (Kotlin/Compose via gomobile AAR) ----
   android:
@@ -355,26 +361,28 @@ jobs:
           echo "ANDROID_BASE_VERSION_CODE=$BASE_VERSION_CODE" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.4"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
       - uses: android-actions/setup-android@v4
         with:
           # "tools" (default) drags in an Android Emulator update we never
           # use and whose download flakes; platform-tools is all we need.
           packages: platform-tools
       - name: Install NDK
-        run: sdkmanager "ndk;26.3.11579264" "platforms;android-34" "build-tools;34.0.0"
-      - name: Build odmobile.aar (gomobile)
+        run: sdkmanager "ndk;30.0.16248370" "platforms;android-37.2" "build-tools;37.0.0"
+      - name: Build pdmobile.aar (gomobile)
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/30.0.16248370
         run: |
-          scripts/build-mobile-tools.sh "$RUNNER_TEMP/opendeezer-mobile-tools"
-          export PATH="$RUNNER_TEMP/opendeezer-mobile-tools:$PATH"
+          scripts/build-mobile-tools.sh "$RUNNER_TEMP/purpledisc-mobile-tools"
+          export PATH="$RUNNER_TEMP/purpledisc-mobile-tools:$PATH"
           mkdir -p gui/android/app/libs
-          gomobile bind -trimpath -target=android -androidapi 24 -o gui/android/app/libs/odmobile.aar ./mobile
+          export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,--pack-dyn-relocs=android"
+          export GOFLAGS="-pgo=$PWD/corelib/default.pgo"
+          gomobile bind -trimpath -ldflags="-s -w" -target=android -androidapi 24 -o gui/android/app/libs/pdmobile.aar ./mobile
       - name: Require Android release-signing secrets
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -392,7 +400,7 @@ jobs:
       - name: Assemble release APKs (signed, phone + TV)
         working-directory: gui/android
         env:
-          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/opendeezer-release.p12
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/purpledisc-release.p12
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -413,8 +421,8 @@ jobs:
         env:
           ANDROID_EXPECTED_CERT_SHA256: ${{ vars.ANDROID_EXPECTED_CERT_SHA256 }}
         run: |
-          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner"
-          AAPT="$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
+          AAPT="$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt"
           EXPECTED="${ANDROID_EXPECTED_CERT_SHA256:-E5:C1:14:BA:5E:F3:48:2B:5A:44:14:85:92:38:35:C5:10:C7:24:01:3F:41:16:C9:A4:48:08:B3:47:DF:A2:30}"
           WANT=$(echo "$EXPECTED" | tr -d ' :' | tr 'a-f' 'A-F')
           verify_one() {
@@ -423,7 +431,7 @@ jobs:
             local verification got
             verification=$("$APKSIGNER" verify --print-certs --verbose "$apk")
             echo "$verification"
-            # Require v2 and v3 blocks, not just the legacy v1 jar signature.
+            # Require v2 and v3 blocks (the APK carries no v1 jar signature).
             for scheme in v2 v3; do
               echo "$verification" | grep -q "Verified using $scheme scheme (APK Signature Scheme $scheme): true" \
                 || { echo "::error::$apk is not signed with APK Signature Scheme $scheme"; exit 1; }
@@ -478,11 +486,11 @@ jobs:
         run: |
           mobile=gui/android/app/build/outputs/apk/mobile/release
           tv=gui/android/app/build/outputs/apk/tv/release
-          cp "$mobile/app-mobile-universal-release.apk" OpenDeezer-android.apk
-          cp "$tv/app-tv-universal-release.apk" OpenDeezer-androidtv.apk
+          cp "$mobile/app-mobile-universal-release.apk" PurpleDisc-android.apk
+          cp "$tv/app-tv-universal-release.apk" PurpleDisc-androidtv.apk
           for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-            cp "$mobile/app-mobile-${abi}-release.apk" "OpenDeezer-android-${abi}.apk"
-            cp "$tv/app-tv-${abi}-release.apk" "OpenDeezer-androidtv-${abi}.apk"
+            cp "$mobile/app-mobile-${abi}-release.apk" "PurpleDisc-android-${abi}.apk"
+            cp "$tv/app-tv-${abi}-release.apk" "PurpleDisc-androidtv-${abi}.apk"
           done
 
       - name: Upload to release
@@ -490,7 +498,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            OpenDeezer-android*.apk
+            PurpleDisc-android*.apk
           fail_on_unmatched_files: true
 
   # ---- iOS app (SwiftUI via gomobile xcframework) — unsigned .ipa for sideloading ----
@@ -542,12 +550,12 @@ jobs:
           echo "== installed iOS SDKs =="; xcodebuild -showsdks 2>/dev/null | grep -i iphoneos || true
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12"
-      - name: Build Odmobile.xcframework (gomobile bind ios)
+          go-version: "1.27.4"
+      - name: Build Pdmobile.xcframework (gomobile bind ios)
         run: |
-          scripts/build-mobile-tools.sh "$RUNNER_TEMP/opendeezer-mobile-tools"
-          export PATH="$RUNNER_TEMP/opendeezer-mobile-tools:$PATH"
-          gomobile bind -trimpath -target=ios -o gui/ios/Odmobile.xcframework ./mobile
+          scripts/build-mobile-tools.sh "$RUNNER_TEMP/purpledisc-mobile-tools"
+          export PATH="$RUNNER_TEMP/purpledisc-mobile-tools:$PATH"
+          gomobile bind -trimpath -ldflags="-s -w" -target=ios -o gui/ios/Pdmobile.xcframework ./mobile
       - name: Generate Xcode project (xcodegen)
         run: |
           brew install xcodegen
@@ -557,20 +565,20 @@ jobs:
           cd gui/ios
           # Use an explicit generic iOS destination — '-sdk iphoneos' alone
           # intermittently fails with "Found no destinations for the scheme".
-          xcodebuild -project OpenDeezer.xcodeproj -scheme OpenDeezer \
+          xcodebuild -project PurpleDisc.xcodeproj -scheme PurpleDisc \
             -destination 'generic/platform=iOS' -configuration Release -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
       - name: Package unsigned .ipa
         run: |
           cd gui/ios
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/OpenDeezer.app Payload/
-          zip -qry ../../OpenDeezer-ios-unsigned.ipa Payload
+          cp -R build/Build/Products/Release-iphoneos/PurpleDisc.app Payload/
+          zip -qry ../../PurpleDisc-ios-unsigned.ipa Payload
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: OpenDeezer-ios-unsigned.ipa
+          files: PurpleDisc-ios-unsigned.ipa
 
   # ---- Checksums: gather every released asset and publish SHA256SUMS.txt ----
   # macOS and iOS are intentionally best-effort (`continue-on-error` above), so
@@ -624,33 +632,33 @@ jobs:
           # SHA256SUMS.txt — drop it so the sums file never references itself.
           rm -f dist/SHA256SUMS.txt
           required=( \
-            opendeezer-tui-darwin-arm64 \
-            opendeezer-tui-darwin-amd64 \
-            opendeezer-tui-linux-arm64 \
-            opendeezer-tui-linux-amd64 \
-            opendeezer-tui-windows-amd64.exe \
-            OpenDeezer-android.apk \
-            OpenDeezer-androidtv.apk \
-            OpenDeezer-android-armeabi-v7a.apk \
-            OpenDeezer-android-arm64-v8a.apk \
-            OpenDeezer-android-x86.apk \
-            OpenDeezer-android-x86_64.apk \
-            OpenDeezer-androidtv-armeabi-v7a.apk \
-            OpenDeezer-androidtv-arm64-v8a.apk \
-            OpenDeezer-androidtv-x86.apk \
-            OpenDeezer-androidtv-x86_64.apk \
+            purpledisc-tui-darwin-arm64 \
+            purpledisc-tui-darwin-amd64 \
+            purpledisc-tui-linux-arm64 \
+            purpledisc-tui-linux-amd64 \
+            purpledisc-tui-windows-amd64.exe \
+            PurpleDisc-android.apk \
+            PurpleDisc-androidtv.apk \
+            PurpleDisc-android-armeabi-v7a.apk \
+            PurpleDisc-android-arm64-v8a.apk \
+            PurpleDisc-android-x86.apk \
+            PurpleDisc-android-x86_64.apk \
+            PurpleDisc-androidtv-armeabi-v7a.apk \
+            PurpleDisc-androidtv-arm64-v8a.apk \
+            PurpleDisc-androidtv-x86.apk \
+            PurpleDisc-androidtv-x86_64.apk \
           )
           if [ "$HAS_GNOME" = true ]; then
-            required+=(OpenDeezer-gnome-x86_64 OpenDeezer-gnome-aarch64)
+            required+=(PurpleDisc-gnome-x86_64.tar.gz PurpleDisc-gnome-aarch64.tar.gz)
           fi
           if [ "$HAS_KDE" = true ]; then
-            required+=(OpenDeezer-kde-x86_64 OpenDeezer-kde-aarch64)
+            required+=(PurpleDisc-kde-x86_64 PurpleDisc-kde-aarch64)
           fi
           if [ "$HAS_LINUX" = true ]; then
-            required+=(OpenDeezer-linux-x86_64.tar.gz OpenDeezer-linux-aarch64.tar.gz)
+            required+=(PurpleDisc-linux-x86_64.tar.gz PurpleDisc-linux-aarch64.tar.gz)
           fi
           if [ "$HAS_WINDOWS" = true ]; then
-            required+=(OpenDeezer-windows-x64.zip)
+            required+=(PurpleDisc-windows-x64.zip)
           fi
           for asset in "${required[@]}"; do
             test -f "dist/$asset" || {

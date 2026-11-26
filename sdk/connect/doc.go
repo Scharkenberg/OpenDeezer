@@ -1,7 +1,7 @@
-// Package connect implements OpenDeezer Connect: LAN discovery and remote
-// control of OpenDeezer devices, in both directions.
+// Package connect implements Purple Disc Connect: LAN discovery and remote
+// control of Purple Disc devices, in both directions.
 //
-// OpenDeezer Connect is symmetric; this package exposes both sides:
+// Purple Disc Connect is symmetric; this package exposes both sides:
 //
 //   - out: discover and control other devices with [Discover] and [RemoteClient]
 //   - in: be discoverable and controllable with [Host] (and the lower-level

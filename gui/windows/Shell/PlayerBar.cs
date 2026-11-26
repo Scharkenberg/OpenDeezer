@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class PlayerBar
 {
@@ -21,7 +21,7 @@ internal sealed class PlayerBar
     private readonly TextBlock _artistText = Ui.Text("", TextKind.SecondaryCaption);
     private readonly HyperlinkButton _artist;
     private readonly TextBlock _formatText = Ui.ChipText("");
-    private readonly Border _format;
+    internal readonly Border _format;
     private readonly Button _like;
     private readonly FrameworkElement _nowPlaying, _idle;
     internal readonly FrameworkElement _elsewhere;
@@ -42,7 +42,7 @@ internal sealed class PlayerBar
     private readonly FontIcon _playIcon = Ui.Icon(Icons.Play);
     private readonly FontIcon _repeatIcon = Ui.Icon(Icons.Repeat), _volumeIcon = Ui.Icon(Icons.Volume);
     private readonly ProgressRing _playRing = Ui.Square(new ProgressRing { Style = Ui.Styles.PlayRing, IsActive = false }, Size.PlayRing);
-    private readonly TextBlock _pos = Ui.Time(0), _dur = Ui.Time(0);
+    internal readonly TextBlock _pos = Ui.Time(0), _dur = Ui.Time(0);
     internal readonly Slider _seek;
 
     private readonly ToggleButton _lyrics, _queue;
@@ -100,22 +100,28 @@ internal sealed class PlayerBar
         {
             if (Player.Current is { } t) TrackView.Open(t);
         };
-        var lines = Ui.Stack(0, Ui.Grid("auto *", 0, _explicit, title), Ui.Grid("* auto", Space.S, _artist, _format));
+        _title.FontSize = _elsewhereTitle.FontSize = Size.BarTitleFont;
+        _artistText.FontSize = _elsewhereArtist.FontSize = Size.BarArtistFont;
+        var lines = Ui.Stack(0, Ui.Grid("auto *", 0, _explicit, title), _artist);
         lines.VerticalAlignment = VerticalAlignment.Center;
-        _nowPlaying = Ui.Grid("auto * auto", Space.M, _artButton, lines, _like);
+        // Like over the codec chip, centered beside the text.
+        _format.HorizontalAlignment = HorizontalAlignment.Center;
+        var side = Ui.Stack(0, _like, _format);
+        side.VerticalAlignment = VerticalAlignment.Center;
+        _nowPlaying = Ui.Grid("auto * auto", Space.S, _artButton, lines, side);
         _nowPlaying.VerticalAlignment = VerticalAlignment.Center;
 
-        _shuffle = Ui.IconToggle(Icons.Shuffle, "Tooltip_Shuffle", on => Player.SetShuffle(on));
-        _prev = Ui.IconButton(Icons.Previous, "Tooltip_Previous", Player.Prev, IconSize.Large);
-        _next = Ui.IconButton(Icons.Next, "Tooltip_Next", Player.Next, IconSize.Large);
+        _shuffle = Ui.IconToggle(Icons.Shuffle, "Tooltip_Shuffle", on => Player.SetShuffle(on), turn: true);
+        _prev = Ui.IconButton(Icons.Previous, "Tooltip_Previous", Player.Prev, IconSize.Large, nudge: -Moves.Nudge);
+        _next = Ui.IconButton(Icons.Next, "Tooltip_Next", Player.Next, IconSize.Large, nudge: Moves.Nudge);
         var playContent = new Grid();
         playContent.Children.Add(_playIcon);
         playContent.Children.Add(_playRing);
         _play = Ui.PlayButton(playContent);
         _play.Click += (_, _) => Player.TogglePlayPause();
-        _repeat = Ui.IconToggle(Icons.Repeat, "Tooltip_RepeatOff", _ => CycleRepeat());
+        _repeat = Ui.IconToggle(Icons.Repeat, "Tooltip_RepeatOff", _ => CycleRepeat(), turn: true);
         _repeat.Content = _repeatIcon;
-        _transport = Ui.Row(Space.S, _shuffle, _prev, _play, _next, _repeat);
+        _transport = Ui.Row(Space.XS, _shuffle, _prev, _play, _next, _repeat);
         _transport.HorizontalAlignment = HorizontalAlignment.Center;
         _seek = Ui.Slider(0, 1, 0, "Tooltip_Seek", v =>
         {
@@ -139,14 +145,12 @@ internal sealed class PlayerBar
         _seek.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => EndSeek()), true);
         _seek.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => EndSeek()), true);
         // The times sit above the slider's ends, beside the buttons: showing them never takes the
-        // slider's width. They show when the column has room beside the buttons; the thumb's tooltip
-        // has the time anyway.
+        // slider's width. They always show; the center column keeps room for them (ApplyWidth).
         _pos.VerticalAlignment = VerticalAlignment.Center;
         _dur.VerticalAlignment = VerticalAlignment.Center;
         _dur.HorizontalAlignment = HorizontalAlignment.Right;
-        _center = Ui.Stack(0, Ui.Grid("* auto *", Space.S, _pos, _transport, _dur), _seek);
+        _center = Ui.Stack(0, Ui.Grid("* auto *", Space.XS, _pos, _transport, _dur), _seek);
         _center.VerticalAlignment = VerticalAlignment.Center;
-        _center.SizeChanged += (_, _) => RenderTimes();
 
         _lyrics = Ui.IconToggle(Icons.Lyrics, "Tooltip_Lyrics", on => LyricsToggled?.Invoke(on));
         _queue = Ui.IconToggle(Icons.Queue, "Tooltip_Queue", on => QueueToggled?.Invoke(on));
@@ -196,7 +200,7 @@ internal sealed class PlayerBar
         Ui.Name(elsewhereLines, Loc.S("Tooltip_PlayingElsewhere"));
         _playHere = Ui.IconButton(Icons.Play, "Tooltip_PlayHere", () =>
         {
-            if (Player.Elsewhere.Track is { } t) Player.Play((Track[])[t], 0, ListenContext.None);
+            if (Player.Elsewhere.Track is { } t) Player.PlayHere(t);
         });
         _elsewhere = Ui.Grid("auto * auto", Space.M, _elsewhereArt.Root, elsewhereLines, _playHere);
         _elsewhere.VerticalAlignment = VerticalAlignment.Center;
@@ -209,17 +213,20 @@ internal sealed class PlayerBar
         slot.Children.Add(idle);
         slot.Children.Add(_elsewhere);
         var card = new Border { Style = Ui.Styles.Get("NowPlayingCard"), Child = slot };
-        Root = Ui.Grid($"* {Size.BarCenterWeight}* *", Space.M, card, _center, right);
+        Root = Ui.Grid($"* {Size.BarCenterWeight}* *", Space.S, card, _center, right);
         Root.ColumnDefinitions[1].MinWidth = Size.BarCenterMin;
         Root.ColumnDefinitions[1].MaxWidth = Size.BarCenterMax;
         Root.Style = Ui.Styles.Bar;
         Root.Padding = Pad.Bar;
         Ui.OnWidthClass(Root, ApplyWidth);
         // The bar's own width grows with the minimums Balance sets: the space it is given decides.
-        Root.Loaded += (_, _) =>
+        RoutedEventHandler? loaded = null;
+        loaded = (_, _) =>
         {
+            Root.Loaded -= loaded;
             if (Root.Parent is FrameworkElement host) host.SizeChanged += (_, e) => Balance(e.NewSize.Width);
         };
+        Root.Loaded += loaded;
 
         Player.TrackChanged += RenderTrack;
         Player.StateChanged += RenderTransport;
@@ -276,7 +283,7 @@ internal sealed class PlayerBar
         Ui.SetText(_pos, Fmt.Time(pos));
     }
 
-    private void RenderTrack()
+    internal void RenderTrack()
     {
         string id = Player.Current?.Id ?? "";
         bool fade = id.Length > 0 && _shownId.Length > 0 && id != _shownId;
@@ -347,8 +354,12 @@ internal sealed class PlayerBar
     {
         bool playing = Player.State == PlayState.Playing;
         bool loading = Player.State == PlayState.Loading;
-        _playIcon.Glyph = playing ? Icons.Pause : Icons.Play;
+        string glyph = playing ? Icons.Pause : Icons.Play;
+        // Only a shown glyph that stays shown swaps with motion; one hidden by or for Loading does not.
+        bool swap = _playIcon.Glyph != glyph && _playIcon.Visibility == Visibility.Visible && !loading;
+        _playIcon.Glyph = glyph;
         _playIcon.Visibility = Ui.Show(!loading);
+        if (swap) Motion.Swap(_playIcon, (float)_playIcon.FontSize);
         _playRing.IsActive = loading;
         _playRing.Visibility = Ui.Show(loading);
         Ui.Name(_play, Loc.S(playing ? "Tooltip_Pause" : "Tooltip_Play"));
@@ -386,11 +397,11 @@ internal sealed class PlayerBar
         _seek.IsEnabled = any && Player.DurationMs > 0 && Player.State != PlayState.Loading;
     }
 
-    private void RenderFormat()
+    internal void RenderFormat()
     {
         string text = Player.IsPreview ? Loc.S("Preview_Badge") : Fmt.FormatChip(Player.Format);
         _formatText.Text = text;
-        _format.Visibility = Ui.Show(text.Length > 0 && Player.Current != null && _width >= WidthClass.Medium);
+        _format.Visibility = Ui.Show(text.Length > 0 && Player.Current != null);
     }
 
     // Below Narrow the art, lyrics and Connect make room (the last two move into More), so the
@@ -408,9 +419,12 @@ internal sealed class PlayerBar
         // up to what it has at the next width class (Small), so widening across it never narrows it.
         double gaps = 2 * Root.ColumnSpacing + Root.Padding.Left + Root.Padding.Right;
         double smallCenter = Breakpoint.Narrow - gaps - LeftMin(narrow: false) - Count.SmallBarButtons * Size.IconButton;
-        Root.ColumnDefinitions[1].MinWidth = narrow ? 2 * Size.IconButton + Size.PlayButton + 2 * Space.S : Size.BarCenterMin;
+        // The transport row and the two times beside it, which always show.
+        double transport = narrow ? 2 * Size.IconButton + Size.PlayButton + 2 * Space.XS : 4 * Size.IconButton + Size.PlayButton + 4 * Space.XS;
+        double centerMin = Math.Max(narrow ? 0 : Size.BarCenterMin, transport + 2 * (Size.TimeText + Space.XS));
+        Root.ColumnDefinitions[1].MinWidth = centerMin;
         Root.ColumnDefinitions[1].MaxWidth = narrow ? smallCenter : Size.BarCenterMax;
-        _centerWant = narrow ? Size.BarCenterNarrow : Math.Max(Size.BarCenterMin, smallCenter);
+        _centerWant = Math.Max(centerMin, narrow ? Size.BarCenterNarrow : smallCenter);
         _volume.Visibility = Ui.Show(c >= WidthClass.Medium);
         _speed.Visibility = Ui.Show(SpeedShown(c));
         _shuffle.Visibility = Ui.Show(!narrow);
@@ -424,20 +438,13 @@ internal sealed class PlayerBar
         Balance((Root.Parent as FrameworkElement)?.ActualWidth ?? 0);
         RenderVolumeName();
         RenderFormat();
-        RenderTimes();
     }
 
-    // Now playing's minimum: the art (but on a narrow bar), the title's room, Like, and the card's
-    // padding and border on both sides.
+    // Now playing's minimum: the art (on a narrow bar only the gap its empty column keeps), the
+    // title's room, Like, and the card's padding and border on both sides.
     private static double LeftMin(bool narrow) =>
-        (narrow ? 0 : Size.BarArt + Space.M) + Size.BarText + Space.M + Size.IconButton + 2 * (Space.S + Size.CardBorder);
-
-    private void RenderTimes()
-    {
-        bool fits = _center.ActualWidth >= _transport.DesiredSize.Width + 2 * (Size.TimeText + Space.S);
-        _pos.Visibility = Ui.Show(fits);
-        _dur.Visibility = Ui.Show(fits);
-    }
+        (narrow ? 0 : Size.BarArt) + Space.S + (narrow ? Size.BarTextNarrow : Size.BarText) + Space.S + Size.BarSide
+        + 2 * (Space.S + Size.CardBorder);
 
     // The center first gets the width it wants (_centerWant); what is left past that evens out the
     // sides, the smaller growing to the larger, so the transport row moves to the window's center;
@@ -482,9 +489,7 @@ internal sealed class PlayerBar
         menu.Items.Clear();
         if (_width == WidthClass.Narrow)
         {
-            var shuffle = new ToggleMenuFlyoutItem { Text = Loc.S("Tooltip_Shuffle"), Icon = Ui.Icon(Icons.Shuffle), IsChecked = Player.Shuffle };
-            shuffle.Click += (_, _) => Player.SetShuffle(shuffle.IsChecked);
-            Menus.Group(menu.Items, shuffle,
+            Menus.Group(menu.Items, Menus.CheckItem("Tooltip_Shuffle", Icons.Shuffle, Player.Shuffle, Player.SetShuffle),
                 Menus.Item(RepeatKey, RepeatGlyph, CycleRepeat),
                 Menus.Item("Tooltip_Lyrics", Icons.Lyrics, () => LyricsToggled?.Invoke(true)),
                 Menus.Item("Tooltip_Connect", Icons.Cast, () => _connectFlyout.ShowAt(_more)));

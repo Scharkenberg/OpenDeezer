@@ -1,15 +1,14 @@
-// Settings and saved login in %APPDATA%\opendeezer: settings.json and arl.txt
+// Settings and saved login in %APPDATA%\purpledisc: settings.json and arl.txt
 // (raw UTF-8, no BOM, plaintext because the TUI reads the same file).
 
 using System;
 using System.IO;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // AudioDevice "" = default.
 internal sealed class Settings
@@ -53,7 +52,7 @@ internal static class Config
     {
         var appdata = Environment.GetEnvironmentVariable("APPDATA");
         if (string.IsNullOrEmpty(appdata)) appdata = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return string.IsNullOrEmpty(appdata) ? "" : Path.Combine(appdata, "opendeezer");
+        return string.IsNullOrEmpty(appdata) ? "" : Path.Combine(appdata, "purpledisc");
     }
 
     private static string SettingsPath() => Path.Combine(ConfigDir(), "settings.json");
@@ -149,12 +148,8 @@ internal static class Config
         }
     }
 
-    public static string AppVersion()
-    {
-        var v = Assembly.GetExecutingAssembly().GetName().Version;
-        return v == null ? "" : $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
-    }
+    public static string AppVersion() => BuildInfo.Version;
 
     public static string DeviceName() =>
-        string.IsNullOrEmpty(Environment.MachineName) ? "OpenDeezer for Windows" : Environment.MachineName;
+        string.IsNullOrEmpty(Environment.MachineName) ? "Purple Disc for Windows" : Environment.MachineName;
 }

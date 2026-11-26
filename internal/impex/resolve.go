@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // Resolver looks imported rows up on Deezer. Narrow so tests use a fake.

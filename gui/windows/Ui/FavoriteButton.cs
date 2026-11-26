@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class FavoriteButton
 {

@@ -1,6 +1,6 @@
-# Contributing to OpenDeezer
+# Contributing to Purple Disc
 
-Thanks for your interest in OpenDeezer.
+Thanks for your interest in Purple Disc.
 
 ## Development
 
@@ -24,8 +24,8 @@ CGO_ENABLED=1 go build -buildmode=c-archive -o libdeezercore.a ./corelib
 Run the TUI (needs a Deezer Premium ARL — see the README):
 
 ```sh
-go run ./cmd/opendeezer
-OPENDEEZER_LOG=debug go run ./cmd/opendeezer   # with debug logging to opendeezer.log
+go run ./cmd/purpledisc
+PURPLEDISC_LOG=debug go run ./cmd/purpledisc   # with debug logging to purpledisc.log
 ```
 
 ## Architecture
@@ -42,7 +42,7 @@ OPENDEEZER_LOG=debug go run ./cmd/opendeezer   # with debug logging to opendeeze
 
 ## Translations
 
-OpenDeezer ships in English, 简体中文, हिन्दी, Español, Français, العربية and
+Purple Disc ships in English, 简体中文, हिन्दी, Español, Français, العربية and
 Русский, across every client. New languages and fixes to the existing ones are
 welcome — each client localizes natively (Go JSON catalogs for the TUI, an inline
 dictionary for the web remote, `.lproj` on macOS/iOS, `.resw` on Windows, gettext
@@ -59,7 +59,7 @@ verify each one.
 
 ## Scope & legality
 
-OpenDeezer is an authenticated Deezer client. Playback quality and downloads are
+Purple Disc is an authenticated Deezer client. Playback quality and downloads are
 limited to the signed-in account's Deezer entitlements. It is not affiliated with
 Deezer; contributions must not circumvent account access controls or enable
 access to media that is unavailable to that account.

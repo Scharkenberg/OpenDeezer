@@ -36,7 +36,7 @@ func TestIsLAN(t *testing.T) {
 }
 
 // useFreePort makes the responder bind a free port the OS picks, not the real
-// discovery port a running OpenDeezer listens on, until the test ends.
+// discovery port a running Purple Disc listens on, until the test ends.
 func useFreePort(t *testing.T) int {
 	t.Helper()
 	free, err := net.ListenPacket("udp4", "127.0.0.1:0")

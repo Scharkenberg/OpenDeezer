@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
@@ -11,7 +12,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class SearchBox
 {
@@ -67,7 +68,8 @@ internal sealed class SearchBox
         var (items, _) = await Task.Run(() => DeezerCore.SearchHistory(Count.SearchHistory));
         if (Root.Text.Length > 0 || items.Length == 0) return;
         _recent = [.. items, null];
-        Root.ItemsSource = _recent.Select(Line).ToList();
+        // The same closed list type as the tile grid: Native AOT has its vector interop.
+        Root.ItemsSource = new ObservableCollection<object>(_recent.Select(Line));
         Root.IsSuggestionListOpen = Root.FocusState != FocusState.Unfocused;
     }
 

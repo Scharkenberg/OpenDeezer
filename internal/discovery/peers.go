@@ -4,8 +4,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
 )
 
 // ProbePeers lists devices for a picker: the LAN probe (minus selfPort) and then the

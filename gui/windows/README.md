@@ -1,7 +1,7 @@
-# OpenDeezer (Windows)
+# Purple Disc (Windows)
 
-Native **WinUI 3 / C# (.NET 11, Windows App SDK 2.6) / Fluent** front-end for OpenDeezer — *an open
-source reimplementation of Deezer*. The whole engine (login, browse, Blowfish
+Native **WinUI 3 / C# (.NET 11 Native AOT, Windows App SDK 2.7) / Fluent** front-end for Purple Disc — *an unofficial open-source
+client for Deezer*. The whole engine (login, browse, Blowfish
 decrypt, MP3/FLAC decode, WASAPI playback) is the Go core compiled to a C-ABI
 shared library (`lib/libdeezercore.dll`) and called in-process via **P/Invoke**;
 this layer is UI only.
@@ -27,10 +27,23 @@ gui\windows\build.ps1
 ```
 
 `build.ps1` (1) builds the Go engine DLL (`go build -buildmode=c-shared ./corelib`
-→ `gui/windows/lib/libdeezercore.dll`), (2) runs `dotnet publish OpenDeezer.csproj
--c Release -r win-x64 --self-contained -p:WindowsPackageType=None`, and (3) copies
-the DLL next to `OpenDeezer.exe` in the publish dir
+→ `gui/windows/lib/libdeezercore.dll`, `GOAMD64=v3`, profile-guided from
+`corelib/default.pgo`), (2) runs `dotnet publish PurpleDisc.csproj
+-c Release -r win-x64 --self-contained -p:WindowsPackageType=None` (Native AOT, x86-64-v3,
+no symbols), checks that `App.xbf` and `PurpleDisc.pri` are in the publish folder, and (3)
+copies the DLL next to `PurpleDisc.exe` in the publish dir
 (`bin\Release\net11.0-windows10.0.26100.0\win-x64\publish\`).
+
+The checks (app build and tests, the off-screen harness, `go vet`, `go test -race`):
+
+```powershell
+gui\windows\check.ps1 -Race
+```
+
+### Requirements to run
+
+A 64-bit x86 CPU with AVX2, BMI2 and FMA (x86-64-v3: Intel Haswell, AMD Excavator and
+later, about 2013 on): the engine DLL and the app are compiled for it and do not start on older CPUs.
 
 ### Prerequisites
 
@@ -41,9 +54,9 @@ the DLL next to `OpenDeezer.exe` in the publish dir
   - **Visual Studio's clang** (recommended, no MinGW): the VS component
     *C++ Clang Compiler for Windows* (`Microsoft.VisualStudio.Component.VC.Llvm.Clang`),
     plus the MSVC build tools and a Windows SDK. Found automatically via `vswhere`.
-  - or **MinGW-w64 gcc** on PATH (what the CI runners use, with Go 1.25).
+  - or **MinGW-w64 gcc** on PATH.
 
-`go-env.ps1` sets this up for the current shell only (no machine-wide `CC`):
+`go-env.ps1` sets this up for the current shell only (no machine-wide `CC`; it also sets `GOAMD64=v3`):
 
 ```powershell
 . gui\windows\go-env.ps1   # go on PATH, CC=clang (VS), CGO_ENABLED=1, static C runtime
@@ -58,22 +71,21 @@ runtime from a GNU `.ctors` entry, which the MSVC C runtime never runs; the file
 registers the same entry in `.CRT$XCU` (MSVC targets only).
 
 No MSBuild / import-lib step is required: P/Invoke loads `libdeezercore.dll` by
-name at runtime. The app is **unpackaged** and **self-contained**
-(`WindowsPackageType=None`, `WindowsAppSDKSelfContained=true`).
+name at runtime. The app is **unpackaged**, **self-contained** and published with **Native AOT**
+(`WindowsPackageType=None`, `WindowsAppSDKSelfContained=true`, `PublishAot=true`).
 
-Debug builds of the app load `gui/windows/libdeezercore.dll` (copied to the
-output by the csproj); copy `lib\libdeezercore.dll` there to run a fresh engine
-build under the debugger.
+Every build of the app copies `lib\libdeezercore.dll` beside its exe (the csproj), so a
+Debug run loads the engine last built into `lib\`.
 ## Login
 
 On first launch the app shows the sign-in view with **"Continue with Deezer"**.
 Picking it opens a **WebView2** view (`Microsoft.UI.Xaml.Controls.WebView2`,
-profile in `%LOCALAPPDATA%\opendeezer\WebView2`, cookies wiped first) pointed at the
-Deezer web login; once you sign in, OpenDeezer reads the `CoreWebView2`
+profile in `%LOCALAPPDATA%\purpledisc\WebView2`, cookies wiped first) pointed at the
+Deezer web login; once you sign in, Purple Disc reads the `CoreWebView2`
 cookie store (`CookieManager.GetCookiesAsync`) for the `arl` cookie — which is
 `HttpOnly`, so it is only readable there, not via `document.cookie` — captures it
 automatically, starts the session with `DZInit`, and writes it to
-`%APPDATA%\opendeezer\arl.txt` so the next launch logs in automatically. No manual
+`%APPDATA%\purpledisc\arl.txt` so the next launch logs in automatically. No manual
 ARL copy needed.
 
 This needs the **Microsoft Edge WebView2 Runtime** (the Evergreen runtime ships
@@ -84,7 +96,7 @@ package.
 ### Manual ARL (fallback)
 
 You can still sign in by ARL directly: choose **"Use an ARL token"** on the
-sign-in view, or pre-seed `%DEEZER_ARL%` / `%APPDATA%\opendeezer\arl.txt` before
+sign-in view, or pre-seed `%DEEZER_ARL%` / `%APPDATA%\purpledisc\arl.txt` before
 launch (a failing `%DEEZER_ARL%` falls back to `arl.txt`). The account picture in
 the title bar shows who is signed in, switches account, or signs out.
 Your ARL is the `arl` cookie from an authenticated `deezer.com` session — treat it
@@ -108,7 +120,7 @@ gui/windows/
   DeezerCore.cs                 [LibraryImport] bridge to libdeezercore.dll (DZ* exports)
   Interop.cs                    Win32 tray (Shell_NotifyIcon), DPI, single-instance wait
   Loc.cs                        MRT Core string lookup (cached), plurals, RTL
-  OpenDeezer.csproj             unpackaged, self-contained C# WinUI 3 (.NET 11) project
+  PurpleDisc.csproj             unpackaged, self-contained C# WinUI 3 (.NET 11) project
   app.manifest                  per-monitor-v2 DPI awareness, asInvoker ($VERSION$ stamped from <Version> at build)
   EngineQueueMirror.cs          engine queue mirror over IEngineQueue (no XAML; unit-tested)
   EngineQueueNative.cs          IEngineQueue -> DeezerCore
@@ -127,7 +139,7 @@ back on the UI thread. Engine state is read on a background loop (250 ms while
 playing with the window visible, 1 s otherwise, 5 s after repeated failures) into an
 immutable snapshot; the UI thread applies only what changed. Every engine queue
 mutation runs on one ordered chain, and remote edits are pulled back via
-`DZQueueVersion`. Errors are logged to `%APPDATA%\opendeezer\windows.log`, which moves to
+`DZQueueVersion`. Errors are logged to `%APPDATA%\purpledisc\windows.log`, which moves to
 `windows.log.old` at 512 KB.
 
 Char\* results from the engine are UTF-8 and freed with `DZFree` (see
@@ -136,4 +148,4 @@ decoded at display size.
 
 ## License
 
-AGPL-3.0. By Cycl0o0.
+AGPL-3.0. By Scharkenberg, based on OpenDeezer by Cycl0o0.

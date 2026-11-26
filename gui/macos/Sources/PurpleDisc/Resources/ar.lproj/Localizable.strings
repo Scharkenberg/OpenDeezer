@@ -1,0 +1,253 @@
+/* Purple Disc — العربية */
+
+/* Sidebar / navigation */
+"Home" = "الرئيسية";
+"Search" = "البحث";
+"Library" = "المكتبة";
+"Liked Songs" = "الأغاني المفضلة";
+"Playlists" = "قوائم التشغيل";
+"Charts" = "الأكثر رواجًا";
+"Podcasts" = "البودكاست";
+
+/* App menu / account row */
+"About Purple Disc" = "حول Purple Disc";
+"Settings…" = "الإعدادات…";
+"Log in / Switch account…" = "تسجيل الدخول / تبديل الحساب…";
+"Settings" = "الإعدادات";
+
+/* Update banner */
+"Purple Disc %@ is available" = "الإصدار %@ من Purple Disc متوفر";
+"Hide notes" = "إخفاء الملاحظات";
+"Release notes" = "ملاحظات الإصدار";
+"Download" = "تنزيل";
+"Later" = "لاحقًا";
+
+/* Login gate */
+"Logging in…" = "جارٍ تسجيل الدخول…";
+"Log in with Deezer" = "تسجيل الدخول عبر Deezer";
+"Hide manual ARL" = "إخفاء إدخال ARL اليدوي";
+"Enter ARL manually" = "إدخال ARL يدويًا";
+"Paste your ARL cookie" = "الصق ملف تعريف الارتباط ARL";
+"Sign in" = "تسجيل الدخول";
+
+/* Free-account gate */
+"Premium required" = "يلزم اشتراك Premium";
+"Purple Disc needs a Deezer Premium subscription to stream. Your account: %@. Subscribe at deezer.com, then restart Purple Disc." = "يحتاج Purple Disc إلى اشتراك Deezer Premium للبث. حسابك: %@. اشترك عبر deezer.com ثم أعد تشغيل Purple Disc.";
+"Log in with a different account" = "تسجيل الدخول بحساب آخر";
+"Quit Purple Disc" = "إنهاء Purple Disc";
+
+/* Explicit badge */
+"Explicit" = "محتوى صريح";
+
+/* Account label */
+"user %@" = "المستخدم %@";
+
+/* Credits / About */
+"v%@ · Unofficial open-source client for Deezer" = "الإصدار %@ · عميل مفتوح المصدر غير رسمي لـDeezer";
+"by Scharkenberg, based on OpenDeezer by Cycl0o0" = "بواسطة Scharkenberg، مبني على OpenDeezer من Cycl0o0";
+"Signed in as %@" = "تم تسجيل الدخول باسم %@";
+"Built with SwiftUI + a Go engine" = "بُني باستخدام SwiftUI ومحرك Go";
+"Audio is decrypted and decoded on this device. Your ARL goes only to Deezer." = "يُفك تشفير الصوت ويُفك ترميزه على هذا الجهاز. لا يُرسَل ARL إلا إلى Deezer.";
+"AGPL-3.0 · Not affiliated with Deezer." = "AGPL-3.0 · غير مرتبط بـ Deezer.";
+"Checking…" = "جارٍ التحقق…";
+"Check for Updates" = "التحقق من التحديثات";
+"Download v%@" = "تنزيل الإصدار %@";
+"Done" = "تم";
+
+/* Hero header + track table */
+"Play" = "تشغيل";
+"Shuffle" = "تشغيل عشوائي";
+"Title" = "العنوان";
+"Album" = "الألبوم";
+"Time" = "المدة";
+"Unlike" = "إلغاء الإعجاب";
+"Like" = "إعجاب";
+"Add to Playlist…" = "إضافة إلى قائمة تشغيل…";
+"Go to Artist" = "الانتقال إلى الفنان";
+
+/* Playlist grid + create/rename/delete */
+"New Playlist" = "قائمة تشغيل جديدة";
+"Open" = "فتح";
+"Rename…" = "إعادة تسمية…";
+"Delete…" = "حذف…";
+"Playlist name" = "اسم قائمة التشغيل";
+"Create" = "إنشاء";
+"Cancel" = "إلغاء";
+"Name your new playlist." = "أدخل اسمًا لقائمة التشغيل الجديدة.";
+"Rename Playlist" = "إعادة تسمية قائمة التشغيل";
+"Save" = "حفظ";
+"Enter a new name." = "أدخل اسمًا جديدًا.";
+"Delete “%@”?" = "حذف ”%@“؟";
+"Delete" = "حذف";
+"This can't be undone." = "لا يمكن التراجع عن هذا الإجراء.";
+
+/* Search */
+"Search tracks, albums, playlists" = "ابحث عن الأغاني والألبومات وقوائم التشغيل";
+"Tracks" = "الأغاني";
+"Artists" = "الفنانون";
+"Artist" = "فنان";
+"Albums" = "الألبومات";
+
+/* Settings — audio */
+"Audio Quality" = "جودة الصوت";
+"Normal · MP3 128" = "عادية · MP3 128";
+"High · MP3 320" = "عالية · MP3 320";
+"HiFi · FLAC lossless" = "HiFi · FLAC بلا فقدان";
+"Applied immediately and on next launch." = "يُطبَّق فورًا وعند التشغيل التالي.";
+"Output Device" = "جهاز الإخراج";
+"System Default" = "افتراضي النظام";
+"%@ (System Default)" = "%@ (افتراضي النظام)";
+"Choose where audio plays. Switching takes effect on the next track or seek." = "اختر مكان تشغيل الصوت. يسري التغيير عند الأغنية التالية أو عند التنقل.";
+"Gapless playback" = "تشغيل دون فواصل";
+"Preloads the next track so albums play with no silence between songs." = "يحمّل الأغنية التالية مسبقًا لتشغيل الألبومات دون صمت بين الأغاني.";
+"Crossfade" = "التلاشي المتقاطع";
+"Off" = "إيقاف";
+"Fades the end of one track into the start of the next." = "يمزج نهاية أغنية مع بداية الأغنية التالية.";
+"Sleep timer" = "مؤقت النوم";
+"%d min" = "%d دقيقة";
+"End of track" = "عند انتهاء الأغنية";
+"Volume normalization" = "توحيد مستوى الصوت";
+"Evens out loudness differences between tracks (ReplayGain)." = "يوازن فروق مستوى الصوت بين الأغاني (ReplayGain).";
+"Equalizer" = "موازن الصوت";
+"Custom" = "مخصص";
+"Preamp" = "تضخيم مسبق";
+"Mono audio" = "صوت أحادي";
+"Plays both channels as one — helpful with a single speaker or hearing in one ear." = "يشغّل القناتين كقناة واحدة — مفيد مع سماعة واحدة أو عند السمع بأذن واحدة.";
+"Keep playing in background" = "متابعة التشغيل في الخلفية";
+"Closing the window hides it to the menu bar instead of quitting." = "إغلاق النافذة يخفيها في شريط القوائم بدلًا من الإنهاء.";
+
+/* Settings — remote control */
+"Remote control" = "التحكم عن بُعد";
+"Lets other devices control playback over the network." = "يتيح للأجهزة الأخرى التحكم في التشغيل عبر الشبكة.";
+"Enable" = "تفعيل";
+"Allow on local network (LAN)" = "السماح على الشبكة المحلية (LAN)";
+"Access token" = "رمز الوصول";
+"None" = "بلا";
+"Phone Remote" = "التحكم عبر الهاتف";
+"Scan with your phone (same Wi-Fi), then enter the code." = "امسح الرمز بهاتفك (نفس شبكة Wi-Fi)، ثم أدخل الرمز.";
+"Stored in %@" = "مخزَّن في %@";
+
+/* Settings — sleep timer captions */
+"Playback pauses when the current track ends." = "يتوقف التشغيل مؤقتًا عند انتهاء الأغنية الحالية.";
+"Fades out and pauses in %@." = "يتلاشى ويتوقف مؤقتًا خلال %@.";
+"Automatically pause playback after a set time." = "يوقف التشغيل مؤقتًا تلقائيًا بعد مدة محددة.";
+
+/* Player bar */
+"Nothing playing" = "لا يوجد تشغيل";
+"Lyrics" = "كلمات الأغنية";
+"Connected — choose a device" = "متصل — اختر جهازًا";
+"Connect to a device" = "الاتصال بجهاز";
+
+/* Lyrics / artist */
+"No lyrics available" = "لا تتوفر كلمات";
+"Couldn't load this artist." = "تعذّر تحميل هذا الفنان.";
+"Top Tracks" = "أفضل الأغاني";
+"Related Artists" = "فنانون ذوو صلة";
+
+/* Podcasts */
+"Search podcasts" = "ابحث في البودكاست";
+"Search for podcasts" = "ابحث في البودكاست";
+"Podcast" = "بودكاست";
+
+/* Charts */
+"Top Albums" = "أفضل الألبومات";
+"Top Artists" = "أفضل الفنانين";
+"Top Playlists" = "أفضل قوائم التشغيل";
+
+/* Device picker */
+"Connect to a Device" = "الاتصال بجهاز";
+"Play on another device on your network" = "التشغيل على جهاز آخر في شبكتك";
+"Refresh" = "تحديث";
+"This computer" = "هذا الكمبيوتر";
+"Play here" = "التشغيل هنا";
+"Looking for devices…" = "جارٍ البحث عن الأجهزة…";
+"No devices found on your network." = "لم يُعثر على أجهزة في شبكتك.";
+"Devices" = "الأجهزة";
+"Device" = "جهاز";
+
+/* Add to playlist */
+"Add to Playlist" = "إضافة إلى قائمة تشغيل";
+"New playlist…" = "قائمة تشغيل جديدة…";
+"Your Playlists" = "قوائم التشغيل الخاصة بك";
+
+/* Home greeting */
+"Good morning" = "صباح الخير";
+"Good afternoon" = "نهارك سعيد";
+"Good evening" = "مساء الخير";
+
+/* Login sheet */
+"Signing in…" = "جارٍ تسجيل الدخول…";
+
+/* Tray menu */
+"Show Purple Disc" = "إظهار Purple Disc";
+"Play / Pause" = "تشغيل / إيقاف مؤقت";
+"Next" = "التالي";
+"Previous" = "السابق";
+
+/* AppState — status / errors / list subtitles */
+"Login failed — invalid or expired ARL." = "فشل تسجيل الدخول — رمز ARL غير صالح أو منتهي الصلاحية.";
+"Purple Disc %@ is available." = "الإصدار %@ من Purple Disc متوفر.";
+"You're up to date." = "أنت تستخدم أحدث إصدار.";
+"plan" = "الاشتراك";
+"%@ plan" = "اشتراك %@";
+"Your %@ doesn't include HiFi (FLAC)." = "لا يشمل %@ جودة HiFi (FLAC).";
+"Your %@ doesn't include High (MP3 320)." = "لا يشمل %@ الجودة العالية (MP3 320).";
+"Playlist" = "قائمة تشغيل";
+"Playlist · %@" = "قائمة تشغيل · %@";
+"Top worldwide" = "الأكثر رواجًا عالميًا";
+"Album · %@" = "ألبوم · %@";
+
+/* No-Internet gate */
+"No Internet Connection" = "لا يوجد اتصال بالإنترنت";
+"Check your connection and try again." = "تحقق من اتصالك وحاول مرة أخرى.";
+"Retry" = "إعادة المحاولة";
+
+/* Downloads + preview + free tier */
+"Downloads" = "التنزيلات";
+"Where downloaded tracks are saved." = "المكان الذي تُحفظ فيه المقاطع المُنزَّلة.";
+"Default folder" = "المجلد الافتراضي";
+"Choose…" = "اختيار…";
+"Choose" = "اختيار";
+"Requires a paid Deezer plan" = "يتطلب اشتراك Deezer مدفوعًا";
+"Downloading “%@”…" = "جارٍ تنزيل «%@»…";
+"Saved “%@”" = "تم حفظ «%@»";
+"Download failed." = "فشل التنزيل.";
+"Preview" = "معاينة";
+"Free account · standard quality (128 kbps)" = "حساب مجاني · جودة عادية (128 kbps)";
+"Don't report my plays" = "لا تبلّغ عن استماعي";
+"Purple Disc plays no ads. It reports your plays to Deezer as Deezer's own player does, which credits the artists. Turning this on stops that: artists get no credit for those plays, and it breaks Deezer's terms of use. Use at your own risk." = "لا يعرض Purple Disc أي إعلانات. يبلّغ Deezer عن استماعك كما يفعل مشغّل Deezer نفسه، فيُنسب الاستماع إلى الفنانين. تفعيل هذا الخيار يوقف ذلك: لا يُنسب هذا الاستماع إلى الفنانين، ويخالف شروط استخدام Deezer. على مسؤوليتك.";
+
+/* Up Next / offline downloads / history / radio (3.x) */
+"%@ Radio" = "راديو %@";
+"%d MB" = "%d ميغابايت";
+"%d in queue" = "%d في قائمة الانتظار";
+"Add to queue" = "إضافة إلى قائمة الانتظار";
+"All" = "الكل";
+"Available offline" = "متوفّر دون اتصال";
+"Clear" = "مسح";
+"Download album" = "تنزيل الألبوم";
+"Download for offline" = "تنزيل للاستماع دون اتصال";
+"Download playlist" = "تنزيل قائمة التشغيل";
+"History" = "السجل";
+"Last 30 days" = "آخر 30 يومًا";
+"No listening history yet" = "لا يوجد سجل استماع بعد";
+"Nothing in the queue" = "لا شيء في قائمة الانتظار";
+"Offline download failed." = "فشل التنزيل دون اتصال.";
+"On" = "تشغيل";
+"On-disk cache for streamed audio (0 = off). Applies at next launch." = "ذاكرة تخزين مؤقت على القرص للصوت المتدفق (0 = إيقاف). يسري عند التشغيل التالي.";
+"One" = "واحد";
+"Play a track and it'll show up here." = "شغّل مقطعًا وسيظهر هنا.";
+"Play next" = "تشغيله تاليًا";
+"Play something and it'll show up here." = "شغّل شيئًا وسيظهر هنا.";
+"Playing on %@" = "قيد التشغيل على %@";
+"Recently played" = "شُغّل مؤخرًا";
+"Remove from queue" = "إزالة من قائمة الانتظار";
+"Repeat" = "تكرار";
+"Saved %1$d, %2$d failed" = "تم حفظ %1$d، وفشل %2$d";
+"Saving “%@” for offline…" = "جارٍ حفظ “%@” للاستماع دون اتصال…";
+"Start radio" = "بدء الراديو";
+"Stream cache" = "التخزين المؤقت للتدفق";
+"Total listening time" = "إجمالي مدة الاستماع";
+"Up Next" = "التالي";
+"“%@” available offline" = "“%@” متوفّر دون اتصال";
+"“%@” is available offline" = "“%@” متوفّر دون اتصال";

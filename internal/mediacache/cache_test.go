@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
 )
 
 func TestPutGetRoundtrip(t *testing.T) {
@@ -143,6 +143,7 @@ func TestRecoverWithoutIndexChecksSizeInName(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	c.Flush() // the index of the two commits, written before a crash loses it
 	old := encodeKey("old.FLAC") + "-ff" // committed before sizes were in names
 	if err := os.WriteFile(filepath.Join(dir, old), []byte("old body"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1192,7 +1193,7 @@ func TestOldCacheRemovalKeepsOtherFiles(t *testing.T) {
 	if err := h.SetMB(0); err != nil {
 		t.Fatal(err)
 	}
-	if err := Purge(filepath.Join(picked, "opendeezer-cache")); err != nil {
+	if err := Purge(filepath.Join(picked, "purpledisc-cache")); err != nil {
 		t.Fatal(err)
 	}
 	same("the cache's use", picked, foreign)
@@ -1331,6 +1332,7 @@ func TestClosedCacheWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := New(dir, 1<<20)
 	putBody(t, c, "1.MP3", 10)
+	c.Flush()
 	wc, err := c.Put("2.MP3")
 	if err != nil {
 		t.Fatal(err)
@@ -1404,6 +1406,40 @@ func BenchmarkNew(b *testing.B) {
 			b.Fatal(len(c.entries))
 		}
 		c.Close()
+	}
+}
+
+// Installs within installFlush share one index write, made when the timer fires;
+// Close writes an install still pending.
+func TestInstallsShareOneIndexWrite(t *testing.T) {
+	prev := installFlush
+	installFlush = time.Hour
+	t.Cleanup(func() { installFlush = prev })
+	dir := t.TempDir()
+	c, _ := New(dir, 1<<20)
+	idx := filepath.Join(dir, "index.json")
+	for i := range 5 {
+		putBody(t, c, fmt.Sprint(i, ".MP3"), 10)
+	}
+	if _, err := os.Stat(idx); !os.IsNotExist(err) {
+		t.Fatalf("index.json written by an install: %v", err)
+	}
+	c.mu.Lock()
+	pending := c.flush != nil && c.dirty
+	c.mu.Unlock()
+	if !pending {
+		t.Fatal("no index write pending after the installs")
+	}
+	c.flushRecency() // the timer firing
+	var d indexData
+	if b, err := os.ReadFile(idx); err != nil || json.Unmarshal(b, &d) != nil || len(d.Entries) != 5 {
+		t.Fatalf("index after the timer: %d entries (%v), want 5", len(d.Entries), err)
+	}
+	putBody(t, c, "5.MP3", 10)
+	c.Close()
+	d = indexData{}
+	if b, err := os.ReadFile(idx); err != nil || json.Unmarshal(b, &d) != nil || len(d.Entries) != 6 {
+		t.Fatalf("index after Close: %d entries (%v), want 6", len(d.Entries), err)
 	}
 }
 

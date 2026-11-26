@@ -7,7 +7,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 // Slow: the fields after it were read on this tick, else they repeat the last read.
 // NowTrack: the last now-playing track read, null when none plays.

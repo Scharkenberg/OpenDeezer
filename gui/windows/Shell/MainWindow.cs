@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 public sealed partial class MainWindow : Window
 {
@@ -39,21 +39,23 @@ public sealed partial class MainWindow : Window
         Ui.Scale = Ui.DpiScale(_hwnd);
         _tray = new Tray(RestoreWindow, Quit);
         _bounds = new WindowBounds(this, _hwnd, Session.Settings);
-        Title = "OpenDeezer";
+        Title = "Purple Disc";
         // Mica Alt: the stronger tint of the desktop wallpaper, as in the Windows 11 apps with tabs.
         SystemBackdrop = new MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt };
 
         if (System.IO.File.Exists(Tray.IconPath())) AppWindow.SetIcon(Tray.IconPath());
         _search = new SearchBox(dq, _navigator);
         _account = AccountPanel.TitleBarButton();
-        _settingsButton = Ui.IconButton(Icons.Settings, "Nav_Settings", () => _navigator.Go<SettingsView>());
+        _settingsButton = Ui.IconButton(Icons.Settings, "Nav_Settings", () => _navigator.Go<SettingsView>(), turn: true);
 
         _home = NavItem("Nav_Home", Icons.Home, () => _navigator.Go<HomeView>());
         _liked = NavItem("Nav_LikedSongs", Icons.Heart, () => _navigator.Go<CollectionView>(Collection.Liked));
         _playlists = NavItem("Nav_Favorites", Icons.Playlists, () => _navigator.Go<PlaylistsView>());
         _recent = NavItem("Nav_Recent", Icons.Recent, () => _navigator.Go<RecentView>());
         _offline = NavItem("Nav_Offline", Icons.Offline, () => _navigator.Go<OfflineView>());
-        _flow = NavItem("Nav_Flow", Icons.Flow, () => _navigator.Go<CollectionView>(Collection.Flow));
+        // Flow plays where the user is: an action, never the selected item.
+        _flow = NavItem("Nav_Flow", Icons.Flow, () => Menus.PlayFlow());
+        _flow.SelectsOnInvoked = false;
         _charts = NavItem("Nav_Charts", Icons.Charts, () => _navigator.Go<ChartsView>());
         _nav = new NavigationView
         {
@@ -112,6 +114,7 @@ public sealed partial class MainWindow : Window
         {
             if (_nav.SettingsItem is NavigationViewItem settings) settings.InfoBadge = new InfoBadge();
         };
+        App.Offline.Changed += () => _flow.IsEnabled = !App.Offline.Mode;
         Player.Failed += f => Toast.Show(f.Warning ? InfoBarSeverity.Warning : InfoBarSeverity.Error, f.Title, f.Message);
         Player.SessionExpired += () => Toast.Show(InfoBarSeverity.Warning, Loc.S("Login_ExpiredTitle"), Loc.S("Login_Expired"),
             Ui.Button(Loc.S("Login_SignInAgain"), WebSignInView.SignInAgain), sticky: true);
@@ -130,8 +133,7 @@ public sealed partial class MainWindow : Window
             // VisibilityChanged need not fire on minimize: a minimized window counts as hidden.
             if (e.DidPresenterChange)
                 SetVisible(AppWindow.IsVisible && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized });
-            if (e.DidPositionChange || e.DidSizeChange || e.DidPresenterChange) _bounds.Capture();
-        };
+            if (e.DidPositionChange || e.DidSizeChange || e.DidPresenterChange) _bounds.Capture();        };
         _root.Loaded += (_, _) =>
         {
             Dialogs.Root = _root.XamlRoot;
@@ -217,7 +219,6 @@ public sealed partial class MainWindow : Window
                 ChartsView => _charts,
                 SettingsView when Session.SignedIn => _nav.SettingsItem,
                 CollectionView when Equals(arg, Collection.Liked) => _liked,
-                CollectionView when Equals(arg, Collection.Flow) => _flow,
                 _ => null,
             };
             if (item != null || view is SearchView) break;

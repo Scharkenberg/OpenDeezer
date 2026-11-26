@@ -1,0 +1,11 @@
+{
+    "apps": [
+        {
+            "id": "dev.scharkenberg.purpledisc",
+            "url": "https://github.com/Scharkenberg/PurpleDisc",
+            "author": "Scharkenberg",
+            "name": "Purple Disc",
+            "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"versionExtractionRegEx\":\"^v?([0-9]+(?:\\\\.[0-9]+)*)$\",\"matchGroupToUse\":\"$1\",\"apkFilterRegEx\":\"^PurpleDisc-android(?:-(?:armeabi-v7a|arm64-v8a|x86|x86_64))?\\\\.apk$\",\"invertAPKFilter\":false,\"autoApkFilterByArch\":true,\"appName\":\"Purple Disc\",\"appAuthor\":\"Scharkenberg\"}"
+        }
+    ]
+}

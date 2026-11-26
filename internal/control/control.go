@@ -24,9 +24,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/bridge"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/bridge"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 )
 
 // Track is a now-playing / queue entry in the API.
@@ -52,6 +52,8 @@ type State struct {
 	Shuffle    bool    `json:"shuffle"`
 	Format     string  `json:"format,omitempty"`
 	Queue      []Track `json:"queue,omitempty"`
+	// QueueIndex is the queue's current row; nil when the host does not say.
+	QueueIndex *int `json:"queueIndex,omitempty"`
 	// QueueVersion changes with Queue's content (0: the host does not version it). GET
 	// /status always carries Queue; GET /events only when QueueVersion changed on that
 	// stream.
@@ -104,7 +106,7 @@ type Commands struct {
 }
 
 // EQState is the equalizer snapshot returned by GET /eq (same wire shape as
-// corelib's DZEQJSON / odmobile's EQJSON, so every controller renders one UI).
+// corelib's DZEQJSON / pdmobile's EQJSON, so every controller renders one UI).
 type EQState struct {
 	Enabled  bool      `json:"enabled"`
 	Mono     bool      `json:"mono"`
@@ -210,9 +212,9 @@ type Whoami struct {
 	Name     string   `json:"name"`
 	Offer    string   `json:"offer,omitempty"`
 	Auth     string   `json:"auth"`              // token | account | session | none
-	Version  string   `json:"version,omitempty"` // OpenDeezer version
+	Version  string   `json:"version,omitempty"` // PurpleDisc version
 	Client   string   `json:"client,omitempty"`  // client/platform id (tui, macos, gnome…)
-	Device   string   `json:"device,omitempty"`  // human device label ("OpenDeezer TUI")
+	Device   string   `json:"device,omitempty"`  // human device label ("Purple Disc TUI")
 	Commands []string `json:"commands"`          // supported command and event capabilities
 }
 
@@ -364,6 +366,12 @@ type Server struct {
 //go:embed webui/remote.html
 var remoteHTML []byte
 
+//go:embed webui/Inter-Regular.woff2
+var interRegular []byte
+
+//go:embed webui/Inter-SemiBold.woff2
+var interSemiBold []byte
+
 // New builds a control server from cfg. status + account are snapshot providers
 // (called from the HTTP goroutine, so they must be race-free reads); client
 // supplies the browse endpoints (search/playlists).
@@ -512,7 +520,7 @@ func (s *Server) Start() error {
 	// exempt, since the pairing code is its auth.
 	if s.token == "" && !s.sameAccount && !s.sessionAuthRequired() && !config.IsLoopbackAddr(s.addr) {
 		return errors.New("control: refusing to serve unauthenticated on a non-loopback address; " +
-			"set OPENDEEZER_CONTROL_TOKEN or keep same-account auth enabled")
+			"set PURPLEDISC_CONTROL_TOKEN or keep same-account auth enabled")
 	}
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -556,12 +564,14 @@ func (s *Server) handler() http.Handler {
 func (s *Server) routes(mux *http.ServeMux) {
 	// Web remote: serve the SPA (no auth; gated by webRemote) and the pair endpoint.
 	mux.HandleFunc("/remote", s.handleRemote)
+	mux.HandleFunc("/remote/Inter-Regular.woff2", s.handleFont(interRegular))
+	mux.HandleFunc("/remote/Inter-SemiBold.woff2", s.handleFont(interSemiBold))
 	mux.HandleFunc("/pair", s.requireMethod(http.MethodPost, s.handlePair))
 	// GET, unauthenticated: identity/discovery (name, auth mode + commands).
 	mux.HandleFunc("/whoami", s.get(s.handleWhoami, false))
 	// GET, authenticated: reads.
 	mux.HandleFunc("/status", s.get(s.handleStatus, true))
-	// EventSource cannot set X-OpenDeezer-Session. This route alone accepts the
+	// EventSource cannot set X-PurpleDisc-Session. This route alone accepts the
 	// same session credential as ?session= and then uses the normal auth path.
 	mux.HandleFunc("/events", s.requireMethod(http.MethodGet, s.eventSourceSession(s.auth(s.handleEvents))))
 	mux.HandleFunc("/playlists", s.get(s.handlePlaylists, true))
@@ -606,16 +616,16 @@ func call(fn func()) {
 }
 
 // eventSourceSession lets /events accept one non-empty ?session= value as the
-// X-OpenDeezer-Session header, since EventSource cannot set headers. Token and account
+// X-PurpleDisc-Session header, since EventSource cannot set headers. Token and account
 // credentials stay header-only.
 func (s *Server) eventSourceSession(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-OpenDeezer-Session") == "" {
+		if r.Header.Get("X-PurpleDisc-Session") == "" {
 			token, present, valid := singleQueryValue(r.URL.Query(), "session")
 			if present && valid {
 				r = r.Clone(r.Context())
 				r.Header = r.Header.Clone()
-				r.Header.Set("X-OpenDeezer-Session", token)
+				r.Header.Set("X-PurpleDisc-Session", token)
 			}
 		}
 		h(w, r)
@@ -799,12 +809,12 @@ func (s *Server) requireMethod(method string, h http.HandlerFunc) http.HandlerFu
 }
 
 // noBrowser rejects requests with a browser Origin header (CSRF), unless they carry a
-// valid X-OpenDeezer-Session token: cross-site pages can neither read that token nor
+// valid X-PurpleDisc-Session token: cross-site pages can neither read that token nor
 // set the header.
 func (s *Server) noBrowser(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != "" {
-			sessTok := r.Header.Get("X-OpenDeezer-Session")
+			sessTok := r.Header.Get("X-PurpleDisc-Session")
 			if !s.hasValidSession(sessTok) {
 				http.Error(w, `{"error":"cross-origin requests are not allowed"}`, http.StatusForbidden)
 				return
@@ -815,13 +825,13 @@ func (s *Server) noBrowser(h http.HandlerFunc) http.HandlerFunc {
 }
 
 // auth enforces the configured auth mode. Credentials come from headers only.
-// A valid X-OpenDeezer-Session token (web remote) is checked first and always
+// A valid X-PurpleDisc-Session token (web remote) is checked first and always
 // grants access regardless of the server's base auth mode.
 func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Session token (web remote): checked before other auth modes so a paired
 		// phone can reach the API even when the server uses token or account auth.
-		if sessTok := r.Header.Get("X-OpenDeezer-Session"); sessTok != "" {
+		if sessTok := r.Header.Get("X-PurpleDisc-Session"); sessTok != "" {
 			if s.hasValidSession(sessTok) {
 				h(w, r)
 				return
@@ -833,17 +843,17 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 		}
 		switch {
 		case s.token != "":
-			tok := r.Header.Get("X-OpenDeezer-Token")
+			tok := r.Header.Get("X-PurpleDisc-Token")
 			// Constant-time compare: the token is a real secret.
 			if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 		case s.sameAccount:
-			// Accept X-OpenDeezer-Account for same-account auth from loopback and LAN clients (the
+			// Accept X-PurpleDisc-Account for same-account auth from loopback and LAN clients (the
 			// documented LAN-trust tradeoff): the built-in control client sends only the account id.
 			want := s.accountID()
-			got := r.Header.Get("X-OpenDeezer-Account")
+			got := r.Header.Get("X-PurpleDisc-Account")
 			// Constant-time compare (defense-in-depth; the id is only semi-secret).
 			if want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
 				http.Error(w, `{"error":"account mismatch"}`, http.StatusUnauthorized)
@@ -918,6 +928,23 @@ func (s *Server) handleRemote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(remoteHTML)
+}
+
+// handleFont serves one of the web remote's Inter files, under the same gate as the page.
+func (s *Server) handleFont(font []byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if !s.WebRemoteEnabled() {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "font/woff2")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		_, _ = w.Write(font)
+	}
 }
 
 // handlePair handles POST /pair: validates the 6-digit code and, on success,

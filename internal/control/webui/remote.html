@@ -2,575 +2,286 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>OpenDeezer Remote</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0d13">
+<meta name="color-scheme" content="dark">
+<title>Purple Disc Remote</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%239A45FF'/%3E%3Cg fill='none' stroke='%23fff' stroke-linecap='round'%3E%3Cpath d='M100.57 49.13A42 42 0 1 1 77.75 21.94' stroke-width='9'/%3E%3Cpath d='M65.12 89.05A29.5 29.5 0 0 1 35.84 43.08' stroke-width='5' opacity='.65'/%3E%3C/g%3E%3Ccircle cx='92.17' cy='33' r='5' fill='%23fff' opacity='.65'/%3E%3Cpath fill='%23fff' fill-rule='evenodd' d='M60 39A21 21 0 1 0 60 81A21 21 0 1 0 60 39ZM57.43 50.06L70.57 57.94Q74 60 70.57 62.06L57.43 69.94Q54 72 54 68L54 52Q54 48 57.43 50.06Z'/%3E%3C/svg%3E">
 <style>
+@font-face { font-family: Inter; font-weight: 400; font-display: swap; src: url("/remote/Inter-Regular.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-weight: 600; font-display: swap; src: url("/remote/Inter-SemiBold.woff2") format("woff2"); }
 :root {
-  --accent: #A238FF;
-  --accent-dim: #7a1fd4;
-  --bg: #0e0e0e;
-  --surface: #1c1c1e;
-  --surface2: #2c2c2e;
-  --text: #ffffff;
-  --text-muted: #8e8e93;
-  --radius: 14px;
+  --accent: #9A45FF;
+  --accent-strong: #b77aff;
+  --accent-soft: rgba(154, 69, 255, 0.18);
+  --bg: #0f0d13;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-hi: rgba(255, 255, 255, 0.10);
+  --line: rgba(255, 255, 255, 0.12);
+  --text: #f4f1f8;
+  --muted: rgba(244, 241, 248, 0.72);
+  --danger: #ff7a8e;
+  --r-lg: 12px;
+  --r-md: 8px;
+  --r-sm: 6px;
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body {
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  overscroll-behavior: none;
-}
+html, body { min-height: 100%; background: var(--bg); color: var(--text); }
 body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  padding: 1.5rem 1.5rem calc(1.5rem + var(--safe-bottom));
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.35;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; -webkit-touch-callout: none; user-select: none; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { width: 24px; height: 24px; fill: currentColor; flex-shrink: 0; }
+
+/* The cover, blurred, behind everything. */
+#backdrop {
+  position: fixed; inset: -40px; z-index: -2;
+  background-size: cover; background-position: center;
+  filter: blur(48px) saturate(1.2); opacity: 0; transition: opacity 0.6s;
+}
+#backdrop.on { opacity: 0.55; }
+#shade { position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(15,13,19,0.55) 0%, rgba(15,13,19,0.92) 55%, var(--bg) 100%); }
+
+.page {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(20px + var(--safe-top)) 20px calc(20px + var(--safe-bottom));
 }
 
-/* ---- Pair view ---- */
-#pair-view {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
-  width: 100%;
-  max-width: 320px;
-  text-align: center;
-}
-.logo {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--accent);
-  letter-spacing: -1px;
-}
-.logo span { color: var(--text); font-weight: 300; }
-#pair-view p {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
+/* ---- Pairing ---- */
+#pair-view { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 360px; text-align: center; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.brand svg { width: 40px; height: 40px; }
+#pair-intro { color: var(--muted); font-size: 15px; }
 #code-input {
-  width: 100%;
-  padding: 1rem;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.5rem;
-  text-align: center;
-  background: var(--surface);
-  border: 2px solid var(--surface2);
-  border-radius: var(--radius);
-  color: var(--text);
-  outline: none;
-  transition: border-color 0.15s;
+  width: 100%; padding: 16px; font-size: 34px; font-weight: 600; letter-spacing: 0.4em; text-indent: 0.4em;
+  text-align: center; font-variant-numeric: tabular-nums;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); outline: none;
+  transition: border-color 0.15s, background 0.15s;
 }
-#code-input:focus { border-color: var(--accent); }
+#code-input:focus { border-color: var(--accent); background: var(--surface-hi); }
+#code-input::placeholder { color: rgba(244,241,248,0.25); }
 #pair-btn {
-  width: 100%;
-  padding: 1rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  width: 100%; padding: 15px; font-size: 16px; font-weight: 600; color: #fff;
+  background: var(--accent); border-radius: var(--r-md); transition: background 0.15s, opacity 0.15s, transform 0.1s;
 }
-#pair-btn:active { background: var(--accent-dim); }
-#pair-error {
-  color: #ff6b6b;
-  font-size: 0.9rem;
-  min-height: 1.2em;
-}
+#pair-btn:active { transform: scale(0.98); background: var(--accent-strong); }
+#pair-btn:disabled { opacity: 0.6; }
+#pair-error { color: var(--danger); font-size: 14px; min-height: 1.3em; }
 
-/* ---- Controls view ---- */
-#ctrl-view {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.1rem;
-  width: 100%;
-  max-width: 380px;
-  max-height: calc(100vh - 3rem - var(--safe-bottom));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-/* Artwork */
+/* ---- Controls ---- */
+#ctrl-view { display: none; width: 100%; max-width: 440px; gap: 22px; }
+.player { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; }
 #artwork-wrap {
-  width: 200px;
-  height: 200px;
-  border-radius: 12px;
-  background: var(--surface);
-  overflow: hidden;
-  flex-shrink: 0;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  width: min(78vw, 300px); aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden;
+  background: var(--surface); box-shadow: 0 18px 48px rgba(0,0,0,0.55); flex-shrink: 0;
+  display: grid; place-items: center;
 }
-#artwork {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.artwork-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 3.5rem;
-  color: var(--text-muted);
-}
+#artwork { width: 100%; height: 100%; object-fit: cover; display: none; }
+#artwork-placeholder svg { width: 72px; height: 72px; fill: var(--muted); }
+.track-info { width: 100%; text-align: center; }
+#track-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#track-artist { margin-top: 4px; font-size: 16px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#state-badge { margin-top: 8px; display: inline-block; min-height: 22px; padding: 2px 8px; border-radius: var(--r-sm); font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface); }
+#state-badge:empty { visibility: hidden; }
+#state-badge::first-letter { text-transform: uppercase; }
 
-/* Track info */
-.track-info {
-  width: 100%;
-  text-align: center;
-  overflow: hidden;
-}
-#track-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 0.25rem;
-}
-#track-artist {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Sliders: seek, volume, preamp */
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; cursor: pointer; touch-action: pan-y; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--fill, var(--text)) var(--pct, 0%), rgba(255,255,255,0.18) var(--pct, 0%)); }
+input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); }
+input[type=range]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--fill, var(--text)); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--text); }
+input[type=range]:disabled { opacity: 0.4; cursor: default; }
+.seek { width: 100%; }
+.time-row { display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Progress */
-.progress-section {
-  width: 100%;
-}
-#progress-bar-wrap {
-  width: 100%;
-  height: 6px;
-  background: var(--surface2);
-  border-radius: 3px;
-  cursor: pointer;
-  position: relative;
-  margin-bottom: 0.4rem;
-}
-#progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  width: 0%;
-  pointer-events: none;
-  transition: width 0.2s linear;
-}
-.time-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
+.transport { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 340px; }
+.icon-btn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: background 0.15s, color 0.15s, transform 0.1s; position: relative; }
+.icon-btn:active { transform: scale(0.92); background: var(--surface-hi); }
+.icon-btn.on { color: var(--accent-strong); }
+.icon-btn.on::after { content: ""; position: absolute; bottom: 5px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.icon-btn .badge { position: absolute; top: 9px; right: 7px; font-size: 10px; font-weight: 600; }
+.icon-btn.big svg { width: 32px; height: 32px; }
+#playpause-btn { width: 72px; height: 72px; background: var(--text); color: var(--bg); box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
+#playpause-btn svg { width: 34px; height: 34px; }
+#playpause-btn:active { background: #fff; }
 
-/* Transport */
-.transport {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  width: 100%;
-}
-.transport button {
-  background: none;
-  border: none;
-  color: var(--text);
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-.transport button:active { opacity: 0.5; }
-.btn-sm { font-size: 1.4rem; }
-.btn-lg {
-  font-size: 2.2rem;
-  background: var(--surface) !important;
-  width: 68px;
-  height: 68px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
-}
-#playpause-btn { color: var(--accent); }
+.volume-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 340px; color: var(--muted); }
+.volume-row svg { width: 20px; height: 20px; }
 
-/* Volume */
-.volume-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.vol-icon { font-size: 1.1rem; color: var(--text-muted); flex-shrink: 0; }
-#volume-slider {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(to right, var(--accent) var(--pct, 80%), var(--surface2) var(--pct, 80%));
-  outline: none;
-  cursor: pointer;
-}
-#volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--text);
-  cursor: pointer;
-}
-#volume-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--text);
-  border: none;
-  cursor: pointer;
-}
+.chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-radius: var(--r-md); font-size: 14px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid transparent; transition: color 0.15s, background 0.15s, border-color 0.15s; }
+.chip svg { width: 18px; height: 18px; }
+.chip.on { color: var(--text); background: var(--accent-soft); border-color: rgba(154,69,255,0.55); }
+.chip:active { opacity: 0.7; }
 
-/* Extra controls */
-.extra-controls {
-  display: flex;
-  gap: 0.75rem;
-  width: 100%;
-  justify-content: center;
-}
-.ctrl-btn {
-  flex: 1;
-  max-width: 140px;
-  padding: 0.65rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  background: var(--surface);
-  color: var(--text-muted);
-  border: 2px solid var(--surface2);
-  border-radius: 10px;
-  cursor: pointer;
-  text-align: center;
-  transition: color 0.15s, border-color 0.15s;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-.ctrl-btn:active { opacity: 0.6; }
-.ctrl-btn.active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+.card { width: 100%; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); border-radius: var(--r-lg); }
 
 /* Queue */
-#queue-panel {
-  display: none;
-  flex-direction: column;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--surface);
-  border-radius: var(--radius);
-}
-#queue-title {
-  padding: 0 0.2rem;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-#queue-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 180px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.queue-row {
-  display: flex;
-  min-height: 44px;
-  overflow: hidden;
-  background: var(--surface2);
-  border-radius: 9px;
-}
-.queue-jump, .queue-remove {
-  border: 0;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-}
-.queue-jump {
-  flex: 1;
-  min-width: 0;
-  padding: 0.5rem 0.65rem;
-  text-align: start;
-}
+#queue-panel { display: none; flex-direction: column; padding: 14px 8px 8px; }
+#queue-panel.open, #eq-panel.open { display: flex; }
+.card-title { padding: 0 10px 8px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+#queue-list { display: flex; flex-direction: column; max-height: 46vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.queue-row { display: flex; align-items: center; min-height: 52px; border-radius: var(--r-sm); }
+.queue-row.current { background: var(--accent-soft); }
+.queue-row.current .queue-track-title { color: var(--accent-strong); }
+.queue-jump { flex: 1; min-width: 0; padding: 8px 10px; text-align: start; border-radius: var(--r-sm); }
+.queue-jump:active { background: var(--surface-hi); }
 .queue-jump-static { cursor: default; }
-.queue-track-title, .queue-track-artist {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.queue-track-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.queue-track-artist {
-  margin-top: 0.1rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
-.queue-remove {
-  flex: 0 0 42px;
-  color: var(--text-muted);
-  font-size: 1.1rem;
-}
-.queue-jump:active, .queue-remove:active { opacity: 0.5; }
-.queue-jump:focus-visible, .queue-remove:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
+.queue-track-title, .queue-track-artist { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-track-title { font-size: 15px; font-weight: 600; }
+.queue-track-artist { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.queue-remove { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); flex-shrink: 0; }
+.queue-remove svg { width: 18px; height: 18px; }
+.queue-remove:active { background: var(--surface-hi); }
 
-/* ---- Equalizer panel ---- */
-#eq-panel {
-  display: none;
-  flex-direction: column;
-  gap: 0.9rem;
-  width: 100%;
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 1rem;
-}
-.eq-toggle-row {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-}
-#eq-preset {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  background: var(--surface2);
-  color: var(--text);
-  border: 2px solid var(--surface2);
-  border-radius: 10px;
-  outline: none;
-  cursor: pointer;
-}
-#eq-preset:focus { border-color: var(--accent); }
-#eq-bands {
-  display: flex;
-  width: 100%;
-}
-.eq-band {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-}
-.eq-slider-wrap {
-  position: relative;
-  width: 100%;
-  height: 110px;
-}
-.eq-slider {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 110px;
-  height: 4px;
-  transform: translate(-50%, -50%) rotate(-90deg);
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 2px;
-  background: var(--surface2);
-  outline: none;
-  cursor: pointer;
-}
-.eq-band-label {
-  font-size: 0.6rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.eq-preamp-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.eq-preamp-row label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-#eq-preamp-val {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 3.5em;
-  text-align: right;
-  flex-shrink: 0;
-}
-#eq-preamp {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--surface2);
-  outline: none;
-  cursor: pointer;
-}
-.eq-slider::-webkit-slider-thumb, #eq-preamp::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--text);
-  cursor: pointer;
-}
-.eq-slider::-moz-range-thumb, #eq-preamp::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--text);
-  border: none;
-  cursor: pointer;
-}
-#eq-error {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-align: center;
-}
+/* Equalizer */
+#eq-panel { display: none; flex-direction: column; gap: 14px; padding: 16px; }
+.eq-toggle-row { display: flex; gap: 8px; justify-content: center; }
+#eq-preset { width: 100%; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-hi); border: 1px solid var(--line); outline: none; }
+#eq-preset option { background: #1d1a23; }
+#eq-bands { display: flex; width: 100%; }
+.eq-band { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.eq-slider-wrap { position: relative; width: 100%; height: 120px; }
+.eq-slider { position: absolute; left: 50%; top: 50%; width: 120px !important; transform: translate(-50%, -50%) rotate(-90deg); }
+.eq-band-label { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.eq-preamp-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+#eq-preamp-val { min-width: 3.8em; text-align: end; font-variant-numeric: tabular-nums; }
+#eq-error { font-size: 13px; color: var(--muted); text-align: center; }
 #eq-error:empty { display: none; }
 
-/* State badge */
-#state-badge {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+/* Wide screens: the player beside the queue. */
+@media (min-width: 820px) {
+  #ctrl-view { max-width: 880px; grid-template-columns: 400px 1fr; align-items: start; }
+  #ctrl-view.shown { display: grid; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  #queue-list { max-height: 60vh; }
+  /* No queue and the equalizer closed: the player alone, centered. */
+  #ctrl-view.shown:not(:has(.side > .open)) { grid-template-columns: 400px; justify-content: center; }
+  #ctrl-view.shown:not(:has(.side > .open)) .side { display: none; }
 }
+@media (max-width: 819px) {
+  #ctrl-view.shown { display: flex; flex-direction: column; align-items: center; }
+  .side { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
+<div id="backdrop"></div><div id="shade"></div>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M6 5h2v14H6zM9.5 12l9.5 6.5v-13z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM14.5 12 5 5.5v13z"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M10.6 9.2 5.4 4 4 5.4l5.2 5.2zM14.5 4l2 2L4 18.6 5.4 20 18 7.5l2 2V4zM14.8 13.4l-1.4 1.4 3.1 3.2-2 2H20v-5.5l-2 2z"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zM17 17H7v-3l-4 4 4 4v-3h12v-6h-2z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></symbol>
+  <symbol id="i-eq" viewBox="0 0 24 24"><path d="M5 20h2v-7H5zm0-10h2V4H5zm6 10h2v-4h-2zm0-7h2V4h-2zm6 7h2v-9h-2zm0-12h2V4h-2zM3 11h6v2H3zm6-3h6v2H9zm6 6h6v2h-6z"/></symbol>
+  <symbol id="i-vol-low" viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4L9 9z"/></symbol>
+  <symbol id="i-vol-high" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 120 120"><circle cx="60" cy="60" r="60" fill="#9A45FF"/><g fill="none" stroke="#fff" stroke-linecap="round"><path d="M100.57 49.13A42 42 0 1 1 77.75 21.94" stroke-width="9"/><path d="M65.12 89.05A29.5 29.5 0 0 1 35.84 43.08" stroke-width="5" opacity=".65"/></g><circle cx="92.17" cy="33" r="5" fill="#fff" opacity=".65"/><path fill="#fff" fill-rule="evenodd" d="M60 39A21 21 0 1 0 60 81A21 21 0 1 0 60 39ZM57.43 50.06L70.57 57.94Q74 60 70.57 62.06L57.43 69.94Q54 72 54 68L54 52Q54 48 57.43 50.06Z"/></symbol>
+</svg>
 
+<div class="page">
 <!-- Pairing view -->
 <div id="pair-view">
-  <div class="logo">Open<span>Deezer</span></div>
-  <p>Enter the 6-digit code shown on your device to pair your phone as a remote.</p>
-  <input id="code-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="off">
-  <button id="pair-btn">Pair</button>
-  <div id="pair-error"></div>
+  <div class="brand"><svg aria-hidden="true"><use href="#i-mark"/></svg>Purple Disc</div>
+  <p id="pair-intro">Enter the 6-digit code shown on your device to pair your phone as a remote.</p>
+  <input id="code-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" autocomplete="one-time-code" enterkeyhint="go" aria-label="Pairing code">
+  <button id="pair-btn" type="button">Pair</button>
+  <div id="pair-error" role="alert"></div>
 </div>
 
 <!-- Controls view -->
 <div id="ctrl-view">
-  <div id="artwork-wrap">
-    <div class="artwork-placeholder" id="artwork-placeholder">&#9834;</div>
-    <img id="artwork" src="" alt="" style="display:none" onerror="this.style.display='none';document.getElementById('artwork-placeholder').style.display='flex'">
-  </div>
-
-  <div class="track-info">
-    <div id="track-title">Not playing</div>
-    <div id="track-artist"></div>
-  </div>
-
-  <div class="progress-section">
-    <div id="progress-bar-wrap">
-      <div id="progress-fill"></div>
+  <div class="player">
+    <div id="artwork-wrap">
+      <div id="artwork-placeholder"><svg aria-hidden="true"><use href="#i-note"/></svg></div>
+      <img id="artwork" src="" alt="">
     </div>
-    <div class="time-row">
-      <span id="time-pos">0:00</span>
-      <span id="time-dur">0:00</span>
+    <div class="track-info">
+      <div id="track-title">Not playing</div>
+      <div id="track-artist"></div>
+      <div id="state-badge"></div>
+    </div>
+    <div class="seek">
+      <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+      <div class="time-row"><span id="time-pos">0:00</span><span id="time-dur">0:00</span></div>
+    </div>
+    <div class="transport">
+      <button id="shuffle-btn" class="icon-btn" type="button"><svg aria-hidden="true"><use href="#i-shuffle"/></svg></button>
+      <button id="prev-btn" class="icon-btn big" type="button"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
+      <button id="playpause-btn" class="icon-btn" type="button"><svg aria-hidden="true"><use id="playpause-icon" href="#i-play"/></svg></button>
+      <button id="next-btn" class="icon-btn big" type="button"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+      <button id="repeat-btn" class="icon-btn" type="button"><svg aria-hidden="true"><use href="#i-repeat"/></svg><span class="badge" id="repeat-badge"></span></button>
+    </div>
+    <div class="volume-row">
+      <svg aria-hidden="true"><use href="#i-vol-low"/></svg>
+      <input id="volume-slider" type="range" min="0" max="100" value="80" aria-label="Volume">
+      <svg aria-hidden="true"><use href="#i-vol-high"/></svg>
+    </div>
+    <div class="chips">
+      <button id="sleep-btn" class="chip" type="button"><svg aria-hidden="true"><use href="#i-moon"/></svg><span id="sleep-label">Sleep</span></button>
+      <button id="eq-btn" class="chip" type="button"><svg aria-hidden="true"><use href="#i-eq"/></svg><span id="eq-label">Equalizer</span></button>
     </div>
   </div>
 
-  <div class="transport">
-    <button id="prev-btn" class="btn-sm" title="Previous">&#9664;&#9664;</button>
-    <button id="playpause-btn" class="btn-lg" title="Play / Pause">&#9654;</button>
-    <button id="next-btn" class="btn-sm" title="Next">&#9654;&#9654;</button>
-  </div>
-
-  <div class="volume-row">
-    <span class="vol-icon">&#128266;</span>
-    <input id="volume-slider" type="range" min="0" max="100" value="80">
-    <span class="vol-icon">&#128266;</span>
-  </div>
-
-  <div class="extra-controls">
-    <button id="repeat-btn" class="ctrl-btn" title="Repeat">&#8635; Repeat: off</button>
-    <button id="shuffle-btn" class="ctrl-btn" title="Shuffle">&#8652; Shuffle</button>
-    <button id="sleep-btn" class="ctrl-btn" title="Sleep timer">&#9790; Sleep</button>
-  </div>
-
-  <div class="extra-controls">
-    <button id="eq-btn" class="ctrl-btn" title="Equalizer">&#9776; Equalizer</button>
-  </div>
-
-  <div id="queue-panel">
-    <div id="queue-title">Queue</div>
-    <div id="queue-list"></div>
-  </div>
-
-  <div id="eq-panel">
-    <div class="eq-toggle-row">
-      <button id="eq-enable-btn" class="ctrl-btn">EQ: off</button>
-      <button id="eq-mono-btn" class="ctrl-btn">Mono: off</button>
+  <div class="side">
+    <div id="eq-panel" class="card">
+      <div class="eq-toggle-row">
+        <button id="eq-enable-btn" class="chip" type="button">EQ: off</button>
+        <button id="eq-mono-btn" class="chip" type="button">Mono: off</button>
+      </div>
+      <select id="eq-preset" title="Preset"></select>
+      <div id="eq-bands"></div>
+      <div class="eq-preamp-row">
+        <label for="eq-preamp">Preamp</label>
+        <input id="eq-preamp" type="range" min="-12" max="12" step="0.5" value="0">
+        <span id="eq-preamp-val">0 dB</span>
+      </div>
+      <div id="eq-error"></div>
     </div>
-    <select id="eq-preset" title="Preset"></select>
-    <div id="eq-bands"></div>
-    <div class="eq-preamp-row">
-      <label for="eq-preamp">Preamp</label>
-      <input id="eq-preamp" type="range" min="-12" max="12" step="0.5" value="0">
-      <span id="eq-preamp-val">0 dB</span>
+    <div id="queue-panel" class="card">
+      <div id="queue-title" class="card-title">Queue</div>
+      <div id="queue-list"></div>
     </div>
-    <div id="eq-error"></div>
   </div>
-
-  <div id="state-badge"></div>
+</div>
 </div>
 
 <script>
 (function () {
 'use strict';
 
-var SESSION_KEY = 'opendeezer_session_v1';
+var SESSION_KEY = 'purpledisc_session_v1';
 
 // ---- i18n ----
 // Small inline dictionary for the shipped locales, chosen from navigator.language
 // (falls back to English). Product names, units and format tokens ({n}) are kept
 // verbatim. Arabic switches the document to RTL below.
 var I18N = {
-  en: {pairIntro:"Enter the 6-digit code shown on your device to pair your phone as a remote.",pair:"Pair",pairing:"Pairing…",enterCode:"Enter the 6-digit code.",tooMany:"Too many attempts — wait a minute and try again.",invalidCode:"Invalid code. Check the display and try again.",errorRetry:"Error {n}. Try again.",networkErr:"Network error. Make sure you are on the same Wi-Fi.",sessionExpired:"Session expired — please pair again.",notPlaying:"Not playing",prev:"Previous",playPause:"Play / Pause",next:"Next",repeatOff:"Repeat: off",repeatOne:"Repeat: one",repeatAll:"Repeat: all",shuffle:"Shuffle",shuffleOn:"Shuffle: on",sleep:"Sleep",sleepEnd:"Sleep: end of track",sleepMin:"Sleep: {n} min",equalizer:"Equalizer",eqOn:"EQ: on",eqOff:"EQ: off",monoOn:"Mono: on",monoOff:"Mono: off",preset:"Preset",preamp:"Preamp",custom:"Custom",eqUnavailable:"Equalizer unavailable on this device.",queue:"Queue",remove:"Remove",st_playing:"playing",st_paused:"paused",st_stopped:"stopped",st_loading:"loading",st_error:"error"},
-  zh: {pairIntro:"输入设备上显示的 6 位配对码，将手机配对为遥控器。",pair:"配对",pairing:"正在配对…",enterCode:"请输入 6 位配对码。",tooMany:"尝试次数过多 — 请等待一分钟后重试。",invalidCode:"配对码无效。请查看设备显示后重试。",errorRetry:"错误 {n}。请重试。",networkErr:"网络错误。请确认与设备连接同一 Wi-Fi。",sessionExpired:"会话已过期 — 请重新配对。",notPlaying:"未在播放",prev:"上一首",playPause:"播放 / 暂停",next:"下一首",repeatOff:"循环：关",repeatOne:"循环：单曲",repeatAll:"循环：全部",shuffle:"随机播放",shuffleOn:"随机：开",sleep:"定时",sleepEnd:"定时：本曲结束",sleepMin:"定时：{n} 分钟",equalizer:"均衡器",eqOn:"EQ：开",eqOff:"EQ：关",monoOn:"单声道：开",monoOff:"单声道：关",preset:"预设",preamp:"前置放大",custom:"自定义",eqUnavailable:"此设备不支持均衡器。",queue:"队列",remove:"移除",st_playing:"正在播放",st_paused:"已暂停",st_stopped:"已停止",st_loading:"加载中",st_error:"错误"},
-  hi: {pairIntro:"अपने फ़ोन को रिमोट के रूप में पेयर करने के लिए डिवाइस पर दिखाया गया 6-अंकीय कोड दर्ज करें।",pair:"पेयर करें",pairing:"पेयर हो रहा है…",enterCode:"6-अंकीय कोड दर्ज करें।",tooMany:"बहुत अधिक प्रयास — एक मिनट रुककर पुनः प्रयास करें।",invalidCode:"अमान्य कोड। डिस्प्ले जाँचें और पुनः प्रयास करें।",errorRetry:"त्रुटि {n}। पुनः प्रयास करें।",networkErr:"नेटवर्क त्रुटि। सुनिश्चित करें कि आप उसी Wi-Fi पर हैं।",sessionExpired:"सत्र समाप्त — कृपया फिर से पेयर करें।",notPlaying:"कुछ नहीं चल रहा",prev:"पिछला",playPause:"चलाएँ / पॉज़ करें",next:"अगला",repeatOff:"दोहराएँ: बंद",repeatOne:"दोहराएँ: एक",repeatAll:"दोहराएँ: सभी",shuffle:"शफ़ल",shuffleOn:"शफ़ल: चालू",sleep:"स्लीप",sleepEnd:"स्लीप: ट्रैक का अंत",sleepMin:"स्लीप: {n} मिनट",equalizer:"इक्वलाइज़र",eqOn:"EQ: चालू",eqOff:"EQ: बंद",monoOn:"मोनो: चालू",monoOff:"मोनो: बंद",preset:"प्रीसेट",preamp:"प्रीएम्प",custom:"कस्टम",eqUnavailable:"इस डिवाइस पर इक्वलाइज़र उपलब्ध नहीं है।",queue:"कतार",remove:"हटाएँ",st_playing:"चल रहा है",st_paused:"रुका हुआ",st_stopped:"रुका",st_loading:"लोड हो रहा है",st_error:"त्रुटि"},
-  es: {pairIntro:"Introduce el código de 6 dígitos que aparece en tu dispositivo para vincular tu teléfono como control remoto.",pair:"Vincular",pairing:"Vinculando…",enterCode:"Introduce el código de 6 dígitos.",tooMany:"Demasiados intentos — espera un minuto e inténtalo de nuevo.",invalidCode:"Código no válido. Comprueba la pantalla e inténtalo de nuevo.",errorRetry:"Error {n}. Inténtalo de nuevo.",networkErr:"Error de red. Asegúrate de estar en la misma Wi-Fi.",sessionExpired:"La sesión expiró — vincula de nuevo.",notPlaying:"Sin reproducción",prev:"Anterior",playPause:"Reproducir / Pausa",next:"Siguiente",repeatOff:"Repetir: no",repeatOne:"Repetir: uno",repeatAll:"Repetir: todo",shuffle:"Aleatorio",shuffleOn:"Aleatorio: sí",sleep:"Sueño",sleepEnd:"Sueño: fin de la canción",sleepMin:"Sueño: {n} min",equalizer:"Ecualizador",eqOn:"EQ: sí",eqOff:"EQ: no",monoOn:"Mono: sí",monoOff:"Mono: no",preset:"Preajuste",preamp:"Preamplificador",custom:"Personalizado",eqUnavailable:"Ecualizador no disponible en este dispositivo.",queue:"Cola",remove:"Eliminar",st_playing:"reproduciendo",st_paused:"en pausa",st_stopped:"detenido",st_loading:"cargando",st_error:"error"},
-  fr: {pairIntro:"Saisissez le code à 6 chiffres affiché sur votre appareil pour associer votre téléphone comme télécommande.",pair:"Associer",pairing:"Association…",enterCode:"Saisissez le code à 6 chiffres.",tooMany:"Trop de tentatives — attendez une minute et réessayez.",invalidCode:"Code invalide. Vérifiez l'écran et réessayez.",errorRetry:"Erreur {n}. Réessayez.",networkErr:"Erreur réseau. Vérifiez que vous êtes sur le même Wi-Fi.",sessionExpired:"Session expirée — associez à nouveau.",notPlaying:"Aucune lecture",prev:"Précédent",playPause:"Lecture / Pause",next:"Suivant",repeatOff:"Répéter : non",repeatOne:"Répéter : un",repeatAll:"Répéter : tout",shuffle:"Aléatoire",shuffleOn:"Aléatoire : oui",sleep:"Veille",sleepEnd:"Veille : fin du titre",sleepMin:"Veille : {n} min",equalizer:"Égaliseur",eqOn:"EQ : oui",eqOff:"EQ : non",monoOn:"Mono : oui",monoOff:"Mono : non",preset:"Préréglage",preamp:"Préampli",custom:"Personnalisé",eqUnavailable:"Égaliseur indisponible sur cet appareil.",queue:"File d’attente",remove:"Retirer",st_playing:"en lecture",st_paused:"en pause",st_stopped:"arrêté",st_loading:"chargement",st_error:"erreur"},
-  ar: {pairIntro:"أدخل الرمز المكوّن من 6 أرقام الظاهر على جهازك لإقران هاتفك كجهاز تحكم عن بُعد.",pair:"إقران",pairing:"جارٍ الإقران…",enterCode:"أدخل الرمز المكوّن من 6 أرقام.",tooMany:"محاولات كثيرة جدًا — انتظر دقيقة ثم أعد المحاولة.",invalidCode:"رمز غير صالح. تحقق من الشاشة وأعد المحاولة.",errorRetry:"خطأ {n}. أعد المحاولة.",networkErr:"خطأ في الشبكة. تأكد من أنك على نفس شبكة Wi-Fi.",sessionExpired:"انتهت الجلسة — يرجى الإقران من جديد.",notPlaying:"لا يوجد تشغيل",prev:"السابق",playPause:"تشغيل / إيقاف مؤقت",next:"التالي",repeatOff:"تكرار: إيقاف",repeatOne:"تكرار: واحد",repeatAll:"تكرار: الكل",shuffle:"تشغيل عشوائي",shuffleOn:"عشوائي: تشغيل",sleep:"النوم",sleepEnd:"النوم: نهاية الأغنية",sleepMin:"النوم: {n} دقيقة",equalizer:"موازن الصوت",eqOn:"EQ: تشغيل",eqOff:"EQ: إيقاف",monoOn:"أحادي: تشغيل",monoOff:"أحادي: إيقاف",preset:"إعداد مسبق",preamp:"تضخيم مسبق",custom:"مخصص",eqUnavailable:"موازن الصوت غير متاح على هذا الجهاز.",queue:"قائمة التشغيل",remove:"إزالة",st_playing:"قيد التشغيل",st_paused:"متوقف مؤقتًا",st_stopped:"متوقف",st_loading:"جارٍ التحميل",st_error:"خطأ"},
-  ru: {pairIntro:"Введите 6-значный код, показанный на устройстве, чтобы подключить телефон как пульт.",pair:"Подключить",pairing:"Подключение…",enterCode:"Введите 6-значный код.",tooMany:"Слишком много попыток — подождите минуту и повторите.",invalidCode:"Неверный код. Проверьте экран и повторите.",errorRetry:"Ошибка {n}. Повторите.",networkErr:"Ошибка сети. Убедитесь, что вы в той же сети Wi-Fi.",sessionExpired:"Сеанс истёк — подключитесь заново.",notPlaying:"Не воспроизводится",prev:"Предыдущий",playPause:"Воспроизвести / Пауза",next:"Следующий",repeatOff:"Повтор: выкл",repeatOne:"Повтор: один",repeatAll:"Повтор: все",shuffle:"Перемешать",shuffleOn:"Перемешать: вкл",sleep:"Сон",sleepEnd:"Сон: конец трека",sleepMin:"Сон: {n} мин",equalizer:"Эквалайзер",eqOn:"EQ: вкл",eqOff:"EQ: выкл",monoOn:"Моно: вкл",monoOff:"Моно: выкл",preset:"Пресет",preamp:"Предусиление",custom:"Свой",eqUnavailable:"Эквалайзер недоступен на этом устройстве.",queue:"Очередь",remove:"Удалить",st_playing:"воспроизведение",st_paused:"пауза",st_stopped:"остановлено",st_loading:"загрузка",st_error:"ошибка"}
+  en: {pairIntro:"Enter the 6-digit code shown on your device to pair your phone as a remote.",pair:"Pair",pairing:"Pairing…",enterCode:"Enter the 6-digit code.",tooMany:"Too many attempts — wait a minute and try again.",invalidCode:"Invalid code. Check the display and try again.",errorRetry:"Error {n}. Try again.",networkErr:"Network error. Make sure you are on the same Wi-Fi.",sessionExpired:"Session expired — please pair again.",notPlaying:"Not playing",prev:"Previous",playPause:"Play / Pause",next:"Next",repeatOff:"Repeat: off",repeatOne:"Repeat: one",repeatAll:"Repeat: all",shuffle:"Shuffle",shuffleOn:"Shuffle: on",sleep:"Sleep",sleepEnd:"Sleep: end of track",sleepMin:"Sleep: {n} min",equalizer:"Equalizer",eqOn:"EQ: on",eqOff:"EQ: off",monoOn:"Mono: on",monoOff:"Mono: off",preset:"Preset",preamp:"Preamp",custom:"Custom",eqUnavailable:"Equalizer unavailable on this device.",queue:"Queue",remove:"Remove",st_playing:"playing",st_paused:"paused",st_stopped:"stopped",st_loading:"loading",st_error:"error",ready:"Ready to play",volume:"Volume",seek:"Seek"},
+  zh: {pairIntro:"输入设备上显示的 6 位配对码，将手机配对为遥控器。",pair:"配对",pairing:"正在配对…",enterCode:"请输入 6 位配对码。",tooMany:"尝试次数过多 — 请等待一分钟后重试。",invalidCode:"配对码无效。请查看设备显示后重试。",errorRetry:"错误 {n}。请重试。",networkErr:"网络错误。请确认与设备连接同一 Wi-Fi。",sessionExpired:"会话已过期 — 请重新配对。",notPlaying:"未在播放",prev:"上一首",playPause:"播放 / 暂停",next:"下一首",repeatOff:"循环：关",repeatOne:"循环：单曲",repeatAll:"循环：全部",shuffle:"随机播放",shuffleOn:"随机：开",sleep:"定时",sleepEnd:"定时：本曲结束",sleepMin:"定时：{n} 分钟",equalizer:"均衡器",eqOn:"EQ：开",eqOff:"EQ：关",monoOn:"单声道：开",monoOff:"单声道：关",preset:"预设",preamp:"前置放大",custom:"自定义",eqUnavailable:"此设备不支持均衡器。",queue:"队列",remove:"移除",st_playing:"正在播放",st_paused:"已暂停",st_stopped:"已停止",st_loading:"加载中",st_error:"错误",ready:"准备播放",volume:"音量",seek:"进度"},
+  hi: {pairIntro:"अपने फ़ोन को रिमोट के रूप में पेयर करने के लिए डिवाइस पर दिखाया गया 6-अंकीय कोड दर्ज करें।",pair:"पेयर करें",pairing:"पेयर हो रहा है…",enterCode:"6-अंकीय कोड दर्ज करें।",tooMany:"बहुत अधिक प्रयास — एक मिनट रुककर पुनः प्रयास करें।",invalidCode:"अमान्य कोड। डिस्प्ले जाँचें और पुनः प्रयास करें।",errorRetry:"त्रुटि {n}। पुनः प्रयास करें।",networkErr:"नेटवर्क त्रुटि। सुनिश्चित करें कि आप उसी Wi-Fi पर हैं।",sessionExpired:"सत्र समाप्त — कृपया फिर से पेयर करें।",notPlaying:"कुछ नहीं चल रहा",prev:"पिछला",playPause:"चलाएँ / पॉज़ करें",next:"अगला",repeatOff:"दोहराएँ: बंद",repeatOne:"दोहराएँ: एक",repeatAll:"दोहराएँ: सभी",shuffle:"शफ़ल",shuffleOn:"शफ़ल: चालू",sleep:"स्लीप",sleepEnd:"स्लीप: ट्रैक का अंत",sleepMin:"स्लीप: {n} मिनट",equalizer:"इक्वलाइज़र",eqOn:"EQ: चालू",eqOff:"EQ: बंद",monoOn:"मोनो: चालू",monoOff:"मोनो: बंद",preset:"प्रीसेट",preamp:"प्रीएम्प",custom:"कस्टम",eqUnavailable:"इस डिवाइस पर इक्वलाइज़र उपलब्ध नहीं है।",queue:"कतार",remove:"हटाएँ",st_playing:"चल रहा है",st_paused:"रुका हुआ",st_stopped:"रुका",st_loading:"लोड हो रहा है",st_error:"त्रुटि",ready:"चलाने के लिए तैयार",volume:"वॉल्यूम",seek:"स्थान बदलें"},
+  es: {pairIntro:"Introduce el código de 6 dígitos que aparece en tu dispositivo para vincular tu teléfono como control remoto.",pair:"Vincular",pairing:"Vinculando…",enterCode:"Introduce el código de 6 dígitos.",tooMany:"Demasiados intentos — espera un minuto e inténtalo de nuevo.",invalidCode:"Código no válido. Comprueba la pantalla e inténtalo de nuevo.",errorRetry:"Error {n}. Inténtalo de nuevo.",networkErr:"Error de red. Asegúrate de estar en la misma Wi-Fi.",sessionExpired:"La sesión expiró — vincula de nuevo.",notPlaying:"Sin reproducción",prev:"Anterior",playPause:"Reproducir / Pausa",next:"Siguiente",repeatOff:"Repetir: no",repeatOne:"Repetir: uno",repeatAll:"Repetir: todo",shuffle:"Aleatorio",shuffleOn:"Aleatorio: sí",sleep:"Sueño",sleepEnd:"Sueño: fin de la canción",sleepMin:"Sueño: {n} min",equalizer:"Ecualizador",eqOn:"EQ: sí",eqOff:"EQ: no",monoOn:"Mono: sí",monoOff:"Mono: no",preset:"Preajuste",preamp:"Preamplificador",custom:"Personalizado",eqUnavailable:"Ecualizador no disponible en este dispositivo.",queue:"Cola",remove:"Eliminar",st_playing:"reproduciendo",st_paused:"en pausa",st_stopped:"detenido",st_loading:"cargando",st_error:"error",ready:"Listo para reproducir",volume:"Volumen",seek:"Buscar"},
+  fr: {pairIntro:"Saisissez le code à 6 chiffres affiché sur votre appareil pour associer votre téléphone comme télécommande.",pair:"Associer",pairing:"Association…",enterCode:"Saisissez le code à 6 chiffres.",tooMany:"Trop de tentatives — attendez une minute et réessayez.",invalidCode:"Code invalide. Vérifiez l'écran et réessayez.",errorRetry:"Erreur {n}. Réessayez.",networkErr:"Erreur réseau. Vérifiez que vous êtes sur le même Wi-Fi.",sessionExpired:"Session expirée — associez à nouveau.",notPlaying:"Aucune lecture",prev:"Précédent",playPause:"Lecture / Pause",next:"Suivant",repeatOff:"Répéter : non",repeatOne:"Répéter : un",repeatAll:"Répéter : tout",shuffle:"Aléatoire",shuffleOn:"Aléatoire : oui",sleep:"Veille",sleepEnd:"Veille : fin du titre",sleepMin:"Veille : {n} min",equalizer:"Égaliseur",eqOn:"EQ : oui",eqOff:"EQ : non",monoOn:"Mono : oui",monoOff:"Mono : non",preset:"Préréglage",preamp:"Préampli",custom:"Personnalisé",eqUnavailable:"Égaliseur indisponible sur cet appareil.",queue:"File d’attente",remove:"Retirer",st_playing:"en lecture",st_paused:"en pause",st_stopped:"arrêté",st_loading:"chargement",st_error:"erreur",ready:"Prêt à lire",volume:"Volume",seek:"Position"},
+  ar: {pairIntro:"أدخل الرمز المكوّن من 6 أرقام الظاهر على جهازك لإقران هاتفك كجهاز تحكم عن بُعد.",pair:"إقران",pairing:"جارٍ الإقران…",enterCode:"أدخل الرمز المكوّن من 6 أرقام.",tooMany:"محاولات كثيرة جدًا — انتظر دقيقة ثم أعد المحاولة.",invalidCode:"رمز غير صالح. تحقق من الشاشة وأعد المحاولة.",errorRetry:"خطأ {n}. أعد المحاولة.",networkErr:"خطأ في الشبكة. تأكد من أنك على نفس شبكة Wi-Fi.",sessionExpired:"انتهت الجلسة — يرجى الإقران من جديد.",notPlaying:"لا يوجد تشغيل",prev:"السابق",playPause:"تشغيل / إيقاف مؤقت",next:"التالي",repeatOff:"تكرار: إيقاف",repeatOne:"تكرار: واحد",repeatAll:"تكرار: الكل",shuffle:"تشغيل عشوائي",shuffleOn:"عشوائي: تشغيل",sleep:"النوم",sleepEnd:"النوم: نهاية الأغنية",sleepMin:"النوم: {n} دقيقة",equalizer:"موازن الصوت",eqOn:"EQ: تشغيل",eqOff:"EQ: إيقاف",monoOn:"أحادي: تشغيل",monoOff:"أحادي: إيقاف",preset:"إعداد مسبق",preamp:"تضخيم مسبق",custom:"مخصص",eqUnavailable:"موازن الصوت غير متاح على هذا الجهاز.",queue:"قائمة التشغيل",remove:"إزالة",st_playing:"قيد التشغيل",st_paused:"متوقف مؤقتًا",st_stopped:"متوقف",st_loading:"جارٍ التحميل",st_error:"خطأ",ready:"جاهز للتشغيل",volume:"مستوى الصوت",seek:"الموضع"},
+  ru: {pairIntro:"Введите 6-значный код, показанный на устройстве, чтобы подключить телефон как пульт.",pair:"Подключить",pairing:"Подключение…",enterCode:"Введите 6-значный код.",tooMany:"Слишком много попыток — подождите минуту и повторите.",invalidCode:"Неверный код. Проверьте экран и повторите.",errorRetry:"Ошибка {n}. Повторите.",networkErr:"Ошибка сети. Убедитесь, что вы в той же сети Wi-Fi.",sessionExpired:"Сеанс истёк — подключитесь заново.",notPlaying:"Не воспроизводится",prev:"Предыдущий",playPause:"Воспроизвести / Пауза",next:"Следующий",repeatOff:"Повтор: выкл",repeatOne:"Повтор: один",repeatAll:"Повтор: все",shuffle:"Перемешать",shuffleOn:"Перемешать: вкл",sleep:"Сон",sleepEnd:"Сон: конец трека",sleepMin:"Сон: {n} мин",equalizer:"Эквалайзер",eqOn:"EQ: вкл",eqOff:"EQ: выкл",monoOn:"Моно: вкл",monoOff:"Моно: выкл",preset:"Пресет",preamp:"Предусиление",custom:"Свой",eqUnavailable:"Эквалайзер недоступен на этом устройстве.",queue:"Очередь",remove:"Удалить",st_playing:"воспроизведение",st_paused:"пауза",st_stopped:"остановлено",st_loading:"загрузка",st_error:"ошибка",ready:"Готово к воспроизведению",volume:"Громкость",seek:"Перемотка"}
 };
-var LANG = (navigator.language || navigator.userLanguage || 'en').slice(0, 2).toLowerCase();
+var LANG = (navigator.language || 'en').slice(0, 2).toLowerCase();
 if (!I18N[LANG]) LANG = 'en';
 function t(k) { return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }
 function tf(k) {
@@ -579,7 +290,6 @@ function tf(k) {
   return s;
 }
 function stateLabel(s) { return t('st_' + s) !== 'st_' + s ? t('st_' + s) : s; }
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ---- State ----
 var token = localStorage.getItem(SESSION_KEY);
@@ -587,71 +297,63 @@ var currentState = {};
 var pollTimer = null;
 var eventSource = null;
 var eventConnectTimer = null;
-var volumeActive = false; // don't update slider while user is dragging
+var volumeActive = false; // the slider is not moved while the user drags it
+var seekActive = false;
 var queueCapabilities = {jump: null, remove: null};
 var queueProbeInFlight = false;
 var queueProbeRetryTimer = null;
 var queueRenderKey = '';
+var shownIndex = -1;
+var shownArt = '';
 
 // ---- Elements ----
-var pairView    = document.getElementById('pair-view');
-var ctrlView    = document.getElementById('ctrl-view');
-var codeInput   = document.getElementById('code-input');
-var pairBtn     = document.getElementById('pair-btn');
-var pairError   = document.getElementById('pair-error');
-var artworkImg  = document.getElementById('artwork');
-var artworkPlh  = document.getElementById('artwork-placeholder');
-var trackTitle  = document.getElementById('track-title');
-var trackArtist = document.getElementById('track-artist');
-var progressFill= document.getElementById('progress-fill');
-var progressWrap= document.getElementById('progress-bar-wrap');
-var timePos     = document.getElementById('time-pos');
-var timeDur     = document.getElementById('time-dur');
-var playpauseBtn= document.getElementById('playpause-btn');
-var prevBtn     = document.getElementById('prev-btn');
-var nextBtn     = document.getElementById('next-btn');
-var volSlider   = document.getElementById('volume-slider');
-var repeatBtn   = document.getElementById('repeat-btn');
-var shuffleBtn  = document.getElementById('shuffle-btn');
-var sleepBtn    = document.getElementById('sleep-btn');
-var stateBadge  = document.getElementById('state-badge');
-var eqBtn       = document.getElementById('eq-btn');
-var eqPanel     = document.getElementById('eq-panel');
-var eqEnableBtn = document.getElementById('eq-enable-btn');
-var eqMonoBtn   = document.getElementById('eq-mono-btn');
-var eqPreset    = document.getElementById('eq-preset');
-var eqBands     = document.getElementById('eq-bands');
-var eqPreamp    = document.getElementById('eq-preamp');
-var eqPreampVal = document.getElementById('eq-preamp-val');
-var eqError     = document.getElementById('eq-error');
-var queuePanel  = document.getElementById('queue-panel');
-var queueTitle  = document.getElementById('queue-title');
-var queueList   = document.getElementById('queue-list');
+function $(id) { return document.getElementById(id); }
+var pairView = $('pair-view'), ctrlView = $('ctrl-view'), codeInput = $('code-input'), pairBtn = $('pair-btn'), pairError = $('pair-error');
+var artworkImg = $('artwork'), artworkPlh = $('artwork-placeholder'), backdrop = $('backdrop');
+var trackTitle = $('track-title'), trackArtist = $('track-artist'), stateBadge = $('state-badge');
+var seekSlider = $('seek'), timePos = $('time-pos'), timeDur = $('time-dur');
+var playpauseBtn = $('playpause-btn'), playpauseIcon = $('playpause-icon'), prevBtn = $('prev-btn'), nextBtn = $('next-btn');
+var volSlider = $('volume-slider'), repeatBtn = $('repeat-btn'), repeatBadge = $('repeat-badge'), shuffleBtn = $('shuffle-btn');
+var sleepBtn = $('sleep-btn'), sleepLabel = $('sleep-label'), eqBtn = $('eq-btn'), eqLabel = $('eq-label');
+var eqPanel = $('eq-panel'), eqEnableBtn = $('eq-enable-btn'), eqMonoBtn = $('eq-mono-btn'), eqPreset = $('eq-preset');
+var eqBands = $('eq-bands'), eqPreamp = $('eq-preamp'), eqPreampVal = $('eq-preamp-val'), eqError = $('eq-error');
+var queuePanel = $('queue-panel'), queueTitle = $('queue-title'), queueList = $('queue-list');
+
+artworkImg.addEventListener('load', function () { artworkImg.style.display = 'block'; artworkPlh.style.display = 'none'; });
+artworkImg.addEventListener('error', function () { artworkImg.style.display = 'none'; artworkPlh.style.display = 'block'; });
 
 // ---- View switching ----
 function showPair() {
   pairView.style.display = 'flex';
-  ctrlView.style.display = 'none';
+  ctrlView.classList.remove('shown');
   stopStateUpdates();
+  codeInput.focus();
 }
 
 function showControls() {
   pairView.style.display = 'none';
-  ctrlView.style.display = 'flex';
+  ctrlView.classList.add('shown');
   startStateUpdates();
 }
 
 // ---- Pairing ----
 function setPairError(msg) { pairError.textContent = msg; }
+function pairIdle() { pairBtn.disabled = false; pairBtn.textContent = t('pair'); }
 
 pairBtn.addEventListener('click', doPair);
-codeInput.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') doPair();
+codeInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doPair(); });
+// Digits only; a complete code pairs at once.
+codeInput.addEventListener('input', function () {
+  var digits = codeInput.value.replace(/\D/g, '').slice(0, 6);
+  if (digits !== codeInput.value) codeInput.value = digits;
+  setPairError('');
+  if (digits.length === 6) doPair();
 });
 
 function doPair() {
   var code = codeInput.value.trim();
-  if (code.length === 0) { setPairError(t('enterCode')); return; }
+  if (code.length !== 6) { setPairError(t('enterCode')); return; }
+  if (pairBtn.disabled) return;
   setPairError('');
   pairBtn.disabled = true;
   pairBtn.textContent = t('pairing');
@@ -660,27 +362,12 @@ function doPair() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code: code })
-  }).then(function(r) {
-    if (r.status === 429) {
-      setPairError(t('tooMany'));
-      pairBtn.disabled = false;
-      pairBtn.textContent = t('pair');
-      return null;
-    }
-    if (r.status === 401 || r.status === 404) {
-      setPairError(t('invalidCode'));
-      pairBtn.disabled = false;
-      pairBtn.textContent = t('pair');
-      return null;
-    }
-    if (!r.ok) {
-      setPairError(tf('errorRetry', r.status));
-      pairBtn.disabled = false;
-      pairBtn.textContent = t('pair');
-      return null;
-    }
+  }).then(function (r) {
+    if (r.status === 429) { setPairError(t('tooMany')); pairIdle(); return null; }
+    if (r.status === 401 || r.status === 404) { setPairError(t('invalidCode')); pairIdle(); codeInput.select(); return null; }
+    if (!r.ok) { setPairError(tf('errorRetry', r.status)); pairIdle(); return null; }
     return r.json();
-  }).then(function(data) {
+  }).then(function (data) {
     if (!data) return;
     token = data.token;
     localStorage.setItem(SESSION_KEY, token);
@@ -689,14 +376,12 @@ function doPair() {
     if (queueProbeRetryTimer) clearTimeout(queueProbeRetryTimer);
     queueProbeRetryTimer = null;
     queueRenderKey = '';
-    pairBtn.disabled = false;
-    pairBtn.textContent = t('pair');
+    pairIdle();
     codeInput.value = '';
     showControls();
-  }).catch(function() {
+  }).catch(function () {
     setPairError(t('networkErr'));
-    pairBtn.disabled = false;
-    pairBtn.textContent = t('pair');
+    pairIdle();
   });
 }
 
@@ -704,8 +389,8 @@ function doPair() {
 function api(method, path) {
   return fetch(path, {
     method: method,
-    headers: { 'X-OpenDeezer-Session': token }
-  }).then(function(r) {
+    headers: { 'X-PurpleDisc-Session': token }
+  }).then(function (r) {
     if (r.status === 401) {
       localStorage.removeItem(SESSION_KEY);
       token = null;
@@ -722,54 +407,38 @@ function api(method, path) {
   });
 }
 
+function send(path) { return api('POST', path).then(applyState).catch(function () {}); }
+
 // ---- State updates ----
 // EventSource cannot set the session header used by the other API calls, so
 // /events accepts the paired session token in this endpoint-only query string.
-// Once SSE fails, close it before starting the legacy poller so the two paths
-// can never update the UI concurrently.
+// Once SSE fails, close it before starting the poller so the two paths can never
+// update the UI concurrently.
 function startStateUpdates() {
   stopStateUpdates();
-
-  if (!token || !window.EventSource) {
-    startPolling();
-    return;
-  }
+  if (!token || !window.EventSource) { startPolling(); return; }
 
   var source = new EventSource('/events?session=' + encodeURIComponent(token));
   eventSource = source;
-  // The stream leaves the queue out while queueVersion is unchanged; keep the
-  // last one it sent.
+  // The stream leaves the queue out while queueVersion is unchanged; keep the last one it sent.
   var queue = [], queueVersion = 0;
 
-  source.addEventListener('state', function(e) {
+  source.addEventListener('state', function (e) {
     if (eventSource !== source) return;
     try {
       var st = JSON.parse(e.data);
-      if (st.queue === undefined && st.queueVersion && st.queueVersion === queueVersion) {
-        st.queue = queue;
-      }
+      if (st.queue === undefined && st.queueVersion && st.queueVersion === queueVersion) st.queue = queue;
       queue = st.queue || [];
       queueVersion = st.queueVersion || 0;
       applyState(st);
     } catch (_) {
-      // Ignore a malformed event; the next server snapshot can recover.
+      // A malformed event is skipped; the next snapshot recovers.
     }
   });
-
-  source.onopen = function() {
-    if (eventSource !== source) return;
-    clearEventConnectTimer();
-  };
-
-  source.onerror = function() {
-    fallbackToPolling(source);
-  };
-
-  // A connection can remain stuck in CONNECTING without firing an error on
-  // some browsers/networks. Preserve the old remote behavior in that case.
-  eventConnectTimer = setTimeout(function() {
-    fallbackToPolling(source);
-  }, 5000);
+  source.onopen = function () { if (eventSource === source) clearEventConnectTimer(); };
+  source.onerror = function () { fallbackToPolling(source); };
+  // A connection can stay in CONNECTING without an error on some networks.
+  eventConnectTimer = setTimeout(function () { fallbackToPolling(source); }, 5000);
 }
 
 function fallbackToPolling(source) {
@@ -788,14 +457,9 @@ function clearEventConnectTimer() {
 
 function stopStateUpdates() {
   clearEventConnectTimer();
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  setClock(false);
 }
 
 function startPolling() {
@@ -804,29 +468,54 @@ function startPolling() {
   pollTimer = setInterval(poll, 1000);
 }
 
-function poll() {
-  api('GET', '/status').then(applyState).catch(function() {});
-}
+function poll() { api('GET', '/status').then(applyState).catch(function () {}); }
+
+// A phone that slept comes back to a fresh state stream.
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && token) startStateUpdates();
+});
 
 // ---- UI update ----
 function fmtTime(ms) {
-  var s = Math.floor(ms / 1000);
-  var m = Math.floor(s / 60);
+  var s = Math.floor(ms / 1000), m = Math.floor(s / 60);
   s = s % 60;
   return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
-// Capability probes use an impossible but well-formed queue index. A wired
-// callback reports 409 (or a harmless 200 if it treats the operation as a
-// no-op); an unavailable route reports 404/501. Controls stay hidden until both
-// independently optional callbacks have answered.
+function setFill(slider, pct) { slider.style.setProperty('--pct', pct + '%'); }
+// A write only when the text changes: the state arrives every second.
+function setText(el, s) { if (el.textContent !== s) el.textContent = s; }
+
+// The stream sends the position once a second; while playing, the page counts on from it.
+var posBase = 0, posAt = 0, posDur = 0, posRunning = false, clockTimer = null;
+function renderPos() {
+  if (seekActive) return;
+  var pos = posRunning ? Math.min(posDur, posBase + performance.now() - posAt) : posBase;
+  var pct = posDur > 0 ? Math.min(100, (pos / posDur) * 100) : 0;
+  seekSlider.value = Math.round(pct * 10);
+  setFill(seekSlider, pct);
+  var shown = fmtTime(pos);
+  if (timePos.textContent !== shown) {
+    timePos.textContent = shown;
+    seekSlider.setAttribute('aria-valuetext', shown + ' / ' + fmtTime(posDur));
+  }
+}
+function setClock(running) {
+  posRunning = running;
+  if (running && !clockTimer) clockTimer = setInterval(renderPos, 250);
+  else if (!running && clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+}
+
+// Capability probes use an impossible but well-formed queue index. A wired callback
+// answers 409 (or a harmless 200); an unavailable route 404/501. Controls stay hidden
+// until both optional callbacks have answered.
 var QUEUE_PROBE_INDEX = 2147483647;
 
 function probeQueueCapability(path) {
-  return api('POST', path).then(function(st) {
+  return api('POST', path).then(function (st) {
     applyState(st);
     return true;
-  }).catch(function(err) {
+  }).catch(function (err) {
     if (err && err.status === 409) return true;
     if (err && (err.status === 404 || err.status === 501)) return false;
     return null; // transient/unknown failure: retry without hiding support
@@ -838,13 +527,9 @@ function probeQueueCapabilities() {
       (queueCapabilities.jump !== null && queueCapabilities.remove !== null)) return;
   queueProbeInFlight = true;
   Promise.all([
-    queueCapabilities.jump === null
-      ? probeQueueCapability('/queue/jump?i=' + QUEUE_PROBE_INDEX)
-      : Promise.resolve(queueCapabilities.jump),
-    queueCapabilities.remove === null
-      ? probeQueueCapability('/queue/remove?i=' + QUEUE_PROBE_INDEX)
-      : Promise.resolve(queueCapabilities.remove)
-  ]).then(function(results) {
+    queueCapabilities.jump === null ? probeQueueCapability('/queue/jump?i=' + QUEUE_PROBE_INDEX) : Promise.resolve(queueCapabilities.jump),
+    queueCapabilities.remove === null ? probeQueueCapability('/queue/remove?i=' + QUEUE_PROBE_INDEX) : Promise.resolve(queueCapabilities.remove)
+  ]).then(function (results) {
     if (results[0] !== null) queueCapabilities.jump = results[0];
     if (results[1] !== null) queueCapabilities.remove = results[1];
     queueProbeInFlight = false;
@@ -860,70 +545,73 @@ function probeQueueCapabilities() {
   });
 }
 
+function icon(id) {
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  var use = document.createElementNS(ns, 'use');
+  svg.setAttribute('aria-hidden', 'true');
+  use.setAttribute('href', '#' + id);
+  svg.appendChild(use);
+  return svg;
+}
+
+function queueIndexOf(st) { return typeof st.queueIndex === 'number' ? st.queueIndex : -1; }
+
 function renderQueue(st) {
   var queue = Array.isArray(st.queue) ? st.queue : [];
   if (queue.length === 0) {
-    queuePanel.style.display = 'none';
+    queuePanel.classList.remove('open');
     queueList.textContent = '';
     queueRenderKey = '';
+    shownIndex = -1;
     return;
   }
-
   if (queueCapabilities.jump === null || queueCapabilities.remove === null) {
-    queuePanel.style.display = 'none';
+    queuePanel.classList.remove('open');
     probeQueueCapabilities();
     return;
   }
-  if (!queueCapabilities.jump && !queueCapabilities.remove) {
-    queuePanel.style.display = 'none';
-    queueList.textContent = '';
-    queueRenderKey = '';
-    return;
-  }
 
-  var key = JSON.stringify(queue) + ':' + queueCapabilities.jump + ':' + queueCapabilities.remove;
-  queuePanel.style.display = 'flex';
+  var current = queueIndexOf(st);
+  // A versioned queue is compared by its version, not by serializing it every second.
+  var key = (st.queueVersion || JSON.stringify(queue)) + ':' + current + ':' + queueCapabilities.jump + ':' + queueCapabilities.remove;
+  queuePanel.classList.add('open');
   if (key === queueRenderKey) return;
 
   var oldScrollTop = queueList.scrollTop;
   var frag = document.createDocumentFragment();
-  queue.forEach(function(track, index) {
+  queue.forEach(function (track, index) {
     track = track || {};
     var row = document.createElement('div');
-    row.className = 'queue-row';
+    row.className = 'queue-row' + (index === current ? ' current' : '');
 
     var jump = document.createElement(queueCapabilities.jump ? 'button' : 'div');
     if (queueCapabilities.jump) jump.type = 'button';
     jump.className = 'queue-jump' + (queueCapabilities.jump ? '' : ' queue-jump-static');
-    jump.title = track.title || t('queue');
 
     var title = document.createElement('span');
     title.className = 'queue-track-title';
     title.textContent = track.title || track.id || '—';
     jump.appendChild(title);
-
     if (track.artist) {
       var artist = document.createElement('span');
       artist.className = 'queue-track-artist';
       artist.textContent = track.artist;
       jump.appendChild(artist);
     }
-
     if (queueCapabilities.jump) {
-      jump.addEventListener('click', function() {
-        runQueueAction('/queue/jump?i=' + index, 'jump');
-      });
+      jump.addEventListener('click', function () { runQueueAction('/queue/jump?i=' + index, 'jump'); });
     }
-
     row.appendChild(jump);
+
     if (queueCapabilities.remove) {
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'queue-remove';
-      remove.textContent = '\u2715';
+      remove.appendChild(icon('i-close'));
       remove.title = t('remove');
       remove.setAttribute('aria-label', t('remove') + ': ' + title.textContent);
-      remove.addEventListener('click', function(e) {
+      remove.addEventListener('click', function (e) {
         e.stopPropagation();
         runQueueAction('/queue/remove?i=' + index, 'remove');
       });
@@ -936,13 +624,18 @@ function renderQueue(st) {
   queueList.appendChild(frag);
   queueList.scrollTop = oldScrollTop;
   queueRenderKey = key;
+  // The current row comes into view when it changes.
+  if (current !== shownIndex && current >= 0 && queueList.children[current]) {
+    queueList.children[current].scrollIntoView({block: 'nearest'});
+  }
+  shownIndex = current;
 }
 
 function runQueueAction(path, capability) {
-  api('POST', path).then(function(st) {
+  api('POST', path).then(function (st) {
     queueCapabilities[capability] = true;
     applyState(st);
-  }).catch(function(err) {
+  }).catch(function (err) {
     if (err && (err.status === 404 || err.status === 501)) {
       queueCapabilities[capability] = false;
       queueRenderKey = '';
@@ -954,167 +647,142 @@ function runQueueAction(path, capability) {
 function applyState(st) {
   currentState = st;
 
-  // Track info (local var must NOT shadow the module-level translator t())
+  // The playing track; with none, the queue's current row, which Play starts.
   var tr = st.track;
-  if (tr && tr.title) {
-    trackTitle.textContent  = tr.title;
-    trackArtist.textContent = tr.artist || '';
-    if (tr.artworkUrl) {
-      artworkImg.src = tr.artworkUrl;
-      artworkImg.style.display = 'block';
-      artworkPlh.style.display = 'none';
+  var queue = Array.isArray(st.queue) ? st.queue : [];
+  var ready = false;
+  if (!(tr && tr.title)) {
+    var row = queue[queueIndexOf(st)];
+    if (row && row.title) { tr = row; ready = true; }
+  }
+  setText(trackTitle, tr && tr.title ? tr.title : t('notPlaying'));
+  setText(trackArtist, (tr && tr.title && tr.artist) || '');
+  var art = (tr && tr.artworkUrl) || '';
+  if (art !== shownArt) {
+    shownArt = art;
+    if (art) {
+      artworkImg.src = art;
+      backdrop.style.backgroundImage = 'url("' + art.replace(/"/g, '%22') + '")';
+      backdrop.classList.add('on');
     } else {
+      artworkImg.removeAttribute('src');
       artworkImg.style.display = 'none';
-      artworkPlh.style.display = 'flex';
+      artworkPlh.style.display = 'block';
+      backdrop.classList.remove('on');
     }
-  } else {
-    trackTitle.textContent  = t('notPlaying');
-    trackArtist.textContent = '';
-    artworkImg.style.display = 'none';
-    artworkPlh.style.display = 'flex';
   }
 
   // Progress
-  var pos = st.positionMs || 0;
-  var dur = st.durationMs || (tr && tr.durationMs) || 0;
-  if (dur > 0) {
-    progressFill.style.width = Math.min(100, (pos / dur) * 100) + '%';
-    timePos.textContent = fmtTime(pos);
-    timeDur.textContent = fmtTime(dur);
-  } else {
-    progressFill.style.width = '0%';
-    timePos.textContent = '0:00';
-    timeDur.textContent = '0:00';
-  }
+  posBase = ready ? 0 : (st.positionMs || 0);
+  posAt = performance.now();
+  posDur = ready ? (tr.durationMs || 0) : (st.durationMs || (tr && tr.durationMs) || 0);
+  seekSlider.disabled = posDur <= 0 || ready;
+  setClock(st.state === 'playing' && !ready && posDur > 0);
+  renderPos();
+  setText(timeDur, fmtTime(posDur));
 
-  // Play/pause button
-  if (st.state === 'playing') {
-    playpauseBtn.innerHTML = '&#9646;&#9646;'; // pause icon
-  } else {
-    playpauseBtn.innerHTML = '&#9654;'; // play icon
-  }
+  // Play / pause
+  var playing = st.state === 'playing' || st.state === 'loading';
+  playpauseIcon.setAttribute('href', playing ? '#i-pause' : '#i-play');
 
-  // State badge
-  stateBadge.textContent = st.state ? stateLabel(st.state) : '';
+  setText(stateBadge, ready ? t('ready') : (st.state && st.state !== 'playing' ? stateLabel(st.state) : ''));
 
-  // Volume (don't update while user is dragging)
+  // Volume
   if (!volumeActive) {
     var vPct = Math.round((st.volume || 0) * 100);
     volSlider.value = vPct;
-    volSlider.style.setProperty('--pct', vPct + '%');
+    setFill(volSlider, vPct);
   }
 
-  // Repeat button
+  // Repeat
   var rep = st.repeat || 'off';
-  repeatBtn.className = 'ctrl-btn' + (rep !== 'off' ? ' active' : '');
-  repeatBtn.innerHTML = '&#8635; ' + esc((rep === 'one') ? t('repeatOne') : (rep === 'all' ? t('repeatAll') : t('repeatOff')));
+  repeatBtn.classList.toggle('on', rep !== 'off');
+  setText(repeatBadge, rep === 'one' ? '1' : '');
+  repeatBtn.title = rep === 'one' ? t('repeatOne') : (rep === 'all' ? t('repeatAll') : t('repeatOff'));
+  repeatBtn.setAttribute('aria-label', repeatBtn.title);
 
-  // Shuffle button
-  shuffleBtn.className = 'ctrl-btn' + (st.shuffle ? ' active' : '');
-  shuffleBtn.innerHTML = '&#8652; ' + esc(st.shuffle ? t('shuffleOn') : t('shuffle'));
+  // Shuffle
+  shuffleBtn.classList.toggle('on', !!st.shuffle);
+  shuffleBtn.title = st.shuffle ? t('shuffleOn') : t('shuffle');
+  shuffleBtn.setAttribute('aria-pressed', st.shuffle ? 'true' : 'false');
 
-  // Sleep-timer button
-  sleepBtn.className = 'ctrl-btn' + (st.sleepActive ? ' active' : '');
-  if (st.sleepActive && st.sleepEndOfTrack) {
-    sleepBtn.innerHTML = '&#9790; ' + esc(t('sleepEnd'));
-  } else if (st.sleepActive) {
-    var mins = Math.max(1, Math.round((st.sleepRemainingMs || 0) / 60000));
-    sleepBtn.innerHTML = '&#9790; ' + esc(tf('sleepMin', mins));
-  } else {
-    sleepBtn.innerHTML = '&#9790; ' + esc(t('sleep'));
-  }
+  // Sleep timer
+  sleepBtn.classList.toggle('on', !!st.sleepActive);
+  sleepBtn.setAttribute('aria-pressed', st.sleepActive ? 'true' : 'false');
+  setText(sleepLabel, st.sleepActive && st.sleepEndOfTrack ? t('sleepEnd')
+    : st.sleepActive ? tf('sleepMin', Math.max(1, Math.round((st.sleepRemainingMs || 0) / 60000))) : t('sleep'));
 
   renderQueue(st);
 }
 
-// ---- Transport controls ----
-playpauseBtn.addEventListener('click', function() {
-  api('POST', '/playpause').then(applyState).catch(function() {});
+// ---- Transport ----
+playpauseBtn.addEventListener('click', function () { send('/playpause'); });
+prevBtn.addEventListener('click', function () { send('/prev'); });
+nextBtn.addEventListener('click', function () { send('/next'); });
+
+// ---- Seek: the slider follows the finger and seeks on release ----
+function seekDuration() { return currentState.durationMs || (currentState.track && currentState.track.durationMs) || 0; }
+seekSlider.addEventListener('input', function () {
+  seekActive = true;
+  var ratio = parseInt(seekSlider.value, 10) / 1000;
+  setFill(seekSlider, ratio * 100);
+  timePos.textContent = fmtTime(ratio * seekDuration());
 });
-prevBtn.addEventListener('click', function() {
-  api('POST', '/prev').then(applyState).catch(function() {});
-});
-nextBtn.addEventListener('click', function() {
-  api('POST', '/next').then(applyState).catch(function() {});
+seekSlider.addEventListener('change', function () {
+  var dur = seekDuration();
+  var ms = Math.round(parseInt(seekSlider.value, 10) / 1000 * dur);
+  if (dur <= 0) { seekActive = false; return; }
+  api('POST', '/seek?ms=' + ms).then(function (st) { seekActive = false; applyState(st); }).catch(function () { seekActive = false; });
 });
 
-// ---- Progress bar (seek on tap/click) ----
-progressWrap.addEventListener('click', function(e) {
-  var rect = progressWrap.getBoundingClientRect();
-  var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  var dur = currentState.durationMs || (currentState.track && currentState.track.durationMs) || 0;
-  if (dur <= 0) return;
-  var ms = Math.round(ratio * dur);
-  api('POST', '/seek?ms=' + ms).then(applyState).catch(function() {});
-});
-
-// ---- Volume slider ----
-volSlider.addEventListener('input', function() {
+// ---- Volume ----
+volSlider.addEventListener('input', function () {
   volumeActive = true;
-  var pct = parseInt(this.value, 10);
-  this.style.setProperty('--pct', pct + '%');
+  setFill(volSlider, parseInt(this.value, 10));
 });
-volSlider.addEventListener('change', function() {
+volSlider.addEventListener('change', function () {
   var v = parseInt(this.value, 10) / 100;
-  api('POST', '/volume?v=' + v.toFixed(4)).then(function(st) {
-    applyState(st);
-    volumeActive = false;
-  }).catch(function() { volumeActive = false; });
+  api('POST', '/volume?v=' + v.toFixed(4)).then(function (st) { volumeActive = false; applyState(st); }).catch(function () { volumeActive = false; });
 });
 
-// ---- Repeat (cycle: off → all → one → off) ----
+// ---- Repeat (off, all, one) and shuffle ----
 var repeatCycle = ['off', 'all', 'one'];
-repeatBtn.addEventListener('click', function() {
+repeatBtn.addEventListener('click', function () {
   var cur = currentState.repeat || 'off';
-  var next = repeatCycle[(repeatCycle.indexOf(cur) + 1) % repeatCycle.length];
-  api('POST', '/repeat?mode=' + next).then(applyState).catch(function() {});
+  send('/repeat?mode=' + repeatCycle[(repeatCycle.indexOf(cur) + 1) % repeatCycle.length]);
 });
+shuffleBtn.addEventListener('click', function () { send('/shuffle?on=' + (currentState.shuffle ? 'false' : 'true')); });
 
-// ---- Shuffle toggle ----
-shuffleBtn.addEventListener('click', function() {
-  var on = currentState.shuffle ? 'false' : 'true';
-  api('POST', '/shuffle?on=' + on).then(applyState).catch(function() {});
-});
-
-// ---- Sleep timer (cycle: off → 15 → 30 → 45 → 60 min → end-of-track → off) ----
-var sleepCycle = [0, 15, 30, 45, 60, -1]; // -1 = end of track
+// ---- Sleep timer (off, 5, 10, 20, 30, 45, 60 min, end of track: the apps' presets) ----
+var sleepCycle = [0, 5, 10, 20, 30, 45, 60, -1];
 function currentSleepStep() {
   if (!currentState.sleepActive) return 0;
-  if (currentState.sleepEndOfTrack) return 5;
+  if (currentState.sleepEndOfTrack) return sleepCycle.length - 1;
   var mins = Math.round((currentState.sleepRemainingMs || 0) / 60000);
   var closest = 1, best = 1e9;
-  for (var i = 1; i <= 4; i++) {
+  for (var i = 1; i < sleepCycle.length - 1; i++) {
     var d = Math.abs(sleepCycle[i] - mins);
     if (d < best) { best = d; closest = i; }
   }
   return closest;
 }
-sleepBtn.addEventListener('click', function() {
-  var next = (currentSleepStep() + 1) % sleepCycle.length;
-  var v = sleepCycle[next];
-  var path = (v === 0) ? '/sleep?cancel=1'
-    : (v < 0 ? '/sleep?eot=1' : '/sleep?minutes=' + v);
-  api('POST', path).then(applyState).catch(function() {});
+sleepBtn.addEventListener('click', function () {
+  var v = sleepCycle[(currentSleepStep() + 1) % sleepCycle.length];
+  send(v === 0 ? '/sleep?cancel=1' : (v < 0 ? '/sleep?eot=1' : '/sleep?minutes=' + v));
 });
 
 // ---- Equalizer ----
-// State lives in the engine (GET/POST /eq); this panel only renders it. It is
-// re-read every time the panel opens so changes from other clients show up.
-var eqState        = null; // last snapshot from the server
-var eqSliders      = [];   // the 10 band inputs, built from the first snapshot
-var eqDragBand     = -1;   // band being dragged (don't overwrite it from polls)
-var eqSendTimer    = null; // coalesces drag events to <=30 calls/s
-var eqPendingBands = {};
+// The state lives in the engine (GET/POST /eq); it is read again each time the panel opens.
+var eqState = null, eqSliders = [], eqDragBand = -1, eqSendTimer = null, eqPendingBands = {};
 
-function fmtBandHz(hz) {
-  return hz >= 1000 ? (hz / 1000) + 'k' : Math.round(hz) + '';
-}
+function fmtBandHz(hz) { return hz >= 1000 ? (hz / 1000) + 'k' : Math.round(hz) + ''; }
+function bandFill(s) { setFill(s, (parseFloat(s.value) + 12) / 24 * 100); }
 
 function buildEQBands(bands) {
   eqBands.innerHTML = '';
   eqSliders = [];
-  bands.forEach(function(hz, i) {
-    var col  = document.createElement('div');
+  bands.forEach(function (hz, i) {
+    var col = document.createElement('div');
     col.className = 'eq-band';
     var wrap = document.createElement('div');
     wrap.className = 'eq-slider-wrap';
@@ -1122,8 +790,10 @@ function buildEQBands(bands) {
     s.type = 'range';
     s.className = 'eq-slider';
     s.min = -12; s.max = 12; s.step = 0.5; s.value = 0;
-    s.addEventListener('input',  function() { onBandInput(i, parseFloat(s.value)); });
-    s.addEventListener('change', function() { onBandChange(i, parseFloat(s.value)); });
+    s.style.setProperty('--fill', 'var(--accent)');
+    s.setAttribute('aria-label', fmtBandHz(hz) + ' Hz');
+    s.addEventListener('input', function () { bandFill(s); onBandInput(i, parseFloat(s.value)); });
+    s.addEventListener('change', function () { onBandChange(i, parseFloat(s.value)); });
     wrap.appendChild(s);
     var lbl = document.createElement('div');
     lbl.className = 'eq-band-label';
@@ -1137,13 +807,13 @@ function buildEQBands(bands) {
 
 function buildEQPresets(presets) {
   eqPreset.innerHTML = '';
-  presets.forEach(function(name) {
+  presets.forEach(function (name) {
     var o = document.createElement('option');
     o.value = name;
-    o.textContent = name.replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    o.textContent = name.replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     eqPreset.appendChild(o);
   });
-  // "custom" is shown when a band was hand-edited but is not user-selectable.
+  // "custom" shows after a band was moved by hand; it cannot be picked.
   var custom = document.createElement('option');
   custom.value = 'custom';
   custom.textContent = t('custom');
@@ -1156,110 +826,93 @@ function applyEQ(eq) {
   eqError.textContent = '';
   if (eqSliders.length === 0 && eq.bands) buildEQBands(eq.bands);
   if (eqPreset.options.length === 0 && eq.presets) buildEQPresets(eq.presets);
-  eqEnableBtn.className = 'ctrl-btn' + (eq.enabled ? ' active' : '');
+  eqEnableBtn.classList.toggle('on', !!eq.enabled);
   eqEnableBtn.textContent = eq.enabled ? t('eqOn') : t('eqOff');
-  eqMonoBtn.className = 'ctrl-btn' + (eq.mono ? ' active' : '');
+  eqMonoBtn.classList.toggle('on', !!eq.mono);
   eqMonoBtn.textContent = eq.mono ? t('monoOn') : t('monoOff');
   eqPreset.value = eq.preset || 'flat';
-  (eq.gainsDb || []).forEach(function(db, i) {
-    if (i !== eqDragBand && eqSliders[i]) eqSliders[i].value = db;
+  (eq.gainsDb || []).forEach(function (db, i) {
+    if (i !== eqDragBand && eqSliders[i]) { eqSliders[i].value = db; bandFill(eqSliders[i]); }
   });
   var pre = eq.preampDb || 0;
   eqPreamp.value = pre;
+  setFill(eqPreamp, (pre + 12) / 24 * 100);
   eqPreampVal.textContent = (pre > 0 ? '+' : '') + pre + ' dB';
 }
 
 function refreshEQ() {
-  api('GET', '/eq').then(applyEQ).catch(function() {
-    eqError.textContent = t('eqUnavailable');
-  });
+  api('GET', '/eq').then(applyEQ).catch(function () { eqError.textContent = t('eqUnavailable'); });
 }
 
-eqBtn.addEventListener('click', function() {
-  var open = eqPanel.style.display === 'flex';
-  eqPanel.style.display = open ? 'none' : 'flex';
-  eqBtn.className = 'ctrl-btn' + (open ? '' : ' active');
-  if (!open) refreshEQ();
+eqBtn.addEventListener('click', function () {
+  var open = eqPanel.classList.toggle('open');
+  eqBtn.classList.toggle('on', open);
+  eqBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) refreshEQ();
+});
+eqEnableBtn.addEventListener('click', function () {
+  api('POST', '/eq?on=' + ((eqState && eqState.enabled) ? '0' : '1')).then(applyEQ).catch(function () {});
+});
+eqMonoBtn.addEventListener('click', function () {
+  api('POST', '/eq?mono=' + ((eqState && eqState.mono) ? '0' : '1')).then(applyEQ).catch(function () {});
+});
+eqPreset.addEventListener('change', function () {
+  api('POST', '/eq?preset=' + encodeURIComponent(this.value)).then(applyEQ).catch(function () {});
 });
 
-eqEnableBtn.addEventListener('click', function() {
-  var on = (eqState && eqState.enabled) ? '0' : '1';
-  api('POST', '/eq?on=' + on).then(applyEQ).catch(function() {});
-});
-
-eqMonoBtn.addEventListener('click', function() {
-  var on = (eqState && eqState.mono) ? '0' : '1';
-  api('POST', '/eq?mono=' + on).then(applyEQ).catch(function() {});
-});
-
-eqPreset.addEventListener('change', function() {
-  api('POST', '/eq?preset=' + encodeURIComponent(this.value)).then(applyEQ).catch(function() {});
-});
-
-// Band drags: show "Custom" immediately, coalesce sends to <=30/s. The engine
-// debounces persistence itself; this only caps HTTP chatter during a drag.
+// Band drags show "Custom" at once and send at most 30 changes a second.
 function onBandInput(i, db) {
   eqDragBand = i;
   eqPreset.value = 'custom';
   eqPendingBands[i] = db;
   if (!eqSendTimer) eqSendTimer = setTimeout(flushEQBands, 33);
 }
-
 function flushEQBands() {
   eqSendTimer = null;
   var pend = eqPendingBands;
   eqPendingBands = {};
-  Object.keys(pend).forEach(function(i) {
-    api('POST', '/eq?band=' + i + '&db=' + pend[i]).catch(function() {});
-  });
+  Object.keys(pend).forEach(function (i) { api('POST', '/eq?band=' + i + '&db=' + pend[i]).catch(function () {}); });
 }
-
 function onBandChange(i, db) {
   eqDragBand = -1;
-  delete eqPendingBands[i]; // the final value goes out right away
-  api('POST', '/eq?band=' + i + '&db=' + db).then(applyEQ).catch(function() {});
+  delete eqPendingBands[i];
+  api('POST', '/eq?band=' + i + '&db=' + db).then(applyEQ).catch(function () {});
 }
-
-eqPreamp.addEventListener('input', function() {
+eqPreamp.style.setProperty('--fill', 'var(--accent)');
+eqPreamp.addEventListener('input', function () {
   var v = parseFloat(this.value);
+  setFill(eqPreamp, (v + 12) / 24 * 100);
   eqPreampVal.textContent = (v > 0 ? '+' : '') + v + ' dB';
 });
-eqPreamp.addEventListener('change', function() {
-  api('POST', '/eq?preamp=' + this.value).then(applyEQ).catch(function() {});
+eqPreamp.addEventListener('change', function () {
+  api('POST', '/eq?preamp=' + this.value).then(applyEQ).catch(function () {});
 });
 
-// ---- Static i18n ----
-// Localizes the fixed markup once on load (dynamic text is handled inline via t()
-// as state arrives). Arabic switches the whole document to RTL.
+// ---- Static text ----
 function applyStaticI18n() {
   document.documentElement.lang = LANG;
   if (LANG === 'ar') document.documentElement.dir = 'rtl';
-  var intro = pairView.querySelector('p');
-  if (intro) intro.textContent = t('pairIntro');
+  $('pair-intro').textContent = t('pairIntro');
   pairBtn.textContent = t('pair');
-  prevBtn.title = t('prev');
-  playpauseBtn.title = t('playPause');
-  nextBtn.title = t('next');
+  prevBtn.title = t('prev'); prevBtn.setAttribute('aria-label', t('prev'));
+  nextBtn.title = t('next'); nextBtn.setAttribute('aria-label', t('next'));
+  playpauseBtn.title = t('playPause'); playpauseBtn.setAttribute('aria-label', t('playPause'));
+  shuffleBtn.setAttribute('aria-label', t('shuffle'));
   trackTitle.textContent = t('notPlaying');
-  repeatBtn.innerHTML = '&#8635; ' + esc(t('repeatOff'));
-  shuffleBtn.innerHTML = '&#8652; ' + esc(t('shuffle'));
-  sleepBtn.innerHTML = '&#9790; ' + esc(t('sleep'));
-  eqBtn.innerHTML = '&#9776; ' + esc(t('equalizer'));
+  sleepLabel.textContent = t('sleep');
+  eqLabel.textContent = t('equalizer');
   eqEnableBtn.textContent = t('eqOff');
   eqMonoBtn.textContent = t('monoOff');
   eqPreset.title = t('preset');
   queueTitle.textContent = t('queue');
-  var preampLabel = document.querySelector('.eq-preamp-row label');
-  if (preampLabel) preampLabel.textContent = t('preamp');
+  volSlider.setAttribute('aria-label', t('volume'));
+  seekSlider.setAttribute('aria-label', t('seek'));
+  document.querySelector('.eq-preamp-row label').textContent = t('preamp');
 }
 
 // ---- Init ----
 applyStaticI18n();
-if (token) {
-  showControls();
-} else {
-  showPair();
-}
+if (token) showControls(); else showPair();
 
 })();
 </script>

@@ -1,14 +1,14 @@
 #!/usr/bin/env sh
-# Build the OpenDeezer KDE app end-to-end:
+# Build the Purple Disc KDE app end-to-end:
 #   1. compile the Go engine to a C static archive (lib/libdeezercore.{a,h})
 #   2. configure + build the Qt6 app with CMake
-#   3. drop the binary at gui/kde/opendeezer-kde
+#   3. drop the binary at gui/kde/purpledisc-kde
 #
-# Usage:  cd gui/kde && ./build.sh && ./opendeezer-kde
+# Usage:  cd gui/kde && ./build.sh && ./purpledisc-kde
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../.." && pwd)   # repo root: module github.com/Cycl0o0/OpenDeezer
+ROOT=$(cd "$HERE/../.." && pwd)   # repo root: module github.com/Scharkenberg/PurpleDisc
 
 mkdir -p "$HERE/lib"
 
@@ -23,6 +23,6 @@ cmake -S "$HERE" -B "$HERE/build" -DCMAKE_BUILD_TYPE=Release
 echo "==> compiling (cmake --build)"
 cmake --build "$HERE/build" -j "$(nproc 2>/dev/null || echo 2)"
 
-cp "$HERE/build/opendeezer-kde" "$HERE/opendeezer-kde"
-cp "$HERE/build/opendeezer-login" "$HERE/opendeezer-login"   # standalone login webview helper
-echo "==> done -> $HERE/opendeezer-kde (+ opendeezer-login)"
+cp "$HERE/build/purpledisc-kde" "$HERE/purpledisc-kde"
+cp "$HERE/build/purpledisc-login" "$HERE/purpledisc-login"   # standalone login webview helper
+echo "==> done -> $HERE/purpledisc-kde (+ purpledisc-login)"

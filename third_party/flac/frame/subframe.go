@@ -26,7 +26,7 @@ type Subframe struct {
 }
 
 // parseSubframe reads and parses the header, and the audio samples of a
-// subframe. The samples go into buf when it is large enough. OpenDeezer patch:
+// subframe. The samples go into buf when it is large enough. Purple Disc patch:
 // upstream has no buf and always allocates.
 func (frame *Frame) parseSubframe(br *bits.Reader, bps uint, buf []int32) (subframe *Subframe, err error) {
 	// Parse subframe header.

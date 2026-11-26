@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenDeezer.Tests;
+namespace PurpleDisc.Tests;
 
 public class EngineQueueMirrorTests
 {

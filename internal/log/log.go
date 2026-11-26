@@ -1,4 +1,4 @@
-// Package log is a tiny leveled logger for OpenDeezer. It writes to an
+// Package log is a tiny leveled logger for Purple Disc. It writes to an
 // io.Writer (a file in normal use) rather than stdout/stderr so it never
 // corrupts the Bubble Tea TUI. Levels are filtered by SetLevel.
 package log
@@ -76,17 +76,17 @@ func SetLevel(l Level) {
 	mu.Unlock()
 }
 
-// OpenFile points logging at <dir>/opendeezer.log (appended, 0600), honoring the
-// OPENDEEZER_LOG env var ("debug"/"info"/...) for the level. Logging is a no-op
+// OpenFile points logging at <dir>/purpledisc.log (appended, 0600), honoring the
+// PURPLEDISC_LOG env var ("debug"/"info"/...) for the level. Logging is a no-op
 // (discard) on failure.
 func OpenFile(dir string) error {
-	if v := os.Getenv("OPENDEEZER_LOG"); v != "" {
+	if v := os.Getenv("PURPLEDISC_LOG"); v != "" {
 		SetLevel(ParseLevel(v))
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	r := &rollingFile{path: filepath.Join(dir, "opendeezer.log")}
+	r := &rollingFile{path: filepath.Join(dir, "purpledisc.log")}
 	if err := r.open(); err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func OpenFile(dir string) error {
 	return nil
 }
 
-// maxLogBytes is the size at which the log moves to opendeezer.log.old, as
+// maxLogBytes is the size at which the log moves to purpledisc.log.old, as
 // the Windows app's own log does.
 const maxLogBytes = 512 * 1024
 

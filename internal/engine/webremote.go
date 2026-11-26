@@ -11,10 +11,10 @@ import (
 
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/config"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/control"
-	"github.com/Cycl0o0/OpenDeezer/v3/internal/discovery"
-	odlog "github.com/Cycl0o0/OpenDeezer/v3/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/control"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/discovery"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
 )
 
 // ControlConfig returns the current remote-control settings for a settings
@@ -67,10 +67,10 @@ func SetControlConfig(on bool, addr, token string) {
 		saved = "1"
 	}
 	if err := config.SaveControlEnabled(on, saved); err != nil {
-		odlog.Warn("control.txt: %v", err)
+		pdlog.Warn("control.txt: %v", err)
 	}
 	if err := config.SaveControlToken(tok); err != nil {
-		odlog.Warn("control-token.txt: %v", err)
+		pdlog.Warn("control-token.txt: %v", err)
 	}
 
 	// Apply live: tear down any running server, then start fresh if enabled.

@@ -116,7 +116,7 @@ extern "C" char *DZDownloadDir(void);
 extern "C" int   DZSetDownloadDir(char *path);
 extern "C" int   DZIsPreview(void);
 
-// OpenDeezer Connect (LAN device transfer). Redeclared here (like the blocks
+// Purple Disc Connect (LAN device transfer). Redeclared here (like the blocks
 // above) so the GUI still builds against an older generated header; identical
 // redeclarations are harmless. char* results are malloc'd — free with DZFree.
 extern "C" char *DZDiscoverDevices(int timeoutMS); // JSON [{name,addr,client,version}]
@@ -127,7 +127,7 @@ extern "C" void  DZSetClientInfo(char *client, char *device); // call BEFORE DZI
 // The track ACTUALLY playing, as the usual track JSON shape
 // ({id,name,artistLine,albumName,artworkUrl,artistId,durationMs,explicit}); "{}"
 // when nothing plays. Reflects tracks started on this device AND, when routed via
-// OpenDeezer Connect, the remote device's current track. Free with DZFree.
+// Purple Disc Connect, the remote device's current track. Free with DZFree.
 extern "C" char *DZNowPlayingJSON(void);
 
 // v1.0 additions. Redeclared here (like the blocks above) so the GUI still
@@ -302,7 +302,7 @@ Track parseTrack(const QJsonObject &o) {
 }
 
 // Track title with a leading explicit-content "E" badge (the 🅴 glyph, matching
-// the other OpenDeezer front-ends) when the track is flagged explicit.
+// the other Purple Disc front-ends) when the track is flagged explicit.
 QString badgedTitle(const Track &t) {
     return t.isExplicit ? QString::fromUtf8("\xF0\x9F\x85\xB4 ") + t.name : t.name;
 }
@@ -430,17 +430,17 @@ QString deviceTypeLabel(const QString &client) {
     if (client == QLatin1String("linux") || client == QLatin1String("gnome") ||
         client == QLatin1String("kde"))
         return QStringLiteral("Linux");
-    if (client.isEmpty())                   return QStringLiteral("OpenDeezer");
+    if (client.isEmpty())                   return QStringLiteral("Purple Disc");
     return client;
 }
 
-// ARL: $DEEZER_ARL first, then ~/.config/opendeezer/arl.txt (legacy deezertui).
+// ARL: $DEEZER_ARL first, then ~/.config/purpledisc/arl.txt (legacy deezertui).
 QString loadARL() {
     const QByteArray env = qgetenv("DEEZER_ARL");
     if (!env.isEmpty())
         return QString::fromUtf8(env).trimmed();
     const QString home = QDir::homePath();
-    for (const QString &sub : {QStringLiteral("opendeezer"), QStringLiteral("deezertui")}) {
+    for (const QString &sub : {QStringLiteral("purpledisc"), QStringLiteral("deezertui")}) {
         QFile f(home + "/.config/" + sub + "/arl.txt");
         if (f.open(QIODevice::ReadOnly)) {
             const QString s = QString::fromUtf8(f.readAll()).trimmed();
@@ -452,18 +452,18 @@ QString loadARL() {
 }
 
 // Where a captured/entered ARL is written so the next launch auto-logs-in. Must
-// match the path loadARL() reads (~/.config/opendeezer/arl.txt).
+// match the path loadARL() reads (~/.config/purpledisc/arl.txt).
 QString arlConfigPath() {
-    return QDir::homePath() + "/.config/opendeezer/arl.txt";
+    return QDir::homePath() + "/.config/purpledisc/arl.txt";
 }
 
 // The app icon: prefer the embedded official logo (Qt resource), then the
 // installed theme icon, then a drawn Deezer-purple disc as a last resort.
 QIcon appIcon() {
-    QIcon embedded(QStringLiteral(":/opendeezer.png"));
+    QIcon embedded(QStringLiteral(":/purpledisc.png"));
     if (!embedded.isNull())
         return embedded;
-    QIcon themed = QIcon::fromTheme(QStringLiteral("org.opendeezer.OpenDeezer"));
+    QIcon themed = QIcon::fromTheme(QStringLiteral("dev.scharkenberg.PurpleDisc"));
     if (!themed.isNull())
         return themed;
     QPixmap pm(64, 64);
@@ -496,15 +496,15 @@ QToolButton *mediaButton(QStyle *style, QStyle::StandardPixmap icon) {
 // ---------------------------------------------------------------------------
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("OpenDeezer");
+    setWindowTitle("Purple Disc");
     setWindowIcon(appIcon());
     setMinimumSize(900, 600);
 
-    // Identify this front-end on the LAN for OpenDeezer Connect (discovery +
+    // Identify this front-end on the LAN for Purple Disc Connect (discovery +
     // /whoami). Must run before DZInit; "kde" maps to a "Linux" device type.
     {
         QByteArray client = "kde";
-        QByteArray device = "OpenDeezer (KDE)";
+        QByteArray device = "Purple Disc (KDE)";
         DZSetClientInfo(cstr(client), cstr(device));
     }
 
@@ -573,7 +573,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
 // Worker lambdas capture `this` and post results back with
 // QMetaObject::invokeMethod(this, ...), but this window is a stack object in
-// opendeezer_run destroyed the moment app.exec() returns — drain both pools
+// purpledisc_run destroyed the moment app.exec() returns — drain both pools
 // before the memory (and, in the dlopen'd launcher case, the code) goes away.
 // Results already queued to the dead event loop are purged by ~QObject.
 MainWindow::~MainWindow() {
@@ -584,8 +584,8 @@ MainWindow::~MainWindow() {
 // ---- OS integration: MPRIS, tray, settings --------------------------------
 
 QString MainWindow::settingsPath() const {
-    // Live next to arl.txt under the app config dir (~/.config/opendeezer).
-    return QDir::homePath() + "/.config/opendeezer/settings.ini";
+    // Live next to arl.txt under the app config dir (~/.config/purpledisc).
+    return QDir::homePath() + "/.config/purpledisc/settings.ini";
 }
 
 // Register on the session bus and wire every MPRIS command to MainWindow's own
@@ -636,10 +636,10 @@ void MainWindow::setupTray() {
     if (!QSystemTrayIcon::isSystemTrayAvailable())
         return;
     m_tray = new QSystemTrayIcon(appIcon(), this);
-    m_tray->setToolTip(QStringLiteral("OpenDeezer"));
+    m_tray->setToolTip(QStringLiteral("Purple Disc"));
 
     auto *menu = new QMenu(this);
-    auto *restore = menu->addAction(tr("Show OpenDeezer"));
+    auto *restore = menu->addAction(tr("Show Purple Disc"));
     connect(restore, &QAction::triggered, this, [this] {
         showNormal();
         raise();
@@ -823,7 +823,7 @@ void MainWindow::checkForUpdates() {
     });
 }
 
-// A small dismissible bar across the top of the window: "OpenDeezer <latest>
+// A small dismissible bar across the top of the window: "Purple Disc <latest>
 // available" plus a Download button that opens the GitHub release page in the
 // user's browser (QDesktopServices — no in-app download/install). Inserted at
 // the top of the central layout, above the sidebar/content splitter.
@@ -841,14 +841,14 @@ void MainWindow::showUpdateBanner(const QString &latest, const QString &url,
     auto *h = new QHBoxLayout(bar);
     h->setContentsMargins(14, 6, 8, 6);
 
-    auto *label = new QLabel(tr("OpenDeezer %1 available").arg(latest));
+    auto *label = new QLabel(tr("Purple Disc %1 available").arg(latest));
     h->addWidget(label);
     h->addStretch(1);
 
     if (!notes.isEmpty()) {
         auto *notesBtn = new QPushButton(tr("Release notes"));
         connect(notesBtn, &QPushButton::clicked, this, [this, latest, notes] {
-            QMessageBox::information(this, QStringLiteral("OpenDeezer %1").arg(latest), notes);
+            QMessageBox::information(this, QStringLiteral("Purple Disc %1").arg(latest), notes);
         });
         h->addWidget(notesBtn);
     }
@@ -956,7 +956,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         hide();
         event->ignore();
         if (!m_trayHintShown) {
-            m_tray->showMessage(QStringLiteral("OpenDeezer"),
+            m_tray->showMessage(QStringLiteral("Purple Disc"),
                                 tr("Still playing in the background."),
                                 appIcon(), 4000);
             m_trayHintShown = true;
@@ -1010,18 +1010,18 @@ void MainWindow::buildMenu() {
     }
 
     auto *help = menuBar()->addMenu(tr("&Help"));
-    auto *about = help->addAction(tr("&About OpenDeezer"));
+    auto *about = help->addAction(tr("&About Purple Disc"));
     connect(about, &QAction::triggered, this, [this] {
         QString text =
-            QStringLiteral("<h3>OpenDeezer 3.1.4</h3><p>") +
+            QStringLiteral("<h3>Purple Disc for Deezer 4.0.0</h3><p>") +
             tr("A Deezer client for the desktop.") + QStringLiteral("</p>");
         // Show the signed-in account tier (from DZAccountJSON) when available.
         if (m_haveAccount && !m_accountName.isEmpty())
             text += tr("<p>Signed in as <b>%1</b> · %2</p>")
                         .arg(m_accountName.toHtmlEscaped(),
                              m_accountOffer.toHtmlEscaped());
-        text += tr("<p>By <b>Cycl0o0</b>.<br>Licensed under <b>AGPL-3.0</b>.</p>");
-        QMessageBox::about(this, tr("About OpenDeezer"), text);
+        text += tr("<p>By <b>Scharkenberg</b>, based on OpenDeezer by Cycl0o0.<br>Licensed under <b>AGPL-3.0</b>.</p>");
+        QMessageBox::about(this, tr("About Purple Disc"), text);
     });
 }
 
@@ -1627,7 +1627,7 @@ QWidget *MainWindow::buildTransport() {
     });
     h->addWidget(m_repeatBtn);
 
-    // OpenDeezer Connect: cast playback to another OpenDeezer device on the LAN.
+    // Purple Disc Connect: cast playback to another Purple Disc device on the LAN.
     m_connectBtn = new QToolButton;
     {
         QIcon ico = QIcon::fromTheme(QStringLiteral("network-wireless"));
@@ -1777,7 +1777,7 @@ void MainWindow::finishLogin(const QByteArray &acct) {
         DZSetAudioDevice(cstr(db));
     }
     applyQuality(m_quality);     // apply persisted quality (+ entitlement note)
-    refreshConnectButton();      // reflect any active OpenDeezer Connect device
+    refreshConnectButton();      // reflect any active PurpleDisc Connect device
     seedFavorites();             // authoritative liked-ids mirror for truthful hearts
     if (m_queueDock) {           // reveal the Up-Next dock now that we're logged in
         m_queueDock->show();
@@ -4002,9 +4002,9 @@ void MainWindow::setVolume(int percent) {
     });
 }
 
-// ---- OpenDeezer Connect (LAN device picker) -------------------------------
+// ---- Purple Disc Connect (LAN device picker) -------------------------------
 
-// Cast button: discover OpenDeezer instances on the LAN, then offer a Spotify-
+// Cast button: discover Purple Disc instances on the LAN, then offer a Spotify-
 // Connect-style picker. Discovery blocks ~0.7s on the network, so it runs on a
 // worker and the modal picker opens with the results (mirroring addTrackToPlaylist).
 void MainWindow::openConnectPicker() {
@@ -4042,7 +4042,7 @@ void MainWindow::openConnectPicker() {
 void MainWindow::showConnectPicker(const QVector<ConnectDevice> &devices,
                                    const QString &connectedAddr) {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("OpenDeezer Connect"));
+    dlg.setWindowTitle(QStringLiteral("Purple Disc Connect"));
     auto *v = new QVBoxLayout(&dlg);
     v->addWidget(new QLabel(tr("Play on a device:")));
     auto *list = new QListWidget;
@@ -4066,9 +4066,9 @@ void MainWindow::showConnectPicker(const QVector<ConnectDevice> &devices,
     for (const ConnectDevice &d : devices) {
         QString sub = deviceTypeLabel(d.client);
         if (!d.version.isEmpty())
-            sub += QStringLiteral(" · OpenDeezer ") + d.version;
+            sub += QStringLiteral(" · Purple Disc ") + d.version;
         auto *it = new QListWidgetItem(
-            (d.name.isEmpty() ? QStringLiteral("OpenDeezer") : d.name) + "\n" + sub);
+            (d.name.isEmpty() ? QStringLiteral("Purple Disc") : d.name) + "\n" + sub);
         it->setData(Qt::UserRole, d.addr);
         it->setData(Qt::UserRole + 1, d.name);
         list->addItem(it);
@@ -4276,7 +4276,7 @@ void MainWindow::tick() {
     }
 
     // Keep the now-playing display in sync with the engine's truth: tracks started
-    // on this device AND, when routed via OpenDeezer Connect, the remote device's
+    // on this device AND, when routed via Purple Disc Connect, the remote device's
     // current track. Act only on a real track whose id differs from what's shown;
     // an empty object ("{}", no id) leaves the display untouched (keep last). The
     // id guard means setNowPlaying — and so the artwork refetch — runs only on an

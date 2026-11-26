@@ -6,13 +6,13 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.System;
 
-namespace OpenDeezer;
+namespace PurpleDisc;
 
 internal sealed class AboutSettings
 {
     // Shown without the scheme, opened with it.
     private const string Https = "https://";
-    private const string Source = "github.com/Cycl0o0/OpenDeezer";
+    private const string Source = "github.com/Scharkenberg/PurpleDisc";
     private const string WindowsAuthor = "github.com/Scharkenberg";
 
     private readonly SettingsCard _update;
@@ -28,7 +28,7 @@ internal sealed class AboutSettings
             Ui.Row(Space.S, Ui.Button(Loc.S("Settings_CheckForUpdates"), Check), _download));
         Cards =
         [
-            Ui.Setting("About_Title", null, Icons.Info, Ui.Text("OpenDeezer " + Config.AppVersion(), TextKind.Body)),
+            Ui.Setting("About_Title", null, Icons.Info, Ui.Text("Purple Disc for Deezer " + Config.AppVersion(), TextKind.Body)),
             Ui.Setting("About_Tagline", "About_Credits", Icons.Code, Ui.Stack(0,
                 Ui.Link(Source, () => Launch(Https + Source)),
                 Ui.Link(WindowsAuthor, () => Launch(Https + WindowsAuthor)))),

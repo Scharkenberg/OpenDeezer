@@ -88,7 +88,7 @@ func TestGatewayCallsLikeWebPlayer(t *testing.T) {
 	if cid, err := strconv.Atoi(q.Get("cid")); err != nil || cid < 0 || cid >= 1e9 {
 		t.Errorf("cid %q, want a random number below 1e9", q.Get("cid"))
 	}
-	if ua := gw.Header.Get("User-Agent"); !strings.HasPrefix(ua, "Mozilla/5.0 (") || !strings.Contains(ua, " Chrome/") || strings.Contains(ua, "OpenDeezer") {
+	if ua := gw.Header.Get("User-Agent"); !strings.HasPrefix(ua, "Mozilla/5.0 (") || !strings.Contains(ua, " Chrome/") || strings.Contains(ua, "PurpleDisc") {
 		t.Errorf("User-Agent %q, want a browser's", ua)
 	}
 	if gw.Header.Get("Origin") != "https://www.deezer.com" || gw.Header.Get("Referer") != "https://www.deezer.com/" || gw.Header.Get("X-Deezer-User") != "7" {
@@ -167,6 +167,24 @@ func TestListenLogCarriesWebRelease(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("listen log %q, want %q", got, want)
+	}
+}
+
+func TestReleaseDigits(t *testing.T) {
+	for _, c := range []struct {
+		in, want string
+		ok       bool
+	}{
+		{`releaseNumeric:"123",`, "123", true},
+		{`releaseNumeric:"",x,releaseNumeric:"456"`, "456", true},
+		{`releaseNumeric:"a1",releaseNumeric:"789"`, "789", true},
+		{`releaseNumeric:"x"`, "", false},
+		{`releaseNumeric:"12`, "", false},
+		{`release:"1.0"`, "", false},
+	} {
+		if got, ok := releaseDigits([]byte(c.in)); got != c.want || ok != c.ok {
+			t.Errorf("releaseDigits(%q) = %q, %v; want %q, %v", c.in, got, ok, c.want, c.ok)
+		}
 	}
 }
 

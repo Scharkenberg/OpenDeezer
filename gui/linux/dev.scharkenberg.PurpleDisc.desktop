@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Purple Disc
+Comment=Unofficial open-source client for Deezer
+Exec=purpledisc
+Icon=dev.scharkenberg.PurpleDisc
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;
+Keywords=music;deezer;streaming;player;

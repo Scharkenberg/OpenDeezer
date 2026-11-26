@@ -6,7 +6,7 @@
 
 namespace {
 const char *kPath    = "/org/mpris/MediaPlayer2";
-const char *kService = "org.mpris.MediaPlayer2.opendeezer";
+const char *kService = "org.mpris.MediaPlayer2.purpledisc";
 const char *kPlayerIf = "org.mpris.MediaPlayer2.Player";
 const char *kPropsIf  = "org.freedesktop.DBus.Properties";
 
@@ -17,7 +17,7 @@ QString trackPath(const QString &id) {
         safe += (c.isLetterOrNumber() || c == '_') ? c : QChar('_');
     if (safe.isEmpty())
         safe = QStringLiteral("none");
-    return QStringLiteral("/org/mpris/MediaPlayer2/opendeezer/track/") + safe;
+    return QStringLiteral("/org/mpris/MediaPlayer2/purpledisc/track/") + safe;
 }
 } // namespace
 

@@ -302,8 +302,25 @@ type searchNode struct {
 	Picture struct{ Small []string } `json:"picture"`
 }
 
-// searchFields reads a searchNode: the web player's search-history fields.
-const searchFields = `__typename ... on Track { id title contributors { edges { node { ... on Artist { name } } } } album { cover { small: urls(pictureRequest: {height: 100, width: 100}) } } } ... on Album { id displayTitle contributors { edges { node { ... on Artist { name } } } } cover { small: urls(pictureRequest: {height: 100, width: 100}) } } ... on Artist { id name picture { small: urls(pictureRequest: {height: 100, width: 100}) } } ... on Playlist { id title owner { name } picture { small: urls(pictureRequest: {height: 100, width: 100}) } } ... on Podcast { id displayTitle cover { small: urls(pictureRequest: {height: 100, width: 100}) } } ... on PodcastEpisode { id title podcast { displayTitle } } ... on Livestream { id name cover { small: urls(pictureRequest: {height: 100, width: 100}) } }`
+// The fields each kind of search item is read with (searchNode). A field of one known type
+// selects only its own set; a field that can be any kind (searchFields) selects them all
+// as fragments. A fragment of another type on a field of a known type is invalid GraphQL,
+// and Pipe then refuses the whole query.
+const (
+	smallPicture     = `small: urls(pictureRequest: {height: 100, width: 100})`
+	trackFields      = `__typename id title contributors { edges { node { ... on Artist { name } } } } album { cover { ` + smallPicture + ` } }`
+	albumFields      = `__typename id displayTitle contributors { edges { node { ... on Artist { name } } } } cover { ` + smallPicture + ` }`
+	artistFields     = `__typename id name picture { ` + smallPicture + ` }`
+	playlistFields   = `__typename id title owner { name } picture { ` + smallPicture + ` }`
+	podcastFields    = `__typename id displayTitle cover { ` + smallPicture + ` }`
+	episodeFields    = `__typename id title podcast { displayTitle }`
+	livestreamFields = `__typename id name cover { ` + smallPicture + ` }`
+)
+
+// searchFields reads a searchNode of any kind: the web player's search-history fields.
+const searchFields = `__typename ... on Track { ` + trackFields + ` } ... on Album { ` + albumFields + ` } ... on Artist { ` + artistFields +
+	` } ... on Playlist { ` + playlistFields + ` } ... on Podcast { ` + podcastFields + ` } ... on PodcastEpisode { ` + episodeFields +
+	` } ... on Livestream { ` + livestreamFields + ` }`
 
 func (n searchNode) item() SearchHistoryItem {
 	it := SearchHistoryItem{Type: n.Type, ID: n.ID, Title: n.Title}
@@ -354,7 +371,7 @@ func (c *Client) SearchHistory(n int) ([]SearchHistoryItem, error) {
 
 // BestResult returns a search's best result as Deezer ranks it (Pipe
 // instantSearch bestResult), or nil when it has none or one of a kind
-// OpenDeezer cannot open (a channel, a Flow config, a smart tracklist).
+// Purple Disc cannot open (a channel, a Flow config, a smart tracklist).
 func (c *Client) BestResult(query string) (*SearchHistoryItem, error) {
 	var r struct {
 		InstantSearch struct {
@@ -362,11 +379,11 @@ func (c *Client) BestResult(query string) (*SearchHistoryItem, error) {
 		} `json:"instantSearch"`
 	}
 	q := `query BestResult($query: String!) { instantSearch(query: $query) { bestResult { __typename` +
-		` ... on InstantSearchArtistBestResult { artist { ` + searchFields + ` } }` +
-		` ... on InstantSearchAlbumBestResult { album { ` + searchFields + ` } }` +
-		` ... on InstantSearchTrackBestResult { track { ` + searchFields + ` } }` +
-		` ... on InstantSearchPlaylistBestResult { playlist { ` + searchFields + ` } }` +
-		` ... on InstantSearchPodcastBestResult { podcast { ` + searchFields + ` } } } } }`
+		` ... on InstantSearchArtistBestResult { artist { ` + artistFields + ` } }` +
+		` ... on InstantSearchAlbumBestResult { album { ` + albumFields + ` } }` +
+		` ... on InstantSearchTrackBestResult { track { ` + trackFields + ` } }` +
+		` ... on InstantSearchPlaylistBestResult { playlist { ` + playlistFields + ` } }` +
+		` ... on InstantSearchPodcastBestResult { podcast { ` + podcastFields + ` } } } } }`
 	if err := c.pipe("BestResult", q, map[string]any{"query": query}, &r); err != nil {
 		return nil, err
 	}
@@ -385,7 +402,7 @@ func (c *Client) BestResult(query string) (*SearchHistoryItem, error) {
 // ErrPinLimit is Deezer refusing a pin: Home holds no more.
 var ErrPinLimit = errors.New("home is full")
 
-// pinTypes are the kinds OpenDeezer pins to Home and shows there, as Pipe names them.
+// pinTypes are the kinds Purple Disc pins to Home and shows there, as Pipe names them.
 var pinTypes = map[string]string{"Album": "ALBUM", "Artist": "ARTIST", "Playlist": "PLAYLIST", "Podcast": "PODCAST", "Track": "TRACK"}
 
 // Pinned returns what the account pinned to Home (Pipe quickAccess, context HOMEPAGE), in its

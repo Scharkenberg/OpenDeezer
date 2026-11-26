@@ -1,5 +1,5 @@
-﻿#requires -Version 5.1
-# Go + cgo environment for building / testing the OpenDeezer engine on Windows.
+#requires -Version 5.1
+# Go + cgo environment for building / testing the Purple Disc engine on Windows.
 #
 # Dot-source it in the CURRENT shell (it only changes this process's env, never
 # machine/user settings, so other C/C++ projects don't inherit a global CC):
@@ -16,10 +16,10 @@
 #          target x86_64-pc-windows-msvc) -- Go 1.27+ links through it in MSVC
 #          mode; the C runtime is linked statically, so the DLL needs no Visual
 #          C++ redistributable (it imports only KERNEL32.dll)
-#       3. MinGW-w64 gcc if one is on PATH (CI runners: Go 1.25, where MSVC
-#          clang is not verified)
+#       3. MinGW-w64 gcc if one is on PATH
 #   * $env:CGO_ENABLED = 1
-#   * $OpenDeezerExtLdFlags -- the -extldflags value build.ps1 passes to go build
+#   * $env:GOAMD64 = v3 (AVX2, BMI2, FMA: CPUs from about 2013 on), and -march=x86-64-v3 for C
+#   * $PurpleDiscExtLdFlags -- the -extldflags value build.ps1 passes to go build
 #
 # Go splits CC on spaces, so clang is put on PATH and CC is just "clang".
 
@@ -38,9 +38,11 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     else { throw 'go not found: install Go (https://go.dev/dl) or put it on PATH.' }
 }
 $goMinor = Get-GoMinor
+# The DLL's floor is x86-64-v3 (GOAMD64 below): the C code gets the same, so dr_flac's SSE4.1 path builds.
+$march = if ((& go env GOARCH) -eq 'amd64') { ' -march=x86-64-v3' } else { '' }
 
 # ---- C toolchain ----------------------------------------------------------------
-$OpenDeezerExtLdFlags = ''
+$PurpleDiscExtLdFlags = ''
 $toolchain = ''
 
 if ($env:CC) {
@@ -63,13 +65,14 @@ else {
         $target = (& clang --version) -join "`n"
         if ($target -notmatch 'Target:\s*\S+-msvc') { throw "VS clang does not report an -msvc target:`n$target" }
         # Static C runtime for every C object (runtime/cgo, corelib, miniaudio) and the link.
-        if (-not $env:CGO_CFLAGS) { $env:CGO_CFLAGS = '-O2 -g -fms-runtime-lib=static' }
-        $OpenDeezerExtLdFlags = '-fms-runtime-lib=static'
+        if (-not $env:CGO_CFLAGS) { $env:CGO_CFLAGS = '-O2 -g -fms-runtime-lib=static' + $march }
+        $PurpleDiscExtLdFlags = '-fms-runtime-lib=static'
         $toolchain = "Visual Studio clang ($vsClangBin)"
     }
     elseif (Get-Command x86_64-w64-mingw32-gcc -ErrorAction SilentlyContinue) {
         $env:CC = 'x86_64-w64-mingw32-gcc'
-        $OpenDeezerExtLdFlags = '-static'   # fold in libwinpthread/libgcc
+        if (-not $env:CGO_CFLAGS) { $env:CGO_CFLAGS = '-O2 -g' + $march }
+        $PurpleDiscExtLdFlags = '-static'   # fold in libwinpthread/libgcc
         $toolchain = 'MinGW-w64 gcc'
     }
     elseif ($vsClangBin) {
@@ -79,15 +82,16 @@ else {
         throw 'No C compiler for cgo: add the Visual Studio component "C++ Clang Compiler for Windows" (Microsoft.VisualStudio.Component.VC.Llvm.Clang).'
     }
 }
-if (-not $OpenDeezerExtLdFlags) {
+if (-not $PurpleDiscExtLdFlags) {
     # CC chosen by the caller: match the static-runtime flags to its target
     # (compile and link must agree, or MSVC objects mix CRTs).
     if (((& $env:CC --version) -join "`n") -match '-msvc') {
-        if (-not $env:CGO_CFLAGS) { $env:CGO_CFLAGS = '-O2 -g -fms-runtime-lib=static' }
-        $OpenDeezerExtLdFlags = '-fms-runtime-lib=static'
+        if (-not $env:CGO_CFLAGS) { $env:CGO_CFLAGS = '-O2 -g -fms-runtime-lib=static' + $march }
+        $PurpleDiscExtLdFlags = '-fms-runtime-lib=static'
     }
-    else { $OpenDeezerExtLdFlags = '-static' }
+    else { $PurpleDiscExtLdFlags = '-static' }
 }
 
 $env:CGO_ENABLED = '1'
+$env:GOAMD64 = 'v3'
 Write-Host "go-env: $((& go env GOVERSION)), cgo via $toolchain" -ForegroundColor DarkGray
