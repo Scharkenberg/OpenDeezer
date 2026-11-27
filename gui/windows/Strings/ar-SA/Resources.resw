@@ -370,6 +370,18 @@
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
     <value>الإصدار {0} متاح. لديك {1}.</value>
   </data>
+  <data name="Settings_UpdateNow" xml:space="preserve">
+    <value>التحديث الآن</value>
+  </data>
+  <data name="Settings_UpdateDownloadingFormat" xml:space="preserve">
+    <value>جارٍ تنزيل الإصدار {0}… {1}٪</value>
+  </data>
+  <data name="Settings_UpdateInstallingFormat" xml:space="preserve">
+    <value>جارٍ تثبيت الإصدار {0}. سيُعاد تشغيل Purple Disc تلقائيًا بعد لحظات.</value>
+  </data>
+  <data name="Settings_UpdateInstallFail" xml:space="preserve">
+    <value>تعذّر تنزيل التحديث أو التحقق منه. نزّله من صفحة الإصدار بدلًا من ذلك.</value>
+  </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>تعذّر التحقق من وجود تحديثات. حاول لاحقًا.</value>
   </data>

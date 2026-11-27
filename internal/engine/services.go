@@ -1253,6 +1253,11 @@ func enginePrev() {
 	engineStep(engineQ.Prev, (*control.Client).Prev)
 }
 
+// Next and Previous step the engine queue (shuffle and repeat applied) and play the new
+// track, or drive the Connect device; Previous restarts a track played 5 s or more.
+func Next()     { engineNext() }
+func Previous() { enginePrev() }
+
 func engineStep(move func() bool, remote func(*control.Client) (control.State, error)) {
 	if rc := routedRemote(); rc != nil {
 		if st, err := remote(rc); err == nil {

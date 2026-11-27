@@ -370,6 +370,18 @@
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
     <value>Доступна версия {0}. У вас {1}.</value>
   </data>
+  <data name="Settings_UpdateNow" xml:space="preserve">
+    <value>Обновить сейчас</value>
+  </data>
+  <data name="Settings_UpdateDownloadingFormat" xml:space="preserve">
+    <value>Загрузка версии {0}… {1} %</value>
+  </data>
+  <data name="Settings_UpdateInstallingFormat" xml:space="preserve">
+    <value>Устанавливается версия {0}. Purple Disc сейчас перезапустится сам.</value>
+  </data>
+  <data name="Settings_UpdateInstallFail" xml:space="preserve">
+    <value>Не удалось скачать или проверить обновление. Скачайте его со страницы выпуска.</value>
+  </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>Не удалось проверить обновления. Попробуйте позже.</value>
   </data>

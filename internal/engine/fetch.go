@@ -8,15 +8,20 @@ import (
 	"time"
 
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/pictures"
 )
 
 // maxFetch bounds Fetch: the length goes out to C as an int, and artwork is far smaller.
 const maxFetch = 32 << 20
 
 // Fetch downloads raw bytes (cover art) for hosts without an HTTP stack, with the web
-// player's User-Agent. A body cut short or over maxFetch is an error; offline mode
-// refuses it.
+// player's User-Agent. A body cut short or over maxFetch is an error. A picture fetched
+// once comes from the picture cache afterwards, also in offline mode, which refuses
+// only pictures not yet kept.
 func Fetch(url string) ([]byte, error) {
+	if b, ok := pictures.Load(url); ok {
+		return b, nil
+	}
 	if OfflineMode() {
 		return nil, ErrOfflineMode
 	}
@@ -40,5 +45,6 @@ func Fetch(url string) ([]byte, error) {
 	if len(b) > maxFetch {
 		return nil, fmt.Errorf("over %d bytes", maxFetch)
 	}
+	pictures.Keep(url, b)
 	return b, nil
 }

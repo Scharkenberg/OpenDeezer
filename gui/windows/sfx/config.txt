@@ -1,0 +1,5 @@
+;!@Install@!UTF-8!
+Title="Purple Disc for Deezer"
+Progress="yes"
+RunProgram="PurpleDisc.exe --install"
+;!@InstallEnd@!

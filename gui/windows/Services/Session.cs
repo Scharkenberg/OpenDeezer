@@ -388,6 +388,35 @@ internal sealed class Session
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return new UpdateInfo(); }
     }
 
+    // The release's installer into %TEMP%, checked against its SHA-256 and, when this exe is signed,
+    // signed by the same publisher, then started; it quits this app (Installer.QuitEvent). Progress
+    // gets the percent downloaded. False when a step failed.
+    public static async Task<bool> InstallUpdateAsync(UpdateInfo info, Action<int> progress)
+    {
+        string path = Path.Combine(Path.GetTempPath(), Installer.DownloadPrefix + info.Latest + Installer.DownloadSuffix);
+        var download = Task.Run(() => DeezerCore.DownloadUpdate(info.Installer, info.InstallerSha256, path));
+        while (await Task.WhenAny(download, Task.Delay(Timing.UpdateProgressMs)) != download) progress(DeezerCore.DZUpdateProgress());
+        if (await download is { Length: > 0 } error)
+        {
+            AppLog.Write("update download: " + error);
+            return false;
+        }
+        progress(100);
+        if (!await Task.Run(() => Signature.Signer(Environment.ProcessPath!) is not { } own || Signature.Signer(path) == own))
+        {
+            AppLog.Write("update: the installer is not signed by this app's publisher");
+            File.Delete(path);
+            return false;
+        }
+        try { System.Diagnostics.Process.Start(path, "-y").Dispose(); }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            AppLog.Write("update start: " + ex.Message);
+            return false;
+        }
+        return true;
+    }
+
     private static string LocalDir()
     {
         string local = Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } l

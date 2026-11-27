@@ -11,6 +11,8 @@ import (
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/i18n"
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/listens"
+	pdlog "github.com/Scharkenberg/PurpleDisc/v4/internal/log"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -546,6 +548,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.status = i18n.Tf("Error: %s", msg.err.Error())
+		return m, nil
+
+	case installStartedMsg:
+		if msg.err != nil {
+			pdlog.Warn("update: %v", msg.err)
+			m.status = i18n.T("The update couldn't be downloaded.")
+		} else {
+			m.status = i18n.T("The installer is open.")
+		}
 		return m, nil
 
 	case updateCheckMsg:
@@ -1460,7 +1471,12 @@ func (m *Model) activate() (tea.Model, tea.Cmd) {
 			m.screen = screenSettings
 			return m, nil
 		case actUpdate:
-			// Opens the release page; never downloads or installs anything itself.
+			// The installed Windows copy updates through the release's installer; any other
+			// copy opens the release page.
+			if m.updateInfo.Installer != "" && update.InstalledApp() {
+				m.status = i18n.T("Downloading the update…")
+				return m, m.installUpdateCmd()
+			}
 			openInBrowser(m.updateInfo.URL)
 			return m, nil
 		case actRemoteManual:

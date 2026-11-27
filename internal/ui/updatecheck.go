@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/update"
@@ -23,6 +25,24 @@ func (m *Model) updateCheckCmd() tea.Cmd {
 	return func() tea.Msg {
 		info, err := update.Check(Version)
 		return updateCheckMsg{info: info, err: err}
+	}
+}
+
+// installStartedMsg ends installUpdateCmd: the installer runs (err nil) or a step failed.
+type installStartedMsg struct{ err error }
+
+// installUpdateCmd downloads the release's Windows installer into the temp folder, checked
+// against its SHA-256, and starts it. The installer asks which apps to install and then
+// quits this one through the "PurpleDisc.Quit" event (cmd/purpledisc).
+func (m *Model) installUpdateCmd() tea.Cmd {
+	info := m.updateInfo
+	return func() tea.Msg {
+		path := filepath.Join(os.TempDir(), "PurpleDisc-"+info.Latest+"-windows-x64.exe")
+		err := update.Download(info.Installer, info.InstallerSHA256, path)
+		if err == nil {
+			err = exec.Command(path, "-y").Start()
+		}
+		return installStartedMsg{err}
 	}
 }
 

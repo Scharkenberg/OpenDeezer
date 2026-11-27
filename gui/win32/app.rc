@@ -1,0 +1,32 @@
+// PD_VERSION (4,0,0,0) and PD_VERSION_TEXT (4.0.0) come from build.ps1, read from internal/version.
+#define TEXT_(x) #x
+#define TEXT(x) TEXT_(x)
+
+1 ICON "..\\windows\\purpledisc.ico"
+1 24 "win32.manifest"
+2 RCDATA "..\\..\\assets\\fonts\\Inter-Regular.ttf"
+
+1 VERSIONINFO
+FILEVERSION PD_VERSION
+PRODUCTVERSION PD_VERSION
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "Scharkenberg"
+      VALUE "FileDescription", "Purple Disc for Deezer"
+      VALUE "FileVersion", TEXT(PD_VERSION_TEXT)
+      VALUE "InternalName", "PurpleDisc-win32"
+      VALUE "OriginalFilename", "PurpleDisc-win32-x86.exe"
+      VALUE "ProductName", "Purple Disc for Deezer"
+      VALUE "ProductVersion", TEXT(PD_VERSION_TEXT)
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

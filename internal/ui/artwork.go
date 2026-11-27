@@ -1,17 +1,20 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/deezer"
+	"github.com/Scharkenberg/PurpleDisc/v4/internal/pictures"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -27,17 +30,25 @@ func artworkSupported() bool {
 	}
 }
 
-// fetchCover downloads and decodes an artwork image.
+// fetchCover decodes an artwork image from the picture cache shared with the other
+// apps, downloading and keeping it when it is not there.
 func fetchCover(url string) (image.Image, error) {
-	resp, err := deezer.HTTPClient(10 * time.Second).Get(url)
-	if err != nil {
-		return nil, err
+	b, ok := pictures.Load(url)
+	if !ok {
+		resp, err := deezer.HTTPClient(10 * time.Second).Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("cover %s", resp.Status)
+		}
+		if b, err = io.ReadAll(io.LimitReader(resp.Body, 32<<20)); err != nil {
+			return nil, err
+		}
+		pictures.Keep(url, b)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("cover %s", resp.Status)
-	}
-	img, _, err := image.Decode(resp.Body)
+	img, _, err := image.Decode(bytes.NewReader(b))
 	return img, err
 }
 

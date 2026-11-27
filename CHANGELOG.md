@@ -7,6 +7,40 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [4.0.0]
 
 ### Added
+- **Win32 app.** `PurpleDisc-win32-x86.exe` is a small 32-bit app built with
+  standard Windows controls on the shared engine, for Windows 10 or later
+  without .NET or the Windows App SDK: search, library, Flow and its moods,
+  charts, podcasts, history, queue, lyrics, downloads and offline pins, sleep
+  timer, Connect and the phone remote; shuffle, repeat, crossfade, episode
+  speed, mono and the equalizer presets. Searches lead with Deezer's top result,
+  rows show their covers and every control has a tooltip. A menu bar in the
+  app's font, a context menu on each row, Back, keyboard and media keys, liked
+  and playing marks, and a window that remembers its place keep it compact. It speaks the seven languages of the other
+  apps, draws in Inter, follows the light, dark and high contrast settings and
+  scales per monitor.
+- **Covers seen once load at once.** The engine keeps fetched cover art in the cache
+  folder (`pictures`, the most recently used 64 MB), so every app, the terminal app too, shows a cover it
+  has shown before without downloading it again, also in offline mode.
+- **Windows installer with updates.** `PurpleDisc-<version>-windows-x64.exe`
+  installs the desktop app, the terminal app or both for the current user
+  without administrator rights (`%LOCALAPPDATA%\Programs\PurpleDisc`, a Start
+  menu entry per app, an entry in Settings › Apps, and for the terminal app
+  the folder on the user's PATH) and opens it. Settings ›
+  About › *Update now* in the desktop app, and *Update available* in the
+  terminal app's menu, download the newer release's installer, check its
+  SHA-256 (and, in the desktop app for signed builds, its publisher) and
+  replace the running apps. Uninstalling asks whether to delete the settings
+  and offline music too. The zip stays as it was.
+- **Smaller terminal app downloads.** The Linux and Windows binaries, and the
+  copy in the Windows installer, are packed with UPX (`--ultra-brute --lzma`):
+  about a third of their size, a fraction of a second more at start. The
+  macOS binaries stay unpacked.
+- **Terminal app sign-in without a flag.** Started without a saved ARL in a
+  terminal, it asks for one (not echoed) instead of only printing how to run
+  `-save-arl`.
+- **Tray menu in the app's theme.** The notification-area menu follows
+  Settings › Theme and, for the system theme, Windows' current light or dark
+  mode, read each time it opens.
 - **One player at a time, like Deezer's own players.** Purple Disc pauses when
   another player of the account (the Deezer web player, a phone) starts a
   track, and announces its own starts so those players pause. Settings ›

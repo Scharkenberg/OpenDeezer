@@ -8,11 +8,13 @@
 # `dotnet` drives the whole .NET build. The C toolchain for cgo comes from
 # go-env.ps1: Visual Studio's clang (Go 1.27+), else MinGW-w64 gcc (CI).
 #
-# Usage:  gui\windows\build.ps1
+# Usage:  gui\windows\build.ps1 [-Installer]
+#   -Installer also builds the terminal app and PurpleDisc-<version>-windows-x64.exe, which holds
+#   both apps, beside the publish folder (sfx.ps1).
 # Prereqs: .NET 11 SDK and Go, plus either Go 1.27+ with the Visual Studio component
 # "C++ Clang Compiler for Windows" (no MinGW needed), or MinGW-w64 gcc on PATH.
 [CmdletBinding()]
-param([string]$Configuration = 'Release')
+param([string]$Configuration = 'Release', [switch]$Installer)
 $ErrorActionPreference = 'Stop'
 
 $here   = $PSScriptRoot
@@ -31,14 +33,19 @@ Write-Host '==> [1/3] building Go c-shared DLL (lib\libdeezercore.dll), alongsid
 #   go test -run=^$ -bench="ResampleRead|New$" -benchtime=10s -cpuprofile=a.pprof ./internal/audio
 #   go test -run=^$ -bench=StripeFeed -benchtime=10s -cpuprofile=d.pprof ./internal/deezer
 #   go tool pprof -proto a.pprof d.pprof > corelib/default.pgo
-$goBuild = Start-Job -ArgumentList $here, $root -ScriptBlock {
-  param($here, $root)
+# With -Installer the terminal app goes into the installer too (lib\purpledisc-tui.exe).
+$goBuild = Start-Job -ArgumentList $here, $root, $Installer.IsPresent -ScriptBlock {
+  param($here, $root, $tui)
   . (Join-Path $here 'go-env.ps1')
   $env:GOOS = 'windows'
   $env:GOARCH = 'amd64'
   Set-Location $root
   & go build -buildmode=c-shared -trimpath -ldflags "-s -w -extldflags=$PurpleDiscExtLdFlags" -o 'gui/windows/lib/libdeezercore.dll' ./corelib 2>&1
   if ($LASTEXITCODE -ne 0) { throw "go build failed ($LASTEXITCODE)" }
+  if ($tui) {
+    & go build -trimpath '-pgo=corelib/default.pgo' -ldflags "-s -w -extldflags=$PurpleDiscExtLdFlags" -o 'gui/windows/lib/purpledisc-tui.exe' ./cmd/purpledisc 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "go build (terminal app) failed ($LASTEXITCODE)" }
+  }
 }
 
 Write-Host '==> [2/3] publishing C# WinUI 3 app (dotnet publish)' -ForegroundColor Cyan
@@ -68,3 +75,4 @@ for ($path = $outDir; $path -ne $bin; $path = Split-Path $path) {
 }
 
 Write-Host "==> done -> $(Join-Path $outDir 'PurpleDisc.exe')" -ForegroundColor Green
+if ($Installer) { & (Join-Path $here 'sfx.ps1') -Publish $outDir -Tui (Join-Path $libDir 'purpledisc-tui.exe') }

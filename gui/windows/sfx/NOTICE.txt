@@ -1,0 +1,13 @@
+7zSD.sfx and 7zr.exe come unchanged from the LZMA SDK 26.06 by Igor Pavlov
+(https://www.7-zip.org/sdk.html, lzma2606.7z: bin\7zSD.sfx and bin\x64\7zr.exe).
+The LZMA SDK is placed in the public domain; its DOC\installer.txt allows joining
+7zSD.sfx with an archive and changing its resources.
+
+7zSD.sfx is the installer stub of PurpleDisc-<version>-windows-x64.exe. sfx.ps1 builds
+that file from a copy of the stub: the copy's icon, version details and manifest are
+replaced with those of stub.rc and stub.manifest, then config.txt and the 7z archive
+of the app are appended. 7zr.exe makes the archive.
+
+SHA-256:
+7zSD.sfx  e8d65f6f4c54c90d040104d84e9414c71e598a23e70080076a8b1489c45e1de6
+7zr.exe   fe66e92b57b88a80585d50e194572b33edde4a4af8a0d33e83801f9fa37e8a4e

@@ -17,6 +17,9 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- No module initializer: it loads Microsoft.WindowsAppRuntime.dll before Main, and uninstall.exe
+         (PurpleDisc.exe alone, Setup/Installer.cs) has no such file. Program.Main calls it instead. -->
+    <WindowsAppSdkAutoInitialize>false</WindowsAppSdkAutoInitialize>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <!-- The [LibraryImport] source generator and the tray's fixed buffers and function pointer. -->

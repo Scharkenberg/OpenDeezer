@@ -104,6 +104,8 @@ internal static class Size
     public const double Grip = 6;
     public const double QueuePane = 320;
     public const double VolumeSlider = 96;
+    // An update's download bar in Settings > About.
+    public const double UpdateProgress = 120;
     public const double FlyoutWidth = 280;
     // A ComboBox's own width beside its text: the left padding, the chevron's column and the border.
     public const double ComboChrome = 52;
@@ -232,6 +234,8 @@ internal static class Timing
     public const int PositionDriftMs = 250;
     public const int PrevRestartsAfterMs = 5000;
     public const int EngineStopWaitMs = 1500;
+    // How often an update's download progress is read.
+    public const int UpdateProgressMs = 200;
     public const int SmtcTimelineMs = 5000;
     public const int LyricsFollowPauseMs = 5000;
     public const int LibraryMaxAgeMinutes = 5;

@@ -87,6 +87,9 @@ jobs:
         # developer machine; exits 1 when any lane fails.
         shell: pwsh
         run: gui\windows\check.ps1 -Race
+      - name: Build Win32 x86 GUI
+        shell: pwsh
+        run: gui\win32\build.ps1
   lint:
     name: golangci-lint
     runs-on: ubuntu-24.04

@@ -336,6 +336,9 @@ internal sealed record UpdateInfo : Reply
     public string Latest { get; init; } = "";
     public bool HasUpdate { get; init; }
     public string Url { get; init; } = "";
+    // The release's Windows installer and its SHA-256 (hex); empty when it has none.
+    public string Installer { get; init; } = "";
+    public string InstallerSha256 { get; init; } = "";
 
     // The engine compares the release with its own version; the app uses its assembly version.
     public UpdateInfo ForApp(string appVersion)

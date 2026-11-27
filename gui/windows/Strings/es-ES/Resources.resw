@@ -370,6 +370,18 @@
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
     <value>La versión {0} está disponible. Tienes la {1}.</value>
   </data>
+  <data name="Settings_UpdateNow" xml:space="preserve">
+    <value>Actualizar ahora</value>
+  </data>
+  <data name="Settings_UpdateDownloadingFormat" xml:space="preserve">
+    <value>Descargando la versión {0}… {1} %</value>
+  </data>
+  <data name="Settings_UpdateInstallingFormat" xml:space="preserve">
+    <value>Instalando la versión {0}. Purple Disc se reiniciará solo en unos instantes.</value>
+  </data>
+  <data name="Settings_UpdateInstallFail" xml:space="preserve">
+    <value>No se pudo descargar o verificar la actualización. Descárgala desde la página de la versión.</value>
+  </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>No se pudo buscar actualizaciones. Inténtalo más tarde.</value>
   </data>

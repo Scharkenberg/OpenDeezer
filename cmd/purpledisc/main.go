@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/audio"
 	"github.com/Scharkenberg/PurpleDisc/v4/internal/config"
@@ -24,6 +25,7 @@ import (
 	version_ "github.com/Scharkenberg/PurpleDisc/v4/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 )
 
 // version defaults to the release number in internal/version and can be
@@ -94,12 +96,37 @@ func main() {
 	}
 	pdlog.Info("purpledisc %s starting", version)
 
+	// From here on an installer can ask this copy to quit: before the program runs (at the
+	// ARL prompt) it just exits, so that the install folder can be replaced.
+	var program atomic.Pointer[tea.Program]
+	quitOnInstall(func() {
+		if p := program.Load(); p != nil {
+			p.Quit()
+		} else {
+			os.Exit(0)
+		}
+	})
+
 	arl := ui.LoadARL()
 	if arl == "" {
 		fmt.Fprintln(os.Stderr, "No ARL found. Set $DEEZER_ARL or run:")
 		fmt.Fprintln(os.Stderr, "  purpledisc -save-arl <your-arl>")
 		fmt.Fprintln(os.Stderr, "\nYour ARL is the 'arl' cookie from an authenticated deezer.com session.")
-		os.Exit(1)
+		// In a terminal (a Start menu shortcut opens one that closes on exit) it can be
+		// pasted here instead; it isn't echoed.
+		if term.IsTerminal(os.Stdin.Fd()) {
+			fmt.Fprint(os.Stderr, "\nPaste your ARL and press Enter (Enter alone quits): ")
+			b, _ := term.ReadPassword(os.Stdin.Fd())
+			fmt.Fprintln(os.Stderr)
+			if arl = strings.TrimSpace(string(b)); arl != "" {
+				if err := ui.SaveARL(arl); err != nil {
+					fmt.Fprintln(os.Stderr, "save-arl:", err)
+				}
+			}
+		}
+		if arl == "" {
+			os.Exit(1)
+		}
 	}
 
 	audio.RemoveTempFiles() // stream files a crash left behind
@@ -133,6 +160,7 @@ func main() {
 		opts = append(opts, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	}
 	p := tea.NewProgram(model, opts...)
+	program.Store(p)
 	model.StartMedia(p.Send) // OS media controls (MPRIS on Linux)
 	if err := model.StartControl(p.Send); err != nil {
 		pdlog.Warn("control api: %v", err) // non-fatal: TUI still runs

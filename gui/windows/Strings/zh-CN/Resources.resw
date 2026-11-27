@@ -370,6 +370,18 @@
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
     <value>版本 {0} 已可用。你当前的版本是 {1}。</value>
   </data>
+  <data name="Settings_UpdateNow" xml:space="preserve">
+    <value>立即更新</value>
+  </data>
+  <data name="Settings_UpdateDownloadingFormat" xml:space="preserve">
+    <value>正在下载版本 {0}… {1}%</value>
+  </data>
+  <data name="Settings_UpdateInstallingFormat" xml:space="preserve">
+    <value>正在安装版本 {0}。Purple Disc 稍后会自动重新启动。</value>
+  </data>
+  <data name="Settings_UpdateInstallFail" xml:space="preserve">
+    <value>无法下载或验证更新。请改为从发布页面下载。</value>
+  </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>无法检查更新。稍后再试。</value>
   </data>

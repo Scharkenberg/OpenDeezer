@@ -25,7 +25,8 @@ workflow publishes the files listed below once a `v4.0.0` tag is pushed.
 | macOS | SwiftUI | macOS 26 or later, universal | `PurpleDisc-macos-universal.zip` |
 | iOS | SwiftUI | iOS 17 or later, iPhone and iPad | `PurpleDisc-ios-unsigned.ipa` |
 | Android | Kotlin, Jetpack Compose | Android 7.0 or later, phone and Android TV | `PurpleDisc-android*.apk`, `PurpleDisc-androidtv*.apk` |
-| Windows | WinUI 3, C# (.NET 11, Native AOT) | Windows 10 1809 or later, x64 with AVX2 | `PurpleDisc-windows-x64.zip` |
+| Windows | WinUI 3, C# (.NET 11, Native AOT) | Windows 10 1809 or later, x64 with AVX2 | `PurpleDisc-<version>-windows-x64.exe` (installer), `PurpleDisc-windows-x64.zip` |
+| Win32 | Go, native Win32 controls | Windows 10 or later, x86 (runs on x64 too) | `PurpleDisc-win32-x86.exe` |
 | GNOME | GTK 4, libadwaita | Linux x86_64, aarch64 | `PurpleDisc-gnome-<arch>.tar.gz` |
 | KDE | Qt 6 Widgets | Linux x86_64, aarch64 | `PurpleDisc-kde-<arch>` |
 | Linux | GTK or Qt, chosen per desktop | Linux x86_64, aarch64 | `PurpleDisc-linux-<arch>.tar.gz` |
@@ -33,6 +34,16 @@ workflow publishes the files listed below once a `v4.0.0` tag is pushed.
 The Android release has one APK for all CPUs plus one per ABI (armeabi-v7a,
 arm64-v8a, x86, x86_64), for phones and for TV. The iOS build is unsigned:
 sideload it, or open the project in Xcode and sign it with your own team.
+
+The Windows installer needs no administrator rights: it asks for the desktop
+app, the terminal app or both, installs them for the current user in
+`%LOCALAPPDATA%\Programs\PurpleDisc` (the terminal app as
+`purpledisc-tui.exe`, with that folder on your PATH so `purpledisc-tui` works
+in any new terminal), adds a Start menu entry for each and opens the app.
+*Update now* in the desktop app's Settings › About, or *Update available* in
+the terminal app's menu, installs a newer release with the same choice, and
+Settings › Apps removes it, asking whether to keep your settings and offline
+music. The zip runs from any folder and never updates itself.
 
 ## What it does
 
@@ -341,7 +352,22 @@ cd gui/kde   && ./build.sh          # ./purpledisc-kde
 ```powershell
 cd gui\windows; .\build.ps1
 # bin\Release\net11.0-windows10.0.26100.0\win-x64\publish\PurpleDisc.exe
+.\build.ps1 -Installer             # also bin\Release\...\win-x64\PurpleDisc-<version>-windows-x64.exe
 ```
+
+The installer also holds the terminal app, packed with
+[UPX](https://upx.github.io): put `upx.exe` on PATH or set `UPX_EXE` to its path.
+
+**Windows Win32** (Go 1.27+, Visual Studio C++ Clang and x86 MSVC libraries)
+
+```powershell
+gui\win32\build.ps1            # builds gui\win32\dist\PurpleDisc-win32-x86.exe
+```
+
+This standalone 32-bit app uses the same Go engine and settings as the other
+apps. Its minimum window size is 480×400. It requires Windows 10 or later; the
+32-bit target does not support XP. It is not UPX-packed: a packed exe unpacks
+itself into private memory (about 47 MB idle instead of 5 MB).
 
 **Android** (JDK 21, Android SDK platform 37.2 with build-tools 37.0.0, NDK r30)
 

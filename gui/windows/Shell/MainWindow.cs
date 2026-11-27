@@ -31,6 +31,9 @@ public sealed partial class MainWindow : Window
     // Setting SelectedItem inside ItemInvoked re-raises ItemInvoked under UI Automation.
     private bool _inNavInvoked;
     private bool _quitting;
+    // An installer sets it to replace this copy: the app saves and quits as from the tray. Manual
+    // reset: the installed terminal app waits on the same event.
+    private readonly System.Threading.EventWaitHandle _quitSignal = new(false, System.Threading.EventResetMode.ManualReset, Installer.QuitEvent);
 
     public MainWindow()
     {
@@ -155,6 +158,7 @@ public sealed partial class MainWindow : Window
         _media = new MediaControls(_hwnd, DispatcherQueue);
         _tray.Add();
         AppWindow.Closing += OnClosing;
+        System.Threading.ThreadPool.RegisterWaitForSingleObject(_quitSignal, (_, _) => DispatcherQueue.TryEnqueue(Quit), null, System.Threading.Timeout.Infinite, executeOnlyOnce: true);
         if (Session.Settings.WinMax && AppWindow.Presenter is OverlappedPresenter op) op.Maximize();
         Session.CheckForUpdate();
     }

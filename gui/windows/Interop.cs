@@ -120,11 +120,20 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool DestroyMenu(IntPtr hMenu);
     [LibraryImport("user32.dll")] internal static partial IntPtr LoadIconW(IntPtr hInstance, IntPtr lpIconName);
 
+    // uxtheme exports these by ordinal only (Windows 10 1903 and later).
+    [LibraryImport("uxtheme.dll", EntryPoint = "#135")] internal static partial int SetPreferredAppMode(int mode);
+    [LibraryImport("uxtheme.dll", EntryPoint = "#136")] internal static partial void FlushMenuThemes();
+    internal const uint SPI_GETHIGHCONTRAST = 0x42, HCF_HIGHCONTRASTON = 1;
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct HIGHCONTRASTW { public uint cbSize, dwFlags; public IntPtr lpszDefaultScheme; }
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SystemParametersInfoW(uint action, uint param, ref HIGHCONTRASTW value, uint winIni);
+
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial uint RegisterWindowMessageW(string name);
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr LoadImageW(IntPtr hInst, string name, uint type, int cx, int cy, uint flags);
     [LibraryImport("user32.dll")] internal static partial int GetSystemMetrics(int index);
     [LibraryImport("user32.dll")] internal static partial uint GetDpiForWindow(IntPtr hWnd);
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool AllowSetForegroundWindow(uint processId);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial nint SendMessageTimeoutW(nint hWnd, uint msg, nint wParam, string lParam, uint flags, uint timeout, out nint result);
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] internal static partial IntPtr CreateEventW(IntPtr attrs, [MarshalAs(UnmanagedType.Bool)] bool manualReset, [MarshalAs(UnmanagedType.Bool)] bool initialState, string? name);
     [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SetEvent(IntPtr h);
     [LibraryImport("ole32.dll")] internal static partial int CoWaitForMultipleObjects(uint flags, uint timeout, uint count, IntPtr[] handles, out uint index);

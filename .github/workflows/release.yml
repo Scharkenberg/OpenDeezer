@@ -44,11 +44,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: linux,   goarch: amd64, runner: ubuntu-24.04,     cgo: 1 }
-          - { goos: linux,   goarch: arm64, runner: ubuntu-24.04-arm, cgo: 1 }
+          # upx: the UPX 5.3.0 release asset that packs this binary, with its SHA-256.
+          # None for macOS: UPX publishes no macOS build, and a packed Mach-O breaks code signing.
+          - { goos: linux,   goarch: amd64, runner: ubuntu-24.04,     cgo: 1, upx: upx-5.3.0-amd64_linux.tar.xz, upxsha: 79cea8a50b6fa102d10c7b79a419cd77dead3cc2d78661de2dc5e5815dc505c1 }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-24.04-arm, cgo: 1, upx: upx-5.3.0-arm64_linux.tar.xz, upxsha: 2a4afa860ac7aa6968f88df7841823746e5d00ba56affdf9342c2f5254fb776f }
           - { goos: darwin,  goarch: arm64, runner: macos-latest,     cgo: 1 }
           - { goos: darwin,  goarch: amd64, runner: macos-latest,     cgo: 1 }
-          - { goos: windows, goarch: amd64, runner: windows-latest,   cgo: 1 }
+          - { goos: windows, goarch: amd64, runner: windows-latest,   cgo: 1, upx: upx-5.3.0-win64.zip,          upxsha: d127996c76615e431be810e9c8d2910dbe3dd400600c5c0c50276fc5a17a9705 }
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -78,6 +80,21 @@ jobs:
           cp corelib/default.pgo cmd/purpledisc/default.pgo
           go build -trimpath -ldflags "$LDFLAGS" -o "$OUT" ./cmd/purpledisc
           echo "ARTIFACT=$OUT" >> "$GITHUB_ENV"
+      - name: Pack with UPX (as the Windows installer's copy)
+        if: matrix.upx != ''
+        shell: bash
+        run: |
+          f="${{ matrix.upx }}"
+          curl -fsSL -o "$f" "https://github.com/upx/upx/releases/download/v5.3.0/$f"
+          echo "${{ matrix.upxsha }}  $f" | sha256sum -c -
+          mkdir upx-tool
+          case "$f" in
+            *.zip) pwsh -NoProfile -Command "Expand-Archive '$f' upx-tool" ;;
+            *) tar -xf "$f" -C upx-tool ;;
+          esac
+          upx="$(ls -d upx-tool/upx-5.3.0-*/)upx"; [ -f "$upx.exe" ] && upx="$upx.exe"
+          "$upx" -q --ultra-brute --lzma "$ARTIFACT"
+          "./$ARTIFACT" -version   # the packed binary still starts
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -296,6 +313,17 @@ jobs:
       - name: Build (Go c-shared DLL + dotnet publish)
         shell: pwsh
         run: cd gui/windows; ./build.ps1
+      - name: Get UPX 5.3.0
+        shell: pwsh
+        # The installer's terminal app is packed with it (sfx.ps1); the Win32 app is not.
+        run: |
+          Invoke-WebRequest https://github.com/upx/upx/releases/download/v5.3.0/upx-5.3.0-win64.zip -OutFile upx.zip
+          if ((Get-FileHash upx.zip -Algorithm SHA256).Hash -ne 'd127996c76615e431be810e9c8d2910dbe3dd400600c5c0c50276fc5a17a9705') { throw 'upx.zip: SHA-256 mismatch' }
+          Expand-Archive upx.zip -DestinationPath upx
+          "UPX_EXE=$(Resolve-Path upx/upx-5.3.0-win64/upx.exe)" >> $env:GITHUB_ENV
+      - name: Build the 32-bit Win32 GUI
+        shell: pwsh
+        run: gui/win32/build.ps1 -Out gui/win32/dist/PurpleDisc-win32-x86.exe
       - name: Locate publish dir
         id: pub
         shell: pwsh
@@ -325,6 +353,52 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+      - name: Sign Win32 GUI (Azure Trusted Signing)
+        if: env.SIGN == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.TRUSTED_SIGNING_CERT_PROFILE }}
+          files-folder: gui/win32/dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Build the terminal app for the installer
+        shell: pwsh
+        # The same build as the tui job's windows/amd64 asset (sfx.ps1 then packs it with
+        # UPX), under the name the installer looks for.
+        env:
+          CGO_ENABLED: "1"
+          CC: x86_64-w64-mingw32-gcc
+        run: go build -trimpath '-pgo=corelib/default.pgo' -ldflags "-s -w -X main.version=${{ github.ref_name }} -extldflags=-static" -o tui/purpledisc-tui.exe ./cmd/purpledisc
+      - name: Build the installer (PurpleDisc-<version>-windows-x64.exe)
+        shell: pwsh
+        # The self-extracting installer the apps update themselves from; it packs the
+        # publish dir with the PurpleDisc.exe signed above, and the terminal app.
+        run: gui/windows/sfx.ps1 -Publish '${{ steps.pub.outputs.dir }}' -Tui tui/purpledisc-tui.exe -Out installer
+      - name: Sign the installer (Azure Trusted Signing)
+        if: env.SIGN == 'true'
+        # After joining: the signature covers the stub, its config and the archive.
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.TRUSTED_SIGNING_CERT_PROFILE }}
+          files-folder: installer
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path (Join-Path '${{ steps.pub.outputs.dir }}' '*') -DestinationPath PurpleDisc-windows-x64.zip
@@ -332,7 +406,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: PurpleDisc-windows-x64.zip
+          files: |
+            PurpleDisc-windows-x64.zip
+            installer/PurpleDisc-*-windows-x64.exe
+            gui/win32/dist/PurpleDisc-win32-x86.exe
 
   # ---- Android app (Kotlin/Compose via gomobile AAR) ----
   android:
@@ -658,7 +735,7 @@ jobs:
             required+=(PurpleDisc-linux-x86_64.tar.gz PurpleDisc-linux-aarch64.tar.gz)
           fi
           if [ "$HAS_WINDOWS" = true ]; then
-            required+=(PurpleDisc-windows-x64.zip)
+            required+=(PurpleDisc-windows-x64.zip "PurpleDisc-${GITHUB_REF_NAME#v}-windows-x64.exe" PurpleDisc-win32-x86.exe)
           fi
           for asset in "${required[@]}"; do
             test -f "dist/$asset" || {

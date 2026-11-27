@@ -9,10 +9,12 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>PurpleDisc.Tests</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\windows\EngineQueueMirror.cs" Link="Linked\EngineQueueMirror.cs" />
     <Compile Include="..\windows\Track.cs" Link="Linked\Track.cs" />
+    <Compile Include="..\windows\Setup\Signature.cs" Link="Linked\Signature.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />

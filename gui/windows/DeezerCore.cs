@@ -122,6 +122,9 @@ internal static partial class DeezerCore
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZHomeJSON();
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZCheckUpdateJSON();
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial IntPtr DZDownloadUpdate(string url, string sha256, string path);
+    // The running DZDownloadUpdate in percent.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial int DZUpdateProgress();
 
     // Pauses after `minutes` with a fade-out, or at the end of the track; 0 and 0 cancels.
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8), UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])] internal static partial void DZSetSleepTimer(int minutes, int endOfTrack);
@@ -264,6 +267,9 @@ internal static partial class DeezerCore
     internal static EQState EQ() => Read(DZEQJSON(), WireJson.Default.EQState);
     internal static HistoryStats HistoryStats(int sinceDays) => Read(DZHistoryStatsJSON(sinceDays), WireJson.Default.HistoryStats);
     internal static UpdateInfo CheckUpdate() => Read(DZCheckUpdateJSON(), WireJson.Default.UpdateInfo).ForApp(Config.AppVersion());
+    // "" when the installer is at path and matches its SHA-256, else the reason.
+    internal static string DownloadUpdate(string url, string sha256, string path) =>
+        Read(DZDownloadUpdate(url, sha256, path), WireJson.Default.Reply).Error;
     internal static SavedReply Download(string id, string dir) => Read(DZDownloadTrack(id, dir), WireJson.Default.SavedReply);
     internal static BatchReply DownloadAlbum(string id) => Read(DZDownloadAlbum(id), WireJson.Default.BatchReply);
     internal static BatchReply DownloadPlaylist(string id) => Read(DZDownloadPlaylist(id), WireJson.Default.BatchReply);

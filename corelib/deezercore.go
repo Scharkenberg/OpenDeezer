@@ -618,12 +618,32 @@ func DZGenreChartsJSON(genreID *C.char) *C.char {
 func DZHomeJSON() *C.char { return C.CString(string(engine.HomeJSON())) }
 
 // DZCheckUpdateJSON checks GitHub for a newer Purple Disc release and returns
-// {current, latest, hasUpdate, url, notes}. Network failure -> hasUpdate:false.
+// {current, latest, hasUpdate, url, notes, installer, installerSha256}; the last two
+// only when the release has a Windows installer. Network failure -> hasUpdate:false.
 //
 //export DZCheckUpdateJSON
 func DZCheckUpdateJSON() *C.char {
 	info, _ := update.Check(version.Number)
 	return jsonStr(info, nil)
+}
+
+// DZDownloadUpdate writes the release installer at url to path, checked against its
+// SHA-256 (hex); {} or {error}. Blocking; DZUpdateProgress reports it meanwhile.
+//
+//export DZDownloadUpdate
+func DZDownloadUpdate(url, sum, path *C.char) *C.char {
+	return jsonStr(struct{}{}, update.Download(C.GoString(url), C.GoString(sum), C.GoString(path)))
+}
+
+// DZUpdateProgress is the running DZDownloadUpdate's progress in percent, 0 while its size is unknown.
+//
+//export DZUpdateProgress
+func DZUpdateProgress() C.int {
+	done, total := update.Progress()
+	if total == 0 {
+		return 0
+	}
+	return C.int(done * 100 / total)
 }
 
 // DZArtistTopJSON returns an artist's most popular tracks.

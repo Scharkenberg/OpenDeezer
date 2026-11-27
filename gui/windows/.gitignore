@@ -10,3 +10,4 @@
 # generated engine artifacts (P/Invoke loads it by name; no import lib needed)
 /lib/libdeezercore.dll
 /lib/libdeezercore.h
+/lib/purpledisc-tui.exe

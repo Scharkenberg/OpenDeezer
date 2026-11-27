@@ -123,10 +123,29 @@ internal sealed unsafe class Tray(Action restore, Action quit)
         NativeMethods.AppendMenuW(menu, transport, (IntPtr)NativeMethods.MENU_PREV, Loc.S("Tooltip_Previous"));
         NativeMethods.AppendMenuW(menu, NativeMethods.MF_SEPARATOR, IntPtr.Zero, null);
         NativeMethods.AppendMenuW(menu, NativeMethods.MF_STRING, (IntPtr)NativeMethods.MENU_QUIT, Loc.S("Tray_Quit"));
+        ThemeMenu();
         NativeMethods.GetCursorPos(out var p);
         NativeMethods.SetForegroundWindow(_hwnd); // so the menu closes on focus loss
         NativeMethods.TrackPopupMenu(menu, NativeMethods.TPM_RIGHTBUTTON, p.X, p.Y, 0, _hwnd, IntPtr.Zero);
         NativeMethods.DestroyMenu(menu);
+    }
+
+    // A Win32 menu takes the process's preferred app mode (uxtheme, by ordinal only). It is set from
+    // the app's theme setting and, for "system", Windows' current value, read at every open: a switch
+    // made by hand, at a scheduled time or while the PC slept is right without any notice arriving.
+    // High contrast keeps the system's own menu colors.
+    private static void ThemeMenu()
+    {
+        bool dark = App.Settings.Theme switch
+        {
+            "dark" => true,
+            "light" => false,
+            _ => Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is 0,
+        };
+        var hc = new NativeMethods.HIGHCONTRASTW { cbSize = (uint)sizeof(NativeMethods.HIGHCONTRASTW) };
+        bool highContrast = NativeMethods.SystemParametersInfoW(NativeMethods.SPI_GETHIGHCONTRAST, hc.cbSize, ref hc, 0) && (hc.dwFlags & NativeMethods.HCF_HIGHCONTRASTON) != 0;
+        NativeMethods.SetPreferredAppMode(highContrast ? 0 : dark ? 2 : 3); // Default, ForceDark, ForceLight
+        NativeMethods.FlushMenuThemes();
     }
 
     // Called from native code: an exception escaping here would end the process.

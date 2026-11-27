@@ -8,7 +8,7 @@ param([switch]$Race, [string[]]$Only = @())
 
 $here = $PSScriptRoot
 $root = (Resolve-Path (Join-Path $here '..\..')).Path
-$pkgs = './internal/...', './corelib', './sdk/...', './cmd/...', './mobile/...'
+$pkgs = './internal/...', './corelib', './sdk/...', './cmd/...', './mobile/...', './gui/win32'
 
 # The Go lanes run with a throwaway profile; the build cache stays the real one, or every run compiles cold.
 $goSetup = {
@@ -32,7 +32,7 @@ $lanes = [ordered]@{
             Select-String ' error |Passed!|Failed' | ForEach-Object { $_.Line.Trim() }
     }
     harness = { param($here) & (Join-Path $here '..\windows.harness\run.ps1') }
-    vet = [scriptblock]::Create("param(`$here, `$root, `$pkgs, `$race) . {$goSetup} `$here `$root; try { go vet @pkgs 2>&1; 'vet exit ' + `$LASTEXITCODE } finally { Remove-Item -Recurse -Force `$tmp -ErrorAction SilentlyContinue }")
+    vet = [scriptblock]::Create("param(`$here, `$root, `$pkgs, `$race) . {$goSetup} `$here `$root; try { go vet @pkgs 2>&1; 'vet exit ' + `$LASTEXITCODE; `$env:GOARCH = '386'; `$env:GO386 = 'sse2'; `$env:CC = 'clang --target=i686-pc-windows-msvc'; `$env:CGO_CFLAGS = '-O2 -fms-runtime-lib=static'; go vet ./gui/win32 ./internal/... 2>&1; '386 vet exit ' + `$LASTEXITCODE } finally { Remove-Item -Recurse -Force `$tmp -ErrorAction SilentlyContinue }")
     go = [scriptblock]::Create("param(`$here, `$root, `$pkgs, `$race) . {$goSetup} `$here `$root; try { `$a = @('test'); if (`$race) { `$a += '-race' }; go @a @pkgs 2>&1 | Where-Object { `$_ -notmatch '^(ok|\?) ' }; 'test exit ' + `$LASTEXITCODE } finally { Remove-Item -Recurse -Force `$tmp -ErrorAction SilentlyContinue }")
 }
 

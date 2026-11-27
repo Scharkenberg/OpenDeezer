@@ -370,6 +370,18 @@
   <data name="Settings_UpdateAvailFormat" xml:space="preserve">
     <value>संस्करण {0} उपलब्ध है। आपके पास {1} है।</value>
   </data>
+  <data name="Settings_UpdateNow" xml:space="preserve">
+    <value>अभी अपडेट करें</value>
+  </data>
+  <data name="Settings_UpdateDownloadingFormat" xml:space="preserve">
+    <value>संस्करण {0} डाउनलोड हो रहा है… {1}%</value>
+  </data>
+  <data name="Settings_UpdateInstallingFormat" xml:space="preserve">
+    <value>संस्करण {0} इंस्टॉल हो रहा है। Purple Disc कुछ ही पलों में अपने-आप फिर से शुरू होगा।</value>
+  </data>
+  <data name="Settings_UpdateInstallFail" xml:space="preserve">
+    <value>अपडेट डाउनलोड या सत्यापित नहीं हो सका। इसके बजाय इसे रिलीज़ पेज से डाउनलोड करें।</value>
+  </data>
   <data name="Settings_UpdateFail" xml:space="preserve">
     <value>अपडेट की जाँच नहीं हो सकी। बाद में फिर से कोशिश करें।</value>
   </data>
